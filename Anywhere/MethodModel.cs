@@ -23,6 +23,7 @@ namespace Anywhere
         [JsonProperty]
         public TypeModel ReturnType { get; set; }
 
+        // TODO: add AssemblyResolver assemblyResolver
         public object Invoke()
         {
             var result = Method.Invoke(Instance.Value, Arguments.Select(a => a.Value).ToArray());

@@ -1,11 +1,22 @@
 ﻿using Newtonsoft.Json;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Runtime.Loader;
 
 namespace Anywhere
 {
     public class MethodModelBuilder
     {
+        //static MethodModelBuilder()
+        //{
+        //    AppDomain.CurrentDomain.AssemblyResolve += CurrentDomain_AssemblyResolve;
+        //}
+
+        //private static Assembly? CurrentDomain_AssemblyResolve(object? sender, ResolveEventArgs args)
+        //{
+        //    throw new NotImplementedException();
+        //}
+
         public static string Serialize<Tprop>(Expression<Func<Tprop>> expression)
         {
             // convert the expression into a serializable model and serialize it
@@ -98,6 +109,105 @@ namespace Anywhere
             }
 
             return invoker;
+        }
+
+        public delegate Task<Stream?> AssemblyResolver(string assemblyName);
+
+        // TODO: add helper to execute code and dynamically resolve assemblies?
+
+        // TODO: add "context" to allow caching assemblies associated with a particular app
+        public static async Task<MethodModel?> DeserializeAsync(string data, AssemblyResolver assemblyResolver)
+        {
+            var triedAssemblies = new HashSet<string>();
+
+            MethodModel? model = null;
+            bool created = false;
+            while (!created)
+            {
+                // deserialize to the strongly typed model to start trying to load the assemblies needed
+                // to execute the encoded lambda
+                model = JsonConvert.DeserializeObject<MethodModel>(data);
+
+                if (model == null)
+                {
+                    return model;
+                }
+
+                try
+                {
+                    var allAssemblies = AppDomain.CurrentDomain.GetAssemblies();
+
+                    // get the instance assembly and type
+                    var assembly = Assembly.Load(model.Instance.Type.AssemblyName);
+                    var type = assembly.GetType(model.Instance.Type.Name, true);
+
+                    // instantiate the instance if necessary
+                    if (!model.IsStatic)
+                    {
+                        model.Instance.Value = JsonConvert.DeserializeObject(JsonConvert.SerializeObject(model.Instance.Value), type);
+                    }
+                    // TODO: should the then-current static state of the instance be (de)serialized too?
+
+                    // find the method
+                    model.Method = type.GetMethod(model.MethodName);
+
+                    // instantiate the arguments
+                    foreach (var arg in model.Arguments)
+                    {
+                        var currentType = arg.Value.GetType();
+                        assembly = Assembly.Load(arg.Type.AssemblyName);
+                        type = assembly.GetType(arg.Type.Name, true);
+                        arg.Value = JsonConvert.DeserializeObject(JsonConvert.SerializeObject(arg.Value), type);
+                    }
+
+                    // make sure the return type is available too
+                    assembly = Assembly.Load(model.ReturnType.AssemblyName);
+                    type = assembly.GetType(model.ReturnType.Name, true);
+
+                    created = true;
+                }
+                catch (FileNotFoundException e)
+                {
+                    var assemblyName = e.FileName;
+
+                    // TODO: first try to load the assembly from cache
+
+                    if (triedAssemblies.Contains(assemblyName))
+                    {
+                        throw new InvalidOperationException($"Could not resolve assembly '{assemblyName}'", e);
+                    }
+
+                    // assembly not found. try to resolve it
+                    var stream = await assemblyResolver(assemblyName);
+
+                    if (stream == null)
+                    {
+                        throw new InvalidOperationException($"Could not resolve assembly '{assemblyName}'", e);
+                    }
+
+                    AssemblyLoadContext.Default.LoadFromStream(stream);
+                    //using (var memstr = new MemoryStream())
+                    //{
+                    //    stream.CopyTo(memstr);
+                    //    var assembly = Assembly.Load(memstr.ToArray());
+                    //}
+
+                    stream.Dispose();
+
+                    triedAssemblies.Add(assemblyName);
+
+                    var allAssemblies = AppDomain.CurrentDomain.GetAssemblies();
+                }
+                catch (Exception e)
+                {
+                    // TODO: don't fail forever. if reach MAX_TRIES abort with exception
+                    var type = e.GetType();
+                    throw;
+                }
+            }
+
+            return model;
+
         }
 
         public static MethodModel Deserialize(string data)

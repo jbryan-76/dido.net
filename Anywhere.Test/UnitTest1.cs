@@ -68,16 +68,28 @@ namespace Anywhere.Test
         [Fact]
         public void GenerateSerializedMethodInvocationData()
         {
-            // serialize a lambda expression invoking a member method
-            var fakeObj = new FakeUtil();
             var fakeArg = 123;
-            var data = MethodModelBuilder.Serialize(() => fakeObj.MemberMethod(fakeArg));
-            var testDataPath = System.IO.Path.Combine(TestFixture.SharedTestDataPath, AnywhereTestFixture.MemberMethodFile);
-            System.IO.File.WriteAllText(testDataPath, data);
+            var fakeObj = new FakeUtil();
 
+            // serialize a lambda expression invoking a member method
+            var data = MethodModelBuilder.Serialize(() => fakeObj.MemberMethod(fakeArg));
+            // save the serialized model
+            var path = System.IO.Path.Combine(TestFixture.SharedTestDataPath, AnywhereTestFixture.MemberMethodFile);
+            System.IO.File.WriteAllText(path, data);
+            // save the expected result
+            var result = fakeObj.MemberMethod(fakeArg);
+            path = System.IO.Path.Combine(TestFixture.SharedTestDataPath, AnywhereTestFixture.MemberResultFile);
+            System.IO.File.WriteAllText(path, Newtonsoft.Json.JsonConvert.SerializeObject(result));
+
+            // serialize a lambda expression invoking a static method
             data = MethodModelBuilder.Serialize(() => FakeUtil.StaticMethod(fakeArg));
-            testDataPath = System.IO.Path.Combine(TestFixture.SharedTestDataPath, AnywhereTestFixture.StaticMethodFile);
-            System.IO.File.WriteAllText(testDataPath, data);
+            // save the serialized model
+            path = System.IO.Path.Combine(TestFixture.SharedTestDataPath, AnywhereTestFixture.StaticMethodFile);
+            System.IO.File.WriteAllText(path, data);
+            // save the expected result
+            result = FakeUtil.StaticMethod(fakeArg);
+            path = System.IO.Path.Combine(TestFixture.SharedTestDataPath, AnywhereTestFixture.StaticResultFile);
+            System.IO.File.WriteAllText(path, Newtonsoft.Json.JsonConvert.SerializeObject(result));
         }
 
         [Fact]
@@ -91,13 +103,6 @@ namespace Anywhere.Test
             var result = method.Invoke();
 
             Assert.Equal(fakeArg, result);
-
-            //var type = typeof(FakeUtil);
-            //var obj = Activator.CreateInstance(type);
-            //var meth = type.GetMethod(nameof(FakeUtil.MemberMethod));
-
-
-            // unload the assembly
         }
 
         [Fact]
@@ -110,14 +115,6 @@ namespace Anywhere.Test
             var result = method.Invoke();
 
             Assert.Equal(fakeArg, result);
-
-            //var type = typeof(FakeUtil);
-            //var obj = Activator.CreateInstance(type);
-            //var meth = type.GetMethod(nameof(FakeUtil.MemberMethod));
-
-
-            // unload the assembly
         }
-
     }
 }
