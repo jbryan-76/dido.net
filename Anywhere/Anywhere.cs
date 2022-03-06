@@ -5,6 +5,9 @@ namespace Anywhere
     public class Anywhere
     {
         // TODO configure remote or local. remote needs some kind of connection string
+        // TODO configuration should be global and static since it applies to the entire application domain
+        // TODO configuration should be transmitted to a runner and applied globally so it can properly implement remote file access
+        // TODO create an Anywhere.IO to mirror System.IO at least for File and Path. readonly? or write too?
         public Anywhere()
         {
 

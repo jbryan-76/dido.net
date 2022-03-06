@@ -4,6 +4,7 @@ using System.Reflection;
 using Xunit;
 using Anywhere.TestLib;
 using Anywhere.Test.Common;
+using Anywhere.TestLibDependency;
 
 namespace Anywhere.Test
 {
@@ -65,56 +66,90 @@ namespace Anywhere.Test
             TestFixture = fixture;
         }
 
+        // TODO: these fields can't be static. figure out why
+
+        SampleDependencyClass DependencyModel = new SampleDependencyClass
+        {
+            MyString = "my string",
+            MyModel = new SampleDependencyModel
+            {
+                MyBool = true,
+                MyInt = 456,
+                MyDateTimeOffset = DateTimeOffset.Now,
+            }
+        };
+
+        int FakeArgument = 123;
+
+        SampleWorkerClass FakeObject = new SampleWorkerClass();
+
+        /// <summary>
+        /// Generate sample lambda method calls, then serialize and save them to a common shared folder
+        /// to be deserialized and executed by the Anywhere.TestEnv project.
+        /// </summary>
         [Fact]
         public void GenerateSerializedMethodInvocationData()
         {
-            var fakeArg = 123;
-            var fakeObj = new FakeUtil();
-
             // serialize a lambda expression invoking a member method
-            var data = MethodModelBuilder.Serialize(() => fakeObj.MemberMethod(fakeArg));
+            var data = MethodModelBuilder.Serialize(() => FakeObject.SimpleMemberMethod(FakeArgument));
             // save the serialized model
             var path = System.IO.Path.Combine(TestFixture.SharedTestDataPath, AnywhereTestFixture.MemberMethodFile);
             System.IO.File.WriteAllText(path, data);
             // save the expected result
-            var result = fakeObj.MemberMethod(fakeArg);
+            var result = FakeObject.SimpleMemberMethod(FakeArgument);
             path = System.IO.Path.Combine(TestFixture.SharedTestDataPath, AnywhereTestFixture.MemberResultFile);
             System.IO.File.WriteAllText(path, Newtonsoft.Json.JsonConvert.SerializeObject(result));
 
             // serialize a lambda expression invoking a static method
-            data = MethodModelBuilder.Serialize(() => FakeUtil.StaticMethod(fakeArg));
+            data = MethodModelBuilder.Serialize(() => SampleWorkerClass.SimpleStaticMethod(FakeArgument));
             // save the serialized model
             path = System.IO.Path.Combine(TestFixture.SharedTestDataPath, AnywhereTestFixture.StaticMethodFile);
             System.IO.File.WriteAllText(path, data);
             // save the expected result
-            result = FakeUtil.StaticMethod(fakeArg);
+            result = SampleWorkerClass.SimpleStaticMethod(FakeArgument);
             path = System.IO.Path.Combine(TestFixture.SharedTestDataPath, AnywhereTestFixture.StaticResultFile);
             System.IO.File.WriteAllText(path, Newtonsoft.Json.JsonConvert.SerializeObject(result));
+
+            // serialize a lambda expression that uses dependent assemblies
+            data = MethodModelBuilder.Serialize(() => FakeObject.MemberMethodWithDependency(DependencyModel));
+            // save the serialized model
+            path = System.IO.Path.Combine(TestFixture.SharedTestDataPath, AnywhereTestFixture.DependencyMethodFile);
+            System.IO.File.WriteAllText(path, data);
+            // save the expected result
+            var dependencyResult = FakeObject.MemberMethodWithDependency(DependencyModel);
+            path = System.IO.Path.Combine(TestFixture.SharedTestDataPath, AnywhereTestFixture.DependencyResultFile);
+            System.IO.File.WriteAllText(path, Newtonsoft.Json.JsonConvert.SerializeObject(dependencyResult));
         }
 
         [Fact]
         public void TestMemberMethod()
         {
-            var fakeObj = new FakeUtil();
-            var fakeArg = 123;
-
-            var data = MethodModelBuilder.Serialize(() => fakeObj.MemberMethod(fakeArg));
+            var data = MethodModelBuilder.Serialize(() => FakeObject.SimpleMemberMethod(FakeArgument));
             var method = MethodModelBuilder.Deserialize(data);
             var result = method.Invoke();
 
-            Assert.Equal(fakeArg, result);
+            Assert.Equal(FakeArgument, result);
         }
 
         [Fact]
         public void TestStaticMethod()
         {
-            var fakeArg = 123;
-
-            var data = MethodModelBuilder.Serialize(() => FakeUtil.StaticMethod(fakeArg));
+            var data = MethodModelBuilder.Serialize(() => SampleWorkerClass.SimpleStaticMethod(FakeArgument));
             var method = MethodModelBuilder.Deserialize(data);
             var result = method.Invoke();
 
-            Assert.Equal(fakeArg, result);
+            Assert.Equal(FakeArgument, result);
+        }
+
+        [Fact]
+        public void TestMemberMethodWithDependency()
+        {
+            var data = MethodModelBuilder.Serialize(() => FakeObject.MemberMethodWithDependency(DependencyModel));
+            var method = MethodModelBuilder.Deserialize(data);
+            var actualResult = method.Invoke();
+            var expecteResult = FakeObject.MemberMethodWithDependency(DependencyModel);
+
+            Assert.Equal(expecteResult, actualResult);
         }
     }
 }

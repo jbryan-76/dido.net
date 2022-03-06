@@ -135,7 +135,7 @@ namespace Anywhere
 
                 try
                 {
-                    var allAssemblies = AppDomain.CurrentDomain.GetAssemblies();
+                    //var allAssemblies = AppDomain.CurrentDomain.GetAssemblies();
 
                     // get the instance assembly and type
                     var assembly = Assembly.Load(model.Instance.Type.AssemblyName);
@@ -166,43 +166,54 @@ namespace Anywhere
 
                     created = true;
                 }
-                catch (FileNotFoundException e)
-                {
-                    var assemblyName = e.FileName;
-
-                    // TODO: first try to load the assembly from cache
-
-                    if (triedAssemblies.Contains(assemblyName))
-                    {
-                        throw new InvalidOperationException($"Could not resolve assembly '{assemblyName}'", e);
-                    }
-
-                    // assembly not found. try to resolve it
-                    var stream = await assemblyResolver(assemblyName);
-
-                    if (stream == null)
-                    {
-                        throw new InvalidOperationException($"Could not resolve assembly '{assemblyName}'", e);
-                    }
-
-                    AssemblyLoadContext.Default.LoadFromStream(stream);
-                    //using (var memstr = new MemoryStream())
-                    //{
-                    //    stream.CopyTo(memstr);
-                    //    var assembly = Assembly.Load(memstr.ToArray());
-                    //}
-
-                    stream.Dispose();
-
-                    triedAssemblies.Add(assemblyName);
-
-                    var allAssemblies = AppDomain.CurrentDomain.GetAssemblies();
-                }
                 catch (Exception e)
                 {
-                    // TODO: don't fail forever. if reach MAX_TRIES abort with exception
-                    var type = e.GetType();
-                    throw;
+                    if (e is FileLoadException || e is FileNotFoundException)
+                    {
+                        string assemblyName = "";
+                        if (e is FileNotFoundException)
+                        {
+                            assemblyName = (e as FileNotFoundException).FileName;
+                        }
+                        else
+                        {
+                            assemblyName = (e as FileLoadException).FileName;
+                        }
+
+                        // TODO: first try to load the assembly from cache
+
+                        if (triedAssemblies.Contains(assemblyName))
+                        {
+                            throw new InvalidOperationException($"Could not resolve assembly '{assemblyName}'", e);
+                        }
+
+                        // assembly not found. try to resolve it
+                        var stream = await assemblyResolver(assemblyName);
+
+                        if (stream == null)
+                        {
+                            throw new InvalidOperationException($"Could not resolve assembly '{assemblyName}'", e);
+                        }
+
+                        AssemblyLoadContext.Default.LoadFromStream(stream);
+                        //using (var memstr = new MemoryStream())
+                        //{
+                        //    stream.CopyTo(memstr);
+                        //    var assembly = Assembly.Load(memstr.ToArray());
+                        //}
+
+                        stream.Dispose();
+
+                        triedAssemblies.Add(assemblyName);
+
+                        //var allAssemblies = AppDomain.CurrentDomain.GetAssemblies();
+                    }
+                    else
+                    {
+                        // TODO: don't fail forever. if reach MAX_TRIES abort with exception
+                        var type = e.GetType();
+                        throw;
+                    }
                 }
             }
 

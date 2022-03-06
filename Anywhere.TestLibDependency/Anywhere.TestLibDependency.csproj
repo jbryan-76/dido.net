@@ -6,8 +6,4 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
-  <ItemGroup>
-    <ProjectReference Include="..\Anywhere.TestLibDependency\Anywhere.TestLibDependency.csproj" />
-  </ItemGroup>
-
 </Project>
