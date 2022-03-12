@@ -1,6 +1,6 @@
-﻿using Anywhere.TestLibDependency;
+﻿using AnywhereNET.TestLibDependency;
 
-namespace Anywhere.TestLib
+namespace AnywhereNET.TestLib
 {
     /// <summary>
     /// A test class containing sample methods for unit testing basic Anywhere

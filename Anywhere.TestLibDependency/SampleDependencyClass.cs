@@ -1,4 +1,4 @@
-﻿namespace Anywhere.TestLibDependency
+﻿namespace AnywhereNET.TestLibDependency
 {
     /// <summary>
     /// A test class which serves as a dependency to Anywhere.TestLib located in another assembly.

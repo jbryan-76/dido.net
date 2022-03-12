@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Anywhere.TestLibDependency
+namespace AnywhereNET.TestLibDependency
 {
     /// <summary>
     /// A POCO model used for testing proper serialization and invokation of
