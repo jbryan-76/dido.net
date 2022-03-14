@@ -154,6 +154,7 @@ namespace AnywhereNET.Test.Common
         /// <returns></returns>
         Task<Stream?> UnitTestRemoteAssemblyResolver(Environment env, string assemblyName)
         {
+            // TODO: use a custom stream to simulate the message passing to negotiate file loading?
             return UnitTestLocalAssemblyResolver(assemblyName);
         }
 

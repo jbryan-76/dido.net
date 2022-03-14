@@ -14,8 +14,31 @@ namespace foo
     // openssl req -newkey rsa:2048 -new -nodes -keyout test.key -x509 -days 365 -out test.pem
     // 2) convert to a pkcs12 pfx
     // openssl pkcs12 -export -out cert.pfx -inkey test.key -in test.pem -password pass:1234
+    // 3) run
+    // ./SslTestServer.exe cert.pfx 1234
 
     // tips: https://paulstovell.com/x509certificate2/
+
+    // use a single connection with multiple channels: Frame = type(1), channel(2), payload_length(4), payload
+    // NetworkOrderSerializer.WriteUInt64
+    // use HeartbeatFrame
+
+    // TODO: task timeout
+    //internal static class TaskExtensions
+    //{
+    //    public static async Task TimeoutAfter(this Task task, TimeSpan timeout)
+    //    {
+    //        if (task == await Task.WhenAny(task, Task.Delay(timeout)).ConfigureAwait(false))
+    //        {
+    //            await task.ConfigureAwait(false);
+    //        }
+    //        else
+    //        {
+    //            Task supressErrorTask = task.ContinueWith((t, s) => t.Exception.Handle(e => true), null, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
+    //            throw new TimeoutException();
+    //        }
+    //    }
+    //}
 
     public sealed class SslTcpServer
     {
@@ -36,7 +59,9 @@ namespace foo
                 // Application blocks while waiting for an incoming connection.
                 // Type CNTL-C to terminate the server.
                 TcpClient client = listener.AcceptTcpClient();
-                ProcessClient(client);
+                //ProcessClient(client);
+
+                Task.Run(() => ProcessClient(client));
             }
         }
         static void ProcessClient(TcpClient client)
@@ -57,17 +82,21 @@ namespace foo
                 DisplayStreamProperties(sslStream);
 
                 // Set timeouts for the read and write to 5 seconds.
-                sslStream.ReadTimeout = 5000;
-                sslStream.WriteTimeout = 5000;
-                // Read a message from the client.
-                Console.WriteLine("Waiting for client message...");
-                string messageData = ReadMessage(sslStream);
-                Console.WriteLine("Received: {0}", messageData);
+                //sslStream.ReadTimeout = 5000;
+                //sslStream.WriteTimeout = 5000;
 
-                // Write a message to the client.
-                byte[] message = Encoding.UTF8.GetBytes("Hello from the server.<EOF>");
-                Console.WriteLine("Sending hello message.");
-                sslStream.Write(message);
+                while (true)
+                {
+                    // Read a message from the client.
+                    Console.WriteLine("----\nWaiting for client message...");
+                    string messageData = ReadMessage(sslStream);
+                    Console.WriteLine("Received: {0}", messageData);
+
+                    // Write a message to the client.
+                    byte[] message = Encoding.UTF8.GetBytes("ack");
+                    Console.WriteLine("Sending ack message.");
+                    sslStream.Write(message);
+                }
             }
             catch (AuthenticationException e)
             {
@@ -76,10 +105,16 @@ namespace foo
                 {
                     Console.WriteLine("Inner exception: {0}", e.InnerException.Message);
                 }
-                Console.WriteLine("Authentication failed - closing the connection.");
-                sslStream.Close();
-                client.Close();
-                return;
+                Console.WriteLine("Authentication failed - closing the connection...");
+            }
+            catch(IOException e)
+            {
+                Console.WriteLine("Exception: {0}", e.Message);
+                Console.WriteLine("Client disconnected - closing the connection...");
+            }
+            catch(Exception e)
+            {
+                Console.WriteLine($"Unhandled Exception: {e.GetType()} {e.Message}");
             }
             finally
             {
@@ -88,6 +123,7 @@ namespace foo
                 // the sslStream.
                 sslStream.Close();
                 client.Close();
+                Console.WriteLine("Closed client connection.");
             }
         }
         static string ReadMessage(SslStream sslStream)
@@ -109,11 +145,11 @@ namespace foo
                 char[] chars = new char[decoder.GetCharCount(buffer, 0, bytes)];
                 decoder.GetChars(buffer, 0, bytes, chars, 0);
                 messageData.Append(chars);
-                // Check for EOF or an empty message.
-                if (messageData.ToString().IndexOf("<EOF>") != -1)
-                {
-                    break;
-                }
+                //// Check for EOF or an empty message.
+                //if (messageData.ToString().IndexOf("<EOF>") != -1)
+                //{
+                //    break;
+                //}
             } while (bytes != 0);
 
             return messageData.ToString();

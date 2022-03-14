@@ -17,13 +17,15 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SslTestServer", "SslTestSer
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SslTestClient", "SslTestClient\SslTestClient.csproj", "{B81EE5C5-7106-40A9-9F22-A790E810F42B}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Anywhere.TestLib", "Anywhere.TestLib\Anywhere.TestLib.csproj", "{998643F0-7B60-4D4D-A638-743766DCE0BA}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Anywhere.TestLib", "Anywhere.TestLib\Anywhere.TestLib.csproj", "{998643F0-7B60-4D4D-A638-743766DCE0BA}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Anywhere.TestEnv", "Anywhere.TestEnv\Anywhere.TestEnv.csproj", "{52EC30F9-578B-4F04-ADEF-ACCBE54C3286}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Anywhere.TestEnv", "Anywhere.TestEnv\Anywhere.TestEnv.csproj", "{52EC30F9-578B-4F04-ADEF-ACCBE54C3286}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Anywhere.Test.Common", "Anywhere.Test.Common\Anywhere.Test.Common.csproj", "{BAC0E325-A45F-41A1-87EE-8B29ABC9D5E3}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Anywhere.Test.Common", "Anywhere.Test.Common\Anywhere.Test.Common.csproj", "{BAC0E325-A45F-41A1-87EE-8B29ABC9D5E3}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Anywhere.TestLibDependency", "Anywhere.TestLibDependency\Anywhere.TestLibDependency.csproj", "{2118BCB1-8AAB-4A60-8F6E-51FD17531B56}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Anywhere.TestLibDependency", "Anywhere.TestLibDependency\Anywhere.TestLibDependency.csproj", "{2118BCB1-8AAB-4A60-8F6E-51FD17531B56}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SslTestCommon", "SslTestCommon\SslTestCommon.csproj", "{C8A9AFCD-7C1F-4E80-AF73-208C1E47D01A}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -75,6 +77,10 @@ Global
 		{2118BCB1-8AAB-4A60-8F6E-51FD17531B56}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{2118BCB1-8AAB-4A60-8F6E-51FD17531B56}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{2118BCB1-8AAB-4A60-8F6E-51FD17531B56}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C8A9AFCD-7C1F-4E80-AF73-208C1E47D01A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C8A9AFCD-7C1F-4E80-AF73-208C1E47D01A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C8A9AFCD-7C1F-4E80-AF73-208C1E47D01A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C8A9AFCD-7C1F-4E80-AF73-208C1E47D01A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

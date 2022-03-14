@@ -10,10 +10,11 @@ using System.IO;
 
 namespace foo
 {
+    // 1) run
+    // ./SslTestClient.exe localhost
+
     public class SslTcpClient
     {
-
-
         // The following method is invoked by the RemoteCertificateValidationDelegate.
         public static bool ValidateServerCertificate(
               object sender,
@@ -28,6 +29,7 @@ namespace foo
             }
 
             // for self-signed, just return true
+            // TODO: make all this better for production use
             return true;
 
             Console.WriteLine("Certificate error: {0}", sslPolicyErrors);
@@ -38,6 +40,7 @@ namespace foo
 
         public static void RunClient(string machineName, string serverName)
         {
+            Console.WriteLine($"Connecting to {machineName}, {serverName}...");
             // Create a TCP/IP client socket.
             // machineName is the host running the server application.
             TcpClient client = new TcpClient(machineName, 8080);
@@ -66,15 +69,29 @@ namespace foo
                 client.Close();
                 return;
             }
-            // Encode a test message into a byte array.
-            // Signal the end of the message using the "<EOF>".
-            byte[] messsage = Encoding.UTF8.GetBytes("Hello from the client.<EOF>");
-            // Send hello message to the server.
-            sslStream.Write(messsage);
-            sslStream.Flush();
-            // Read message from the server.
-            string serverMessage = ReadMessage(sslStream);
-            Console.WriteLine("Server says: {0}", serverMessage);
+
+            while (true)
+            {
+                Console.WriteLine("Enter some text:");
+
+                var input = Console.ReadLine();
+                Console.WriteLine(String.Join(" ", Encoding.UTF8.GetBytes(input)));
+                if (input == null)
+                {
+                    break;
+                }
+
+                // Encode a test message into a byte array.
+                // Signal the end of the message using the "<EOF>".
+                byte[] messsage = Encoding.UTF8.GetBytes(input);
+                // Send hello message to the server.
+                sslStream.Write(messsage);
+                sslStream.Flush();
+                // Read message from the server.
+                string serverMessage = ReadMessage(sslStream);
+                Console.WriteLine("Server says: {0}", serverMessage);
+            }
+
             // Close the client connection.
             client.Close();
             Console.WriteLine("Client closed.");
