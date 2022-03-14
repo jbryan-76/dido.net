@@ -1,12 +1,9 @@
-﻿using System;
-using System.Collections;
-using System.Net;
+﻿using SslTestCommon;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
-using System.Text;
 using System.Security.Cryptography.X509Certificates;
-using System.IO;
+using System.Text;
 
 namespace foo
 {
@@ -38,7 +35,7 @@ namespace foo
             return false;
         }
 
-        public static void RunClient(string machineName, string serverName)
+        public static async Task RunClient(string machineName, string serverName)
         {
             Console.WriteLine($"Connecting to {machineName}, {serverName}...");
             // Create a TCP/IP client socket.
@@ -76,20 +73,33 @@ namespace foo
 
                 var input = Console.ReadLine();
                 Console.WriteLine(String.Join(" ", Encoding.UTF8.GetBytes(input)));
-                if (input == null)
-                {
-                    break;
-                }
 
                 // Encode a test message into a byte array.
                 // Signal the end of the message using the "<EOF>".
                 byte[] messsage = Encoding.UTF8.GetBytes(input);
+
+                if (messsage.Length == 0)
+                {
+                    break;
+                }
+
+                await sslStream.WriteFrame(new Frame
+                {
+                    Type = 1,
+                    Channel = 1,
+                    Length = messsage.Length,
+                    Payload = messsage
+                });
+
                 // Send hello message to the server.
-                sslStream.Write(messsage);
-                sslStream.Flush();
+                //sslStream.Write(messsage);
+                //sslStream.Flush();
                 // Read message from the server.
-                string serverMessage = ReadMessage(sslStream);
-                Console.WriteLine("Server says: {0}", serverMessage);
+                //string serverMessage = ReadMessage(sslStream);
+                var frame = await sslStream.ReadFrame();
+
+                //Console.WriteLine("Server says: {0}", serverMessage);
+                Console.WriteLine("Server says: {0}", frame);
             }
 
             // Close the client connection.
@@ -129,6 +139,7 @@ namespace foo
             Console.WriteLine("clientSync machineName [serverName]");
             Environment.Exit(1);
         }
+
         public static int Main(string[] args)
         {
             string serverCertificateName = null;
@@ -148,7 +159,9 @@ namespace foo
             {
                 serverCertificateName = args[1];
             }
-            SslTcpClient.RunClient(machineName, serverCertificateName);
+
+            SslTcpClient.RunClient(machineName, serverCertificateName).GetAwaiter().GetResult();
+            
             return 0;
         }
     }

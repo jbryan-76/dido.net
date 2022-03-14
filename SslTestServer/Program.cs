@@ -7,6 +7,7 @@ using System.Security.Authentication;
 using System.Text;
 using System.Security.Cryptography.X509Certificates;
 using System.IO;
+using SslTestCommon;
 
 namespace foo
 {
@@ -45,7 +46,7 @@ namespace foo
         static X509Certificate2 serverCertificate = null;
         // The certificate parameter specifies the name of the file
         // containing the machine certificate.
-        public static void RunServer(string pfxFile, string password)
+        public static async Task RunServer(string pfxFile, string password)
         {
             //serverCertificate = X509Certificate.CreateFromCertFile(certificate);
             //serverCertificate = X509Certificate2.CreateFromPemFile(pemFile, keyFile);
@@ -64,7 +65,8 @@ namespace foo
                 Task.Run(() => ProcessClient(client));
             }
         }
-        static void ProcessClient(TcpClient client)
+
+        static async Task ProcessClient(TcpClient client)
         {
             // A client has connected. Create the
             // SslStream using the client's network stream.
@@ -87,15 +89,28 @@ namespace foo
 
                 while (true)
                 {
-                    // Read a message from the client.
                     Console.WriteLine("----\nWaiting for client message...");
-                    string messageData = ReadMessage(sslStream);
-                    Console.WriteLine("Received: {0}", messageData);
+
+                    // Read a message from the client.
+                    var frame = await sslStream.ReadFrame();
+                    //string messageData = ReadMessage(sslStream);
+                    //Console.WriteLine("Received: {0}", messageData);
+                    Console.WriteLine("Received: {0}", frame);
 
                     // Write a message to the client.
-                    byte[] message = Encoding.UTF8.GetBytes("ack");
-                    Console.WriteLine("Sending ack message.");
-                    sslStream.Write(message);
+                    //byte[] message = Encoding.UTF8.GetBytes("ack");
+                    //Console.WriteLine("Sending ack message.");
+                    //sslStream.Write(message);
+
+                    byte[] messsage = Encoding.UTF8.GetBytes("ack");
+
+                    await sslStream.WriteFrame(new Frame
+                    {
+                        Type = 1,
+                        Channel = 1,
+                        Length = messsage.Length,
+                        Payload = messsage
+                    });
                 }
             }
             catch (AuthenticationException e)
@@ -218,7 +233,9 @@ namespace foo
             }
             pfxFile = args[0];
             pass = args[1];
-            SslTcpServer.RunServer(pfxFile, pass);
+
+            SslTcpServer.RunServer(pfxFile, pass).GetAwaiter().GetResult();
+
             return 0;
         }
     }
