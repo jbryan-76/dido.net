@@ -5,8 +5,10 @@ namespace SslTestCommon
     public enum FrameTypes
     {
         // heartbeat?
-        // graceful close?
-        // 
+        // diconnect?
+        // event?
+        Disconnect,
+        Debug
     }
 
     // TODO: for sending, create larger message constructs that are broken up into frames and multiplexed into an async producer/consumer queue for sending
@@ -19,18 +21,31 @@ namespace SslTestCommon
         public int Length { get; set; }
         public byte[] Payload { get; set; }
 
+        public FrameTypes FrameType
+        {
+            get
+            {
+                return (FrameTypes)Type;
+            }
+            set
+            {
+                Type = (byte)value;
+            }
+        }
+
+        public Frame() { }
+
+        internal Frame(Frame frame)
+        {
+            FrameType = frame.FrameType;
+            Channel = frame.Channel;
+            Length = frame.Length;
+            Payload = frame.Payload;
+        }
+
         public override string ToString()
         {
-            return $"Frame {Type} on channel {Channel}: received {Length} bytes ({Encoding.UTF8.GetString(Payload)})";
+            return $"Frame '{FrameType}' on channel {Channel}: received {Length} bytes ({Encoding.UTF8.GetString(Payload)})";
         }
     }
-
-    //public class MessageFrame : Frame
-    //{
-    //    public MessageFrame(string message)
-    //    {
-    //        Type = (byte)FrameTypes.MessageFrame;
-    //        Ch
-    //    }
-    //}
 }

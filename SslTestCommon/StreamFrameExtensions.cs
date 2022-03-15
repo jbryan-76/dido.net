@@ -25,7 +25,10 @@
             stream.WriteByte(frame.Type);
             stream.WriteUInt16BE(frame.Channel);
             stream.WriteInt32BE(frame.Length);
-            stream.Write(frame.Payload);
+            if (frame.Length > 0)
+            {
+                stream.Write(frame.Payload);
+            }
             stream.Flush();
         }
     }

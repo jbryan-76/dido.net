@@ -1,9 +1,6 @@
 using AnywhereNET.Test.Common;
 using System;
 using System.IO;
-using System.Linq;
-using System.Reflection;
-using System.Threading.Tasks;
 using Xunit;
 
 namespace AnywhereNET.TestEnv
@@ -12,6 +9,8 @@ namespace AnywhereNET.TestEnv
     {
         readonly AnywhereTestFixture TestFixture;
 
+        // TODO: try creating a separate app domain 
+        // https://docs.microsoft.com/en-us/dotnet/api/system.appdomain?view=net-6.0#:~:text=The%20AppDomain%20class%20implements%20a,application%20domains%2C%20see%20Application%20Domains.
 
         public UnitTest1(AnywhereTestFixture fixture)
         {
