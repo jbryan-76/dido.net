@@ -7,6 +7,7 @@ namespace SslTestCommon
         // heartbeat?
         // diconnect?
         // event?
+        ChannelData,
         Disconnect,
         Debug
     }
@@ -16,10 +17,13 @@ namespace SslTestCommon
 
     public class Frame
     {
+        static public int MaxFrameSize = 512 * 1024;
+
         public byte Type { get; set; }
         public ushort Channel { get; set; }
         public int Length { get; set; }
-        public byte[] Payload { get; set; }
+        //public byte[] Payload { get; set; }
+        public ArraySegment<byte> Payload { get; set; }
 
         public FrameTypes FrameType
         {

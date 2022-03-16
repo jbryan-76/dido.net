@@ -32,6 +32,16 @@ namespace foo
     //    }
     //}
 
+    //public class MyChannelTest
+    //{
+    //    Channel Channel;
+
+    //    public MyChannelTest(Channel channel)
+    //    {
+    //        Channel = channel;
+    //    }
+    //}
+
     public sealed class SslTcpServer
     {
         static X509Certificate2? serverCertificate = null;
@@ -51,11 +61,23 @@ namespace foo
             while (true)
             {
                 Console.WriteLine("Waiting for a client to connect...");
-                // Application blocks while waiting for an incoming connection.
-                // Type CNTL-C to terminate the server.
-                TcpClient client = listener.AcceptTcpClient();
+                // block and wait for the next incoming connection
+                TcpClient client = await listener.AcceptTcpClientAsync();
 
-                connections.Add(new Connection(client, serverCertificate));
+                // create the connection
+                Connection connection;
+                connections.Add(connection = new Connection(client, serverCertificate));
+
+                // create a dummy channel
+                //var channel = connection.GetChannel(0);
+
+#if DEBUG
+                // send a debug message to confirm the client can receive
+                _ = Task.Delay(0).ContinueWith((task) =>
+                {
+                    _ = connection.DebugAsync("Hello from the server");
+                });
+#endif
 
                 //Task.Run(() => ProcessClient(client));
             }

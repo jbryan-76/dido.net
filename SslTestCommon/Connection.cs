@@ -7,15 +7,12 @@ using System.Security.Cryptography.X509Certificates;
 
 namespace SslTestCommon
 {
-    // TODO: message objects: 
-    // TODO: frame types: heartbeat; create object; disconnect
+    //public interface IMessage
+    //{
+    //    // Task<Frame[]>
 
-    public interface IMessage
-    {
-        // Task<Frame[]>
-
-        // TODO: how to do streams? like we could receive a frame to create an object, then add data to its internal (memory stream) buffer
-    }
+    //    // TODO: how to do streams? like we could receive a frame to create an object, then add data to its internal (memory stream) buffer
+    //}
 
     public class Connection : IDisposable
     {
@@ -27,11 +24,13 @@ namespace SslTestCommon
         private Task? WriteTask;
 
         private bool IsDisposed = false;
-        private long Connected = 0;
+        private long IsConnected = 0;
 
-        public delegate Task FrameHandler(Frame frame);
+        private Dictionary<ushort, Channel> Channels = new Dictionary<ushort, Channel>();
 
-        public FrameHandler? HandleFrame = null;
+        //public delegate Task FrameHandler(Frame frame);
+
+        //public FrameHandler? HandleFrame = null;
 
         /// <summary>
         /// Create a new connection as a server connected to the provided client.
@@ -104,18 +103,6 @@ namespace SslTestCommon
             }
         }
 
-        internal void FinishConnecting()
-        {
-            Connected = 1;
-            var remote = (IPEndPoint)Client.Client.RemoteEndPoint;
-            var local = (IPEndPoint)Client.Client.LocalEndPoint;
-            Console.WriteLine($"connected. Local = {local.Address}:{local.Port}. Remote = {remote.Address}:{remote.Port}");
-
-            // start separate threads to read and write data
-            ReadTask = Task.Run(() => ReadLoop());
-            WriteTask = Task.Run(() => WriteLoop());
-        }
-
         public void Dispose()
         {
             if (!IsDisposed)
@@ -123,8 +110,8 @@ namespace SslTestCommon
                 Console.WriteLine("disposing");
 
                 // dispose managed objects
-                ReadTask.Dispose();
-                WriteTask.Dispose();
+                ReadTask?.Dispose();
+                WriteTask?.Dispose();
                 IsDisposed = true;
 
                 Console.WriteLine("disposed");
@@ -132,26 +119,21 @@ namespace SslTestCommon
             GC.SuppressFinalize(this);
         }
 
-        public async Task SendMessageAsync(IMessage message, ushort channel = 0)
-        {
-            // TODO: break into frames and enqueue
-        }
+        //public async Task SendMessageAsync(IMessage message, ushort channel = 0)
+        //{
+        //    // TODO: break into frames and enqueue
+        //}
 
         public async Task DisconnectAsync()
         {
-            // TODO: enqueue a "close" (ie graceful disconnect) frame, then close
+            // enqueue a "close" (ie graceful disconnect) frame
             FrameQueue.Enqueue(new DisconnectFrame());
 
             // indicate we are disconnecting
             Console.WriteLine("disconnecting");
-            Interlocked.Exchange(ref Connected, 0);
-
-            //?????
-            //Stream.Close();
-            //Client.Close();
+            Interlocked.Exchange(ref IsConnected, 0);
 
             // wait for the tasks to terminate
-
             Console.WriteLine("awaiting read and write tasks");
             await ReadTask;
             await WriteTask;
@@ -164,10 +146,44 @@ namespace SslTestCommon
             FrameQueue.Enqueue(new DebugFrame(message));
         }
 
-        async void WriteLoop()
+        public Channel GetChannel(ushort channelNumber)
+        {
+            if (!Channels.ContainsKey(channelNumber))
+            {
+                Channels.Add(channelNumber, new Channel(this, channelNumber));
+            }
+            return Channels[channelNumber];
+        }
+
+        internal void EnqueueFrame(Frame frame)
+        {
+            FrameQueue.Enqueue(frame);
+        }
+
+        internal void EnqueueFrames(IEnumerable<Frame> frames)
+        {
+            foreach (var frame in frames)
+            {
+                FrameQueue.Enqueue(frame);
+            }
+        }
+
+        private void FinishConnecting()
+        {
+            IsConnected = 1;
+            var remote = (IPEndPoint)Client.Client.RemoteEndPoint;
+            var local = (IPEndPoint)Client.Client.LocalEndPoint;
+            Console.WriteLine($"connected. Local = {local.Address}:{local.Port}. Remote = {remote.Address}:{remote.Port}");
+
+            // start separate threads to read and write data
+            ReadTask = Task.Run(() => ReadLoop());
+            WriteTask = Task.Run(() => WriteLoop());
+        }
+
+        private async void WriteLoop()
         {
             Console.WriteLine("starting write loop");
-            while (Interlocked.Read(ref Connected) == 1)
+            while (Interlocked.Read(ref IsConnected) == 1)
             {
                 Thread.Sleep(0);
                 if (FrameQueue.TryDequeue(out Frame? frame))
@@ -178,19 +194,19 @@ namespace SslTestCommon
             Console.WriteLine("exiting write loop");
         }
 
-        async void ReadLoop()
+        private async void ReadLoop()
         {
             Console.WriteLine("starting read loop");
             try
             {
-                while (Interlocked.Read(ref Connected) == 1)
+                while (Interlocked.Read(ref IsConnected) == 1)
                 {
                     Console.WriteLine("Waiting for next incoming data frame...");
 
                     // receive the next data frame from the remote connection
                     var rawFrame = await Stream.ReadFrame();
 
-                    // TODO: why is C#8 making this return type nullable
+                    // TODO: why is C#8 making this return type nullable?!?!?
                     var frame = FrameFactory.Decode(rawFrame);
 
                     Console.WriteLine("Received: {0}", frame);
@@ -198,7 +214,7 @@ namespace SslTestCommon
                     if (frame is DisconnectFrame)
                     {
                         Console.WriteLine("disconnecting");
-                        Interlocked.Exchange(ref Connected, 0);
+                        Interlocked.Exchange(ref IsConnected, 0);
                     }
 
                     else if (frame is DebugFrame)
@@ -207,20 +223,16 @@ namespace SslTestCommon
                     }
 
                     // TODO: process the data frame
-                    else if (HandleFrame != null)
-                    {
-                        await HandleFrame(frame);
-                    }
-
-                    //byte[] messsage = Encoding.UTF8.GetBytes("ack");
-
-                    //await sslStream.WriteFrame(new Frame
+                    //else if (HandleFrame != null)
                     //{
-                    //    Type = 1,
-                    //    Channel = 1,
-                    //    Length = messsage.Length,
-                    //    Payload = messsage
-                    //});
+                    //    await HandleFrame(frame);
+                    //}
+
+                    else
+                    {
+                        var channel = GetChannel(frame.Channel);
+                        channel.Receive(frame.Payload);
+                    }
                 }
                 Console.WriteLine("exiting read loop");
             }
@@ -243,7 +255,7 @@ namespace SslTestCommon
         }
 
         // The following method is invoked by the RemoteCertificateValidationDelegate.
-        static bool ValidateServerCertificate(
+        private static bool ValidateServerCertificate(
               object sender,
               X509Certificate? certificate,
               X509Chain? chain,
