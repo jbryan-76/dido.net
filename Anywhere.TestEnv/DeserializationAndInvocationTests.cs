@@ -5,14 +5,16 @@ using Xunit;
 
 namespace AnywhereNET.TestEnv
 {
-    public class UnitTest1 : IClassFixture<AnywhereTestFixture>
+    public class DeserializationAndInvocationTests : IClassFixture<AnywhereTestFixture>
     {
         readonly AnywhereTestFixture TestFixture;
 
         // TODO: try creating a separate app domain 
         // https://docs.microsoft.com/en-us/dotnet/api/system.appdomain?view=net-6.0#:~:text=The%20AppDomain%20class%20implements%20a,application%20domains%2C%20see%20Application%20Domains.
+        // TODO: appdomains deprecated, use AssemblyLoadContext instead?
+        // https://stackoverflow.com/questions/27266907/no-appdomains-in-net-core-why
 
-        public UnitTest1(AnywhereTestFixture fixture)
+        public DeserializationAndInvocationTests(AnywhereTestFixture fixture)
         {
             TestFixture = fixture;
         }

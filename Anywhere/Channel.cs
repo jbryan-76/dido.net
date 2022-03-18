@@ -1,6 +1,6 @@
 ﻿using System.Collections.Concurrent;
 
-namespace SslTestCommon
+namespace AnywhereNET
 {
     public class Channel : Stream
     {

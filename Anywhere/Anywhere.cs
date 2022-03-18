@@ -76,6 +76,11 @@ using System.Reflection;
 // send data from app thread
 
 
+// 1) generate a cert
+// openssl req -newkey rsa:2048 -new -nodes -keyout test.key -x509 -days 365 -out test.pem
+// 2) convert to a pkcs12 pfx
+// openssl pkcs12 -export -out cert.pfx -inkey test.key -in test.pem -password pass:1234
+
 namespace AnywhereNET
 {
 

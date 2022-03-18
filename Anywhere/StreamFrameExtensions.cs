@@ -1,4 +1,4 @@
-﻿namespace SslTestCommon
+﻿namespace AnywhereNET
 {
     public static class StreamFrameExtensions
     {

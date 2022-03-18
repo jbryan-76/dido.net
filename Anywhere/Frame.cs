@@ -1,6 +1,6 @@
 ﻿using System.Text;
 
-namespace SslTestCommon
+namespace AnywhereNET
 {
     public enum FrameTypes
     {

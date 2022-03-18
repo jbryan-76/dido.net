@@ -8,7 +8,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\SslTestCommon\SslTestCommon.csproj" />
+    <ProjectReference Include="..\Anywhere\Anywhere.csproj" />
   </ItemGroup>
 
 </Project>

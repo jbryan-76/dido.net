@@ -6,12 +6,11 @@ using Xunit;
 
 namespace AnywhereNET.Test
 {
-
-    public class UnitTest1 : IClassFixture<AnywhereTestFixture>
+    public class SerializationAndInvocationTests : IClassFixture<AnywhereTestFixture>
     {
         readonly AnywhereTestFixture TestFixture;
 
-        public UnitTest1(AnywhereTestFixture fixture)
+        public SerializationAndInvocationTests(AnywhereTestFixture fixture)
         {
             TestFixture = fixture;
         }

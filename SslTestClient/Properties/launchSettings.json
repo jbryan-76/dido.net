@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "SslTestClient": {
+      "commandName": "Project",
+      "commandLineArgs": "localhost"
+    }
+  }
+}
