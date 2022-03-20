@@ -190,7 +190,7 @@ namespace AnywhereNET.Test
                 var client = await listener.AcceptTcpClientAsync();
 
                 // create a secure connection to the client
-                var serverConnection = new Connection(client, cert);
+                var serverConnection = new Connection(client, cert, "server");
                 return serverConnection;
             });
         }
@@ -209,7 +209,7 @@ namespace AnywhereNET.Test
                 var client = new TcpClient(localhost, port);
 
                 // return a secure connection to the server
-                var clientConnection = new Connection(client, localhost);
+                var clientConnection = new Connection(client, localhost, "client");
                 return clientConnection;
             });
         }

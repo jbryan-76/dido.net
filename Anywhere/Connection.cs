@@ -21,55 +21,73 @@ namespace AnywhereNET
         private Exception? ReadThreadException;
         private Exception? WriteThreadException;
 
+        private MemoryStream ReadBuffer = new MemoryStream();
+
         //private bool IsDisposed = false;
         private long Connected = 0;
 
         private Dictionary<ushort, Channel> Channels = new Dictionary<ushort, Channel>();
 
+        public string Name { get; private set; } = "";
+
+        private void Log(string message)
+        {
+            if (!string.IsNullOrWhiteSpace(Name))
+            {
+                Console.WriteLine($"[{DateTimeOffset.UtcNow.ToString("o")}] ({Name}) {message}");
+            }
+            else
+            {
+                Console.WriteLine($"[{DateTimeOffset.UtcNow.ToString("o")}] {message}");
+            }
+        }
+
         /// <summary>
-        /// Create a new connection as a server connected to the provided client.
+        /// Create a new secure connection as a server using the provided client and certificate.
         /// </summary>
         /// <param name="client"></param>
         /// <param name="serverCertificate"></param>
-        public Connection(TcpClient client, X509Certificate2 serverCertificate)
+        public Connection(TcpClient client, X509Certificate2 serverCertificate, string? name = null)
         {
+            Name = name ?? "";
             Client = client;
 
-            Console.WriteLine("creating sslstream as server");
+            Log("creating sslstream as server");
             // if a certificate is supplied, the connection is implied to be a server
             Stream = new SslStream(client.GetStream(), false);
 
             try
             {
-                Console.WriteLine("stream created - authenticating");
+                Log("stream created - authenticating");
                 // Authenticate the server but don't require the client to authenticate.
                 Stream.AuthenticateAsServer(serverCertificate, clientCertificateRequired: false, checkCertificateRevocation: true);
-                Console.WriteLine("authenticated");
+                Log("authenticated");
 
                 FinishConnecting();
             }
             catch (AuthenticationException e)
             {
-                Console.WriteLine("Exception: {0}", e.Message);
+                Log($"Exception: {e.Message}");
                 if (e.InnerException != null)
                 {
-                    Console.WriteLine("Inner exception: {0}", e.InnerException.Message);
+                    Log($"  Inner exception: {e.InnerException.Message}");
                 }
-                Console.WriteLine("Authentication failed");
+                Log("Authentication failed");
                 throw;
             }
         }
 
         /// <summary>
-        /// Create a new connection as a client connected to the provided host server.
+        /// Create a new secure connection using the provided client and connected to the provided host server.
         /// </summary>
         /// <param name="client"></param>
         /// <param name="targetHost"></param>
-        public Connection(TcpClient client, string targetHost)
+        public Connection(TcpClient client, string targetHost, string? name = null)
         {
+            Name = name ?? "";
             Client = client;
 
-            Console.WriteLine("creating sslstream as client");
+            Log("creating sslstream as client");
             // otherwise the connection is implied to be a client
             Stream = new SslStream(
                 Client.GetStream(),
@@ -80,65 +98,97 @@ namespace AnywhereNET
 
             try
             {
-                Console.WriteLine("Authenticating to host {0}.", targetHost);
+                Log($"Authenticating to host {targetHost}.");
                 Stream.AuthenticateAsClient(targetHost);
 
                 FinishConnecting();
             }
             catch (AuthenticationException e)
             {
-                Console.WriteLine("Exception: {0}", e.Message);
+                Log($"Exception: {e.Message}");
                 if (e.InnerException != null)
                 {
-                    Console.WriteLine("Inner exception: {0}", e.InnerException.Message);
+                    Log($"  Inner exception: {e.InnerException.Message}");
                 }
-                Console.WriteLine("Authentication failed");
+                Log("Authentication failed");
                 throw;
             }
         }
 
         public void Dispose()
         {
-            Console.WriteLine("starting connection dispose");
+            Log("starting connection dispose");
             if (Interlocked.Read(ref Connected) == 1)
             {
-                Console.WriteLine("  still connected");
-                // TODO: force disconnect?
+                Log("  still connected");
+                // cleanup
                 Disconnect();
                 Stream.Dispose();
+                ReadBuffer.Dispose();
             }
 
             //if (!IsDisposed)
             //{
-            //    Console.WriteLine("disposing connection");
+            //    Log("disposing connection");
 
             //    // TODO: dispose any managed objects
             //    IsDisposed = true;
 
             //}
-            Console.WriteLine("disposed connection");
+            Log("disposed connection");
             GC.SuppressFinalize(this);
         }
 
         public void Disconnect()
         {
-            Console.WriteLine("starting connection disconnect");
             // short circuit if already disconnected
             if (Interlocked.Read(ref Connected) == 0)
             {
                 return;
             }
-            Console.WriteLine("  still connected: sending disconnect frame");
+            Log("starting connection disconnect");
+            Log("  still connected: sending disconnect frame");
 
             // gracefully attempt to shut down the other side of the connection
+            // by sending a disconnecte frame
             var frame = new DisconnectFrame();
             if (UnitTestTransmitFrameMonitor != null)
             {
                 UnitTestTransmitFrameMonitor(frame);
             }
-            Stream.WriteFrame(frame);
+            WriteFrame(frame);
 
-            FinishDisconnecting();
+            Log("FinishDisconnecting");
+            // signal all threads to stop
+            Interlocked.Exchange(ref Connected, 0);
+            //ReadThread!.Join(1000);
+            //WriteThread!.Join(1000);
+
+            // wait for all threads to terminate, and aggregate any exceptions
+            var exceptions = new List<Exception>();
+            if (!ReadThread!.Join(1000))
+            {
+                //exceptions.Add(new TimeoutException("The read thread did not join after disconnect within the time allotted."));
+            }
+            if (!WriteThread!.Join(1000))
+            {
+                //exceptions.Add(new TimeoutException("The write thread did not join after disconnect within the time allotted."));
+            }
+            if (ReadThreadException != null)
+            {
+                exceptions.Add(ReadThreadException);
+            }
+            if (WriteThreadException != null)
+            {
+                exceptions.Add(WriteThreadException);
+            }
+
+            Log("disconnected");
+
+            if (exceptions.Count > 0)
+            {
+                throw new AggregateException(exceptions);
+            }
         }
 
         /// <summary>
@@ -149,48 +199,6 @@ namespace AnywhereNET
             get
             {
                 return Interlocked.Read(ref Connected) == 1;
-            }
-        }
-
-        private void FinishDisconnecting()
-        {
-            try
-            {
-                var exceptions = new List<Exception>();
-
-                Console.WriteLine("FinishDisconnecting");
-                // signal all threads to stop then wait for them to terminate
-                Interlocked.Exchange(ref Connected, 0);
-                ReadThread!.Join(1000);
-                WriteThread!.Join(1000);
-                //if (!ReadThread!.Join(5000))
-                //{
-                //    exceptions.Add(new TimeoutException("The read thread did not join after disconnect within the time allotted."));
-                //}
-                //if (!WriteThread!.Join(5000))
-                //{
-                //    exceptions.Add(new TimeoutException("The write thread did not join after disconnect within the time allotted."));
-                //}
-
-                // report any exceptions that may have occurred
-                if (ReadThreadException != null)
-                {
-                    exceptions.Add(ReadThreadException);
-                }
-                if (WriteThreadException != null)
-                {
-                    exceptions.Add(WriteThreadException);
-                }
-                if (exceptions.Count > 0)
-                {
-                    throw new AggregateException(exceptions);
-                }
-            }
-            finally
-            {
-                Stream.Close();
-
-                Console.WriteLine("disconnected");
             }
         }
 
@@ -205,15 +213,15 @@ namespace AnywhereNET
         //    FrameQueue.Enqueue(new DisconnectFrame());
 
         //    // indicate we are disconnecting
-        //    Console.WriteLine("disconnecting");
+        //    Log("disconnecting");
         //    Interlocked.Exchange(ref IsConnected, 0);
 
         //    // wait for the tasks to terminate
-        //    Console.WriteLine("awaiting read and write tasks");
+        //    Log("awaiting read and write tasks");
         //    await ReadTask;
         //    await WriteTask;
 
-        //    Console.WriteLine("disconnected");
+        //    Log("disconnected");
         //}
 
         public async Task DebugAsync(string message)
@@ -232,7 +240,7 @@ namespace AnywhereNET
 
         internal void EnqueueFrame(Frame frame)
         {
-            Console.WriteLine($"enqueuing frame: {frame}");
+            Log($"enqueuing frame: {frame}");
             FrameQueue.Enqueue(frame);
         }
 
@@ -253,89 +261,114 @@ namespace AnywhereNET
             Connected = 1;
             var remote = (IPEndPoint)Client.Client.RemoteEndPoint;
             var local = (IPEndPoint)Client.Client.LocalEndPoint;
-            Console.WriteLine($"connected. Local = {local.Address}:{local.Port}. Remote = {remote.Address}:{remote.Port}");
+            Log($"connected. Local = {local.Address}:{local.Port}. Remote = {remote.Address}:{remote.Port}");
 
             // start separate threads to read and write data
-            //try
-            //{
-            //ReadTask = Task.Run(() => ReadLoop());
-            //WriteTask = Task.Run(() => WriteLoop());
-
             ReadThread = new Thread(() => ReadLoop());
             ReadThread.Start();
             WriteThread = new Thread(() => WriteLoop());
             WriteThread.Start();
-            //}
-            //catch (Exception ex)
-            //{
-
-            //}
         }
 
-        private async void WriteLoop()
+        /// <summary>
+        /// Continuously transmits queued frames until the connection is closed.
+        /// </summary>
+        private void WriteLoop()
         {
             try
             {
-                Console.WriteLine("starting write loop");
+                Log("starting write loop");
                 while (Interlocked.Read(ref Connected) == 1)
                 {
-                    Thread.Sleep(0);
-                    // TODO: try to combine multiple channels frames together into a single frame?
+                    Thread.Sleep(1);
                     if (FrameQueue.TryDequeue(out Frame? frame) && frame != null)
                     {
                         if (UnitTestTransmitFrameMonitor != null)
                         {
                             UnitTestTransmitFrameMonitor(frame);
                         }
-                        await Stream.WriteFrameAsync(frame);
+                        WriteFrame(frame);
                     }
                 }
-                Console.WriteLine("exiting write loop");
+                Log("exiting write loop");
             }
             catch (Exception e)
             {
-                Console.WriteLine($"Unhandled Exception: {e.GetType()} {e.Message}");
+                Log($"WriteLoop terminated: Unhandled Exception: {e.GetType()} {e.Message}");
                 WriteThreadException = e;
                 // force all thread termination on any error
                 Interlocked.Exchange(ref Connected, 0);
             }
         }
 
-        private async void ReadLoop()
+        /// <summary>
+        /// Continously receives frames until the connection is closed.
+        /// </summary>
+        private void ReadLoop()
         {
-            // TODO: set ReadTimeout and properly handle a blocking read returning 0?
-            // TODO: this is tricky if we're waiting for an entire frame. 
-            // TODO: regardless, how would we detect the stream closed?
-            //Stream.ReadTimeout = 100;
-            Console.WriteLine("starting read loop");
+            // set a timeout so read methods do not block too long.
+            // this allows for periodically checking the Connected status to 
+            // exit the loop when this object disconnects
+            Stream.ReadTimeout = 100;
+            Log("starting read loop");
             try
             {
+                // TODO: how big should this buffer be?
+                byte[] data = new byte[4096];
                 while (Interlocked.Read(ref Connected) == 1)
                 {
-                    Console.WriteLine("Waiting for next incoming data frame...");
+                    try
+                    {
+                        // read as much data is available and append to the read buffer
+                        int read = Stream.Read(data, 0, data.Length);
+                        if (read > 0)
+                        {
+                            ReadBuffer.Write(data, 0, read);
+                        }
+                    }
+                    catch (IOException e)
+                    {
+                        // https://stackoverflow.com/questions/37177401/how-to-repeatedly-read-from-net-sslstream-with-a-timeout
+                        // if the stream read times out, just ignore:
+                        // that is expected if the other end of the connection is not sending any data
+                        var socketException = e.InnerException as SocketException;
+                        if (socketException != null && socketException.SocketErrorCode == SocketError.TimedOut)
+                        {
+                            // NOTE it is bad practice to use exception handling to control 
+                            // "normal" program flow, but in this case there is no way to
+                            // cleanly terminate a thread that is blocking indefinitely on
+                            // a Stream.Read.
+                            continue;
+                        }
+                        else
+                        {
+                            throw;
+                        }
+                    }
 
-                    // receive the next data frame from the remote connection
-                    var rawFrame = await Stream.ReadFrameAsync();
-
-                    // TODO: why is C#8 making this return type nullable?!?!?
-                    var frame = FrameFactory.Decode(rawFrame);
+                    // try to read a frame from the buffer
+                    var frame = TryReadFrame();
+                    if (frame == null)
+                    {
+                        continue;
+                    }
 
                     if (UnitTestReceiveFrameMonitor != null)
                     {
                         UnitTestReceiveFrameMonitor(frame);
                     }
 
-                    Console.WriteLine("Received: {0}", frame);
+                    Log($"Received: {frame.ToString()}");
 
                     if (frame is DisconnectFrame)
                     {
-                        Console.WriteLine("disconnecting");
+                        Log("disconnecting");
                         Interlocked.Exchange(ref Connected, 0);
                     }
 
                     else if (frame is DebugFrame)
                     {
-                        Console.WriteLine($"DEBUG: {(frame as DebugFrame).Message}");
+                        Log($"DEBUG: {(frame as DebugFrame).Message}");
                     }
 
                     else
@@ -344,29 +377,71 @@ namespace AnywhereNET
                         channel.Receive(frame.Payload);
                     }
                 }
-                Console.WriteLine("exiting read loop");
+                Log("exiting read loop");
             }
             catch (IOException e)
             {
-                Console.WriteLine("Exception: {0}", e.Message);
-                Console.WriteLine("Client disconnected - closing the connection...");
+                Log($"Exception ({e.GetType()}): {e.Message}");
+                Log("Client disconnected - closing the connection...");
                 // force all thread termination on any error
                 Interlocked.Exchange(ref Connected, 0);
             }
             catch (Exception e)
             {
-                Console.WriteLine($"Unhandled Exception: {e.GetType()} {e.Message}");
+                Log($"ReadLoop terminated: Unhandled Exception: {e.GetType()} {e.Message}");
                 ReadThreadException = e;
                 // force all thread termination on any error
                 Interlocked.Exchange(ref Connected, 0);
             }
-            //finally
-            //{
-            //    // cleanup
-            //    //Stream.Close();
-            //    Console.WriteLine("Closed client connection.");
-            //}
         }
+
+        private Frame? TryReadFrame()
+        {
+            // remember the current buffer position and reset it back to the start
+            long position = ReadBuffer.Position;
+            ReadBuffer.Position = 0;
+
+            // try to read a frame from the buffer
+            if (ReadBuffer.TryReadByte(out var type)
+                && ReadBuffer.TryReadUShortBE(out var channel)
+                && ReadBuffer.TryReadIntBE(out var length)
+                && ReadBuffer.TryReadBytes(length, out var payload)
+                )
+            {
+                // a frame was read successfully. clear the buffer...
+                ReadBuffer.Position = 0;
+                ReadBuffer.SetLength(0);
+                // ..and return the frame
+                return FrameFactory.Decode(new Frame
+                {
+                    Type = type,
+                    Channel = channel,
+                    Length = length,
+                    Payload = payload!
+                });
+            }
+            else
+            {
+                // a new frame is not yet available. restore the buffer position and return null
+                ReadBuffer.Position = position;
+                return null;
+            }
+        }
+
+        public void WriteFrame(Frame frame)
+        {
+            Stream.WriteByte(frame.Type);
+            Stream.WriteUInt16BE(frame.Channel);
+            Stream.WriteInt32BE(frame.Length);
+            if (frame.Length > 0)
+            {
+                //stream.Write(frame.Payload.Array, frame.Payload.Offset, frame.Payload.Count);
+                Stream.Write(frame.Payload, 0, frame.Payload.Length);
+                //Console.WriteLine("wrote bytes=" + String.Join(' ', frame.Payload.ToArray().Select(b => b.ToString())));
+            }
+            Stream.Flush();
+        }
+
 
         // The following method is invoked by the RemoteCertificateValidationDelegate.
         private static bool ValidateServerCertificate(

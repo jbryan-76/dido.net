@@ -45,8 +45,6 @@ namespace AnywhereNET
 
         public override long Position { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 
-        // TODO: every write call is trying to make a separate frame. we need to buffer multiple calls and only send out a frame when its big enough
-
         public override void Flush()
         {
             throw new NotImplementedException();
@@ -132,8 +130,21 @@ namespace AnywhereNET
             //}
         }
 
-        public void Dispose()
+        /// <summary>
+        /// Finalizer is necessary when inheriting from Stream.
+        /// </summary>
+        ~Channel()
         {
+            Dispose(false);
+        }
+
+        /// <summary>
+        /// Override of Stream implementation to dispose resources.
+        /// </summary>
+        /// <param name="disposing"></param>
+        protected override void Dispose(bool disposing)
+        {
+            base.Dispose(disposing);
             if (Interlocked.Read(ref IsDisposed) == 0)
             {
                 //IsDisposed = true;
@@ -141,6 +152,13 @@ namespace AnywhereNET
                 Interlocked.Exchange(ref IsDisposed, 1);
                 // wait for the write thread to finish
                 WriteThread!.Join();
+                if (WriteThreadException != null)
+                {
+                    throw WriteThreadException;
+                }
+            }
+            if (disposing)
+            {
                 // dispose any managed objects
                 WriteBuffer.Dispose();
             }
@@ -184,9 +202,8 @@ namespace AnywhereNET
             }
             catch (Exception e)
             {
-                Console.WriteLine($"Unhandled Exception: {e.GetType()} {e.Message}");
-                //throw;
-                // TODO: save exception in main object to be reported at Join
+                Console.WriteLine($"Channel Unhandled Exception: {e.GetType()} {e.Message}");
+                WriteThreadException = e;
             }
         }
 
@@ -194,6 +211,7 @@ namespace AnywhereNET
         private long IsDisposed = 0;
         private MemoryStream WriteBuffer = new MemoryStream();
         private Thread? WriteThread;
+        private Exception? WriteThreadException;
 
         private ConcurrentQueue<byte[]> DataQueue = new ConcurrentQueue<byte[]>();
         private int CurrentSegmentOffset = 0;

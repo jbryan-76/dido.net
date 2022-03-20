@@ -101,17 +101,10 @@ namespace AnywhereNET.Test
                 //var channel2ClientSide = clientServerConnection.ClientConnection.GetChannel(2);
                 //var channel2ServerSide = clientServerConnection.ServerConnection.GetChannel(2);
                 {
-
                     var testMessage = "hello world";
                     channel1ClientSide.WriteString(testMessage);
-                    //channel1ClientSide.WriteInt16BE(13);
 
-                    //var testFrame = new DebugFrame("hello world");
-                    //testFrame.Channel = 123;
-                    //clientServerConnection.SendClientToServer(testFrame);
-
-                    //Thread.Sleep(1000);
-                    // TODO: block until something has been received
+                    // block until something has been received
                     Console.WriteLine("start waiting");
                     await channel1ServerSide.WaitForDataAsync();
                     //while (!channel1ServerSide.IsDataAvailable)

@@ -343,5 +343,101 @@ namespace AnywhereNET
             var bytes = stream.ReadBytes(length);
             return Encoding.UTF8.GetString(bytes);
         }
+
+        /// <summary>
+        /// Try to read the given number of bytes from the stream.
+        /// <para/>Note the stream must support Position and Length properties,
+        /// and data is only read if enough bytes are available.
+        /// </summary>
+        /// <param name="stream"></param>
+        /// <param name="length"></param>
+        /// <param name="buffer"></param>
+        /// <returns>True if the number of bytes were read successfully, else false.</returns>
+        public static bool TryReadBytes(this Stream stream, int length, out byte[]? buffer)
+        {
+            if (stream.Length - stream.Position < length)
+            {
+                buffer = null;
+                return false;
+            }
+            buffer = new byte[length];
+            stream.Read(buffer, 0, length);
+            //var remaining = buffer.Length;
+            //while (remaining > 0)
+            //{
+            //    int read = stream.Read(buffer, buffer.Length - remaining, remaining);
+            //    remaining -= read;
+            //    if (read == 0 && remaining > 0)
+            //    {
+            //        return false;
+            //    }
+            //}
+            return true;
+        }
+
+        /// <summary>
+        /// Try to read a byte value from a stream.
+        /// <para/>Note the stream must support Position and Length properties,
+        /// and data is only read if enough bytes are available.
+        /// </summary>
+        /// <param name="stream"></param>
+        /// <param name="value"></param>
+        /// <returns>True if the value was read successfully, else false.</returns>
+        public static bool TryReadByte(this Stream stream, out byte value)
+        {
+            value = 0;
+            if (!stream.TryReadBytes(1, out var bytes))
+            {
+                return false;
+            }
+            value = bytes![0];
+            return true;
+        }
+
+        /// <summary>
+        /// Try to read a ushort value from a stream in network-byte-order (ie Big Endian).
+        /// <para/>Note the stream must support Position and Length properties,
+        /// and data is only read if enough bytes are available.
+        /// </summary>
+        /// <param name="stream"></param>
+        /// <param name="value"></param>
+        /// <returns>True if the value was read successfully, else false.</returns>
+        public static bool TryReadUShortBE(this Stream stream, out ushort value)
+        {
+            value = 0;
+            if (!stream.TryReadBytes(2, out var bytes))
+            {
+                return false;
+            }
+            if (BitConverter.IsLittleEndian)
+            {
+                Array.Reverse(bytes!);
+            }
+            value = BitConverter.ToUInt16(bytes);
+            return true;
+        }
+
+        /// <summary>
+        /// Try to read an int value from a stream in network-byte-order (ie Big Endian).
+        /// <para/>Note the stream must support Position and Length properties,
+        /// and data is only read if enough bytes are available.
+        /// </summary>
+        /// <param name="stream"></param>
+        /// <param name="value"></param>
+        /// <returns>True if the value was read successfully, else false.</returns>
+        public static bool TryReadIntBE(this Stream stream, out int value)
+        {
+            value = 0;
+            if (!stream.TryReadBytes(4, out var bytes))
+            {
+                return false;
+            }
+            if (BitConverter.IsLittleEndian)
+            {
+                Array.Reverse(bytes!);
+            }
+            value = BitConverter.ToInt32(bytes);
+            return true;
+        }
     }
 }
