@@ -12,13 +12,27 @@ namespace AnywhereNET
 
         public Connection Connection { get; private set; }
 
-        private ConcurrentQueue<ArraySegment<byte>> DataQueue = new ConcurrentQueue<ArraySegment<byte>>();
-        private int CurrentSegmentOffset = 0;
+        public bool IsDataAvailable { get { return !DataQueue.IsEmpty; } }
 
-        internal Channel(Connection connection, ushort channelNumber)
+        public bool IsConnected { get { return Connection != null && Connection.IsConnected; } }
+
+        public Task WaitForDataAsync()
         {
-            Connection = connection;
-            ChannelNumber = channelNumber;
+            var source = new TaskCompletionSource();
+            Task.Run(() =>
+            {
+                while (!IsDataAvailable)
+                {
+                    Thread.Sleep(1);
+
+                    if (!IsConnected)
+                    {
+                        source.SetException(new InvalidOperationException("Channel disconnected"));
+                    }
+                }
+                source.SetResult();
+            });
+            return source.Task;
         }
 
         public override bool CanRead => true;
@@ -30,6 +44,8 @@ namespace AnywhereNET
         public override long Length => throw new NotImplementedException();
 
         public override long Position { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
+
+        // TODO: every write call is trying to make a separate frame. we need to buffer multiple calls and only send out a frame when its big enough
 
         public override void Flush()
         {
@@ -48,19 +64,22 @@ namespace AnywhereNET
 
         public override int Read(byte[] buffer, int offset, int count)
         {
+            //Console.WriteLine($"reading {count} bytes @ {offset} into buffer[{buffer.Length}]");
             int read = 0;
             int remaining = count;
             while (remaining > 0)
             {
                 // peek at the next available segment
-                if (DataQueue.TryPeek(out ArraySegment<byte> segment))
+                if (DataQueue.TryPeek(out byte[] segment))
                 {
                     // how many bytes remain to be read in the current segment?
-                    int remainingInSegment = segment.Count - CurrentSegmentOffset;
+                    int remainingInSegment = segment.Length - CurrentSegmentOffset;
                     // how many bytes can be copied in this loop iteration?
                     int size = Math.Min(remaining, remainingInSegment);
                     // copy the bytes from the segment to the buffer
-                    Buffer.BlockCopy(segment.Array!, segment.Offset + CurrentSegmentOffset, buffer, offset, size);
+                    //Console.WriteLine($"Copying {size} bytes from array [{CurrentSegmentOffset}]({segment.Length}) to buffer [{offset}]");
+                    //Console.WriteLine("bytes=" + string.Join(' ', segment.AsSpan(offset, size).ToArray().Select(b => b.ToString())));
+                    Buffer.BlockCopy(segment, CurrentSegmentOffset, buffer, offset, size);
                     // update counters
                     offset += size;
                     read += size;
@@ -83,28 +102,115 @@ namespace AnywhereNET
             return read;
         }
 
+        // TODO: use a buffer to queue bytes in a frame until some time or size limit is reached to avoid sending tons of little frames
         public override void Write(byte[] buffer, int offset, int count)
         {
-            int remaining = count;
-            while (remaining > 0)
+            //Console.WriteLine($"writing {count} bytes @ {offset} from buffer[{buffer.Length}]");
+            //Console.WriteLine("bytes=" + string.Join(' ', buffer.AsSpan(offset, count).ToArray().Select(b => b.ToString())));
+
+            lock (WriteBuffer)
             {
-                int size = Math.Min(remaining, Frame.MaxFrameSize);
-                Connection.EnqueueFrame(new Frame
+                WriteBuffer.Write(buffer, offset, count);
+            }
+
+            //int remaining = count;
+            //while (remaining > 0)
+            //{
+            //    int size = Math.Min(remaining, Frame.MaxFrameSize);
+            //    var bytes = new byte[size];
+            //    Buffer.BlockCopy(buffer, offset, bytes, 0, size);
+            //    var frame = new Frame
+            //    {
+            //        FrameType = FrameTypes.ChannelData,
+            //        Channel = ChannelNumber,
+            //        Length = size,
+            //        Payload = bytes//new ArraySegment<byte>(buffer, offset, size)
+            //    };
+            //    Connection.EnqueueFrame(frame);
+            //    remaining -= size;
+            //    offset += size;
+            //}
+        }
+
+        public void Dispose()
+        {
+            if (Interlocked.Read(ref IsDisposed) == 0)
+            {
+                //IsDisposed = true;
+                // signal the write thread to terminate
+                Interlocked.Exchange(ref IsDisposed, 1);
+                // wait for the write thread to finish
+                WriteThread!.Join();
+                // dispose any managed objects
+                WriteBuffer.Dispose();
+            }
+            GC.SuppressFinalize(this);
+        }
+
+        private void WriteLoop()
+        {
+            try
+            {
+                // loop forever until the object is disposed
+                while (Interlocked.Read(ref IsDisposed) == 0)
                 {
-                    FrameType = FrameTypes.ChannelData,
-                    Channel = ChannelNumber,
-                    Length = size,
-                    Payload = new ArraySegment<byte>(buffer, offset, size)
-                });
-                remaining -= size;
-                offset += size;
+                    Thread.Sleep(1);
+                    lock (WriteBuffer)
+                    {
+                        int offset = 0;
+                        int remaining = (int)WriteBuffer.Length;
+                        while (remaining > 0)
+                        {
+                            int size = Math.Min(remaining, Frame.MaxFrameSize);
+                            var bytes = new byte[size];
+                            //Console.WriteLine($"building frame of {size} bytes from buffer[{remaining}] @ {offset}");
+                            Buffer.BlockCopy(WriteBuffer.GetBuffer(), offset, bytes, 0, size);
+                            var frame = new Frame
+                            {
+                                FrameType = FrameTypes.ChannelData,
+                                Channel = ChannelNumber,
+                                Length = size,
+                                Payload = bytes
+                            };
+                            Connection.EnqueueFrame(frame);
+                            remaining -= size;
+                            offset += size;
+                        }
+                        // reset the buffer
+                        WriteBuffer.Position = 0;
+                        WriteBuffer.SetLength(0);
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine($"Unhandled Exception: {e.GetType()} {e.Message}");
+                //throw;
+                // TODO: save exception in main object to be reported at Join
             }
         }
 
-        internal void Receive(ArraySegment<byte> data)
+        //private bool IsDisposed = false;
+        private long IsDisposed = 0;
+        private MemoryStream WriteBuffer = new MemoryStream();
+        private Thread? WriteThread;
+
+        private ConcurrentQueue<byte[]> DataQueue = new ConcurrentQueue<byte[]>();
+        private int CurrentSegmentOffset = 0;
+
+        internal Channel(Connection connection, ushort channelNumber)
         {
+            Connection = connection;
+            ChannelNumber = channelNumber;
+            WriteThread = new Thread(() => WriteLoop());
+            WriteThread.Start();
+        }
+
+        internal void Receive(byte[] bytes)
+        {
+            //Console.WriteLine("queueing data=" + string.Join(' ', bytes.Select(b => b.ToString())));
             // when the connection receives data for this channel, enqueue it to be later read by a caller
-            DataQueue.Enqueue(data);
+            DataQueue.Enqueue(bytes);
             // notify all event handlers new data is available
             OnDataAvailable?.Invoke(this);
         }

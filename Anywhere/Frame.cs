@@ -22,8 +22,7 @@ namespace AnywhereNET
         public byte Type { get; set; }
         public ushort Channel { get; set; }
         public int Length { get; set; }
-        //public byte[] Payload { get; set; }
-        public ArraySegment<byte> Payload { get; set; }
+        public byte[] Payload { get; set; }
 
         public FrameTypes FrameType
         {
@@ -49,7 +48,7 @@ namespace AnywhereNET
 
         public override string ToString()
         {
-            return $"Frame '{FrameType}' on channel {Channel}: received {Length} bytes ({Encoding.UTF8.GetString(Payload)})";
+            return $"Frame '{FrameType}' on channel {Channel}: {Length} bytes ({Encoding.UTF8.GetString(Payload.ToArray())})";
         }
     }
 }

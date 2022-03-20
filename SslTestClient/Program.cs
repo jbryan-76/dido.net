@@ -33,7 +33,8 @@ namespace foo
             }
 
             // close the connection
-            await connection.DisconnectAsync();
+            //await connection.DisconnectAsync();
+            connection.Disconnect();
             client.Close();
             Console.WriteLine("Client closed.");
         }
