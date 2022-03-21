@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -81,13 +82,15 @@ namespace AnywhereNET.Test
                 using (var channel1ClientSide = clientServerConnection.ClientConnection.GetChannel(1))
                 using (var channel1ServerSide = clientServerConnection.ServerConnection.GetChannel(1))
                 {
+                    // indicate the channel should block reads until data is available
+                    channel1ServerSide.BlockingReads = true;
+
                     // send a test message to the server
                     var testMessage = "hello world";
                     channel1ClientSide.WriteString(testMessage);
 
                     // wait until the server receives the message, then read it back
-                    await channel1ServerSide.WaitForDataAsync();
-                    // TODO: explore any way to have ReadString block?
+                    //await channel1ServerSide.WaitForDataAsync();
                     var receivedMessage = channel1ServerSide.ReadString();
                     Assert.Equal(testMessage, receivedMessage);
                 }
@@ -131,6 +134,35 @@ namespace AnywhereNET.Test
             }
         }
 
-        // TODO: add test to send a lot of data to confirm multiple frames are created
+        [Fact]
+        public async void BigFrames()
+        {
+            // create a local client/server system
+            using (var clientServerConnection = await ClientServerConnection.CreateAsync(GetNextAvailablePort()))
+            using (var channelClientSide = clientServerConnection.ClientConnection.GetChannel(1))
+            using (var channelServerSide = clientServerConnection.ServerConnection.GetChannel(1))
+            {
+                int maxFrameSize = Frame.MaxFrameSize;
+
+                // write enough data to generate 3 frames
+                var data = new byte[2 * maxFrameSize + 1];
+                for (int i = 0; i < data.Length; i++)
+                {
+                    data[i] = (byte)i;
+                }
+
+                channelClientSide.Write(data, 0, data.Length);
+                channelServerSide.BlockingReads = true;
+
+                await channelServerSide.WaitForDataAsync();
+
+                var resultData = channelServerSide.ReadBytes(data.Length);
+
+                // verify the communication
+                Assert.Equal(3, clientServerConnection.ClientTransmittedFrames.Count);
+                Assert.Equal(3, clientServerConnection.ServerRecievedFrames.Count);
+                Assert.True(Enumerable.SequenceEqual(data, resultData));
+            }
+        }
     }
 }

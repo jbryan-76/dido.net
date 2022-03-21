@@ -4,9 +4,7 @@ namespace AnywhereNET
 {
     public enum FrameTypes
     {
-        // heartbeat?
-        // diconnect?
-        // event?
+        // TODO: heartbeat
         ChannelData,
         Disconnect,
         Debug

@@ -29,6 +29,11 @@ namespace AnywhereNET
         public bool IsConnected { get { return Connection != null && Connection.IsConnected; } }
 
         /// <summary>
+        /// Indicates whether Read() will block until some data is available.
+        /// </summary>
+        public bool BlockingReads { get; set; } = false;
+
+        /// <summary>
         /// Create a new channel using the given connection and with the given (unique) channel number.
         /// </summary>
         /// <param name="connection"></param>
@@ -133,6 +138,19 @@ namespace AnywhereNET
                     {
                         DataQueue.TryDequeue(out segment);
                         CurrentSegmentOffset = 0;
+                    }
+                }
+                else if (BlockingReads)
+                {
+                    if (read > 0)
+                    {
+                        // at least some data was read. return control to caller
+                        break;
+                    }
+                    else
+                    {
+                        // otherwise block until data is available
+                        Thread.Sleep(0);
                     }
                 }
                 else
