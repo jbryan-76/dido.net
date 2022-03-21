@@ -33,6 +33,8 @@ namespace AnywhereNET
 
         private long Connected = 0;
 
+        private bool IsDisposed = false;
+
         private Dictionary<ushort, Channel> Channels = new Dictionary<ushort, Channel>();
 
         public string Name { get; private set; } = "";
@@ -123,59 +125,54 @@ namespace AnywhereNET
 
         public void Dispose()
         {
-            Log("starting connection dispose");
             if (Interlocked.Read(ref Connected) == 1)
             {
-                Log("  still connected");
-                // cleanup
                 Disconnect();
+            }
+
+            if (!IsDisposed)
+            {
+                IsDisposed = true;
+
+                ReadThread!.Join(1000);
+                WriteThread!.Join(1000);
+
+                var exceptions = new List<Exception>();
+                if (ReadThreadException != null)
+                {
+                    exceptions.Add(ReadThreadException);
+                }
+                if (WriteThreadException != null)
+                {
+                    exceptions.Add(WriteThreadException);
+                }
+                if (exceptions.Count > 0)
+                {
+                    throw new AggregateException(exceptions);
+                }
+
                 Stream.Dispose();
                 ReadBuffer.Dispose();
             }
 
-            Log("disposed connection");
             GC.SuppressFinalize(this);
         }
 
         public void Disconnect()
         {
-            // short circuit if already disconnected
-            if (Interlocked.Read(ref Connected) == 0)
+            if (Interlocked.Read(ref Connected) == 1)
             {
-                return;
-            }
-            Log("starting connection disconnect");
-            Log("  still connected: sending disconnect frame");
+                // signal all threads to stop
+                Interlocked.Exchange(ref Connected, 0);
 
-            // gracefully attempt to shut down the other side of the connection
-            // by sending a disconnecte frame
-            var frame = new DisconnectFrame();
-            if (UnitTestTransmitFrameMonitor != null)
-            {
-                UnitTestTransmitFrameMonitor(frame);
-            }
-            WriteFrame(frame);
-
-            Log("FinishDisconnecting");
-            // signal all threads to stop, wait for all threads to terminate, then aggregate any exceptions
-            Interlocked.Exchange(ref Connected, 0);
-            ReadThread!.Join(1000);
-            WriteThread!.Join(1000);
-            var exceptions = new List<Exception>();
-            if (ReadThreadException != null)
-            {
-                exceptions.Add(ReadThreadException);
-            }
-            if (WriteThreadException != null)
-            {
-                exceptions.Add(WriteThreadException);
-            }
-
-            Log("disconnected");
-
-            if (exceptions.Count > 0)
-            {
-                throw new AggregateException(exceptions);
+                // gracefully attempt to shut down the other side of the connection
+                // by sending a disconnect frame
+                var frame = new DisconnectFrame();
+                if (UnitTestTransmitFrameMonitor != null)
+                {
+                    UnitTestTransmitFrameMonitor(frame);
+                }
+                WriteFrame(frame);
             }
         }
 

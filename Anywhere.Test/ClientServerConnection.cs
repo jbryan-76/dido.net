@@ -100,8 +100,6 @@ namespace AnywhereNET.Test
             Thread.Sleep(1);
         }
 
-        //public void 
-
         /// <summary>
         /// Clear all transmitted and received frame queues.
         /// </summary>
@@ -141,11 +139,6 @@ namespace AnywhereNET.Test
                 throw new AggregateException(exceptions);
             }
         }
-        //public async Task CloseAsync()
-        //{
-        //    await ClientConnection.DisconnectAsync();
-        //    await ServerConnection.DisconnectAsync();
-        //}
 
         /// <summary>
         /// Create a local loopback client+server system on the specified port.
@@ -178,7 +171,7 @@ namespace AnywhereNET.Test
         /// </summary>
         /// <param name="port"></param>
         /// <returns></returns>
-        static Task<Connection> StartServer(X509Certificate2 cert, int port)
+        static private Task<Connection> StartServer(X509Certificate2 cert, int port)
         {
             return Task.Run(async () =>
             {
@@ -200,7 +193,7 @@ namespace AnywhereNET.Test
         /// </summary>
         /// <param name="port"></param>
         /// <returns></returns>
-        static Task<Connection> ConnectClient(int port)
+        static private Task<Connection> ConnectClient(int port)
         {
             var localhost = "localhost";
             return Task.Run(() =>

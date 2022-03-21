@@ -2,6 +2,7 @@
 
 namespace AnywhereNET
 {
+    // TODO: refactor into StreamReadExtensions and StreamWriteExtensions
     public static class StreamExtensions
     {
         /// <summary>
@@ -217,7 +218,7 @@ namespace AnywhereNET
         /// </summary>
         /// <param name="stream"></param>
         /// <param name="value"></param>
-        public static short ReadShortBE(this Stream stream)
+        public static short ReadInt16BE(this Stream stream)
         {
             var bytes = stream.ReadBytes(2);
             if (BitConverter.IsLittleEndian)
@@ -232,7 +233,7 @@ namespace AnywhereNET
         /// </summary>
         /// <param name="stream"></param>
         /// <param name="value"></param>
-        public static ushort ReadUShortBE(this Stream stream)
+        public static ushort ReadUInt16BE(this Stream stream)
         {
             var bytes = stream.ReadBytes(2);
             if (BitConverter.IsLittleEndian)
@@ -247,7 +248,7 @@ namespace AnywhereNET
         /// </summary>
         /// <param name="stream"></param>
         /// <param name="value"></param>
-        public static int ReadIntBE(this Stream stream)
+        public static int ReadInt32BE(this Stream stream)
         {
             var bytes = stream.ReadBytes(4);
             if (BitConverter.IsLittleEndian)
@@ -262,7 +263,7 @@ namespace AnywhereNET
         /// </summary>
         /// <param name="stream"></param>
         /// <param name="value"></param>
-        public static uint ReadUIntBE(this Stream stream)
+        public static uint ReadUInt32BE(this Stream stream)
         {
             var bytes = stream.ReadBytes(4);
             if (BitConverter.IsLittleEndian)
@@ -277,7 +278,7 @@ namespace AnywhereNET
         /// </summary>
         /// <param name="stream"></param>
         /// <param name="value"></param>
-        public static long ReadLongBE(this Stream stream)
+        public static long ReadInt64BE(this Stream stream)
         {
             var bytes = stream.ReadBytes(8);
             if (BitConverter.IsLittleEndian)
@@ -292,7 +293,7 @@ namespace AnywhereNET
         /// </summary>
         /// <param name="stream"></param>
         /// <param name="value"></param>
-        public static ulong ReadULongBE(this Stream stream)
+        public static ulong ReadUInt64BE(this Stream stream)
         {
             var bytes = stream.ReadBytes(8);
             if (BitConverter.IsLittleEndian)
@@ -339,7 +340,7 @@ namespace AnywhereNET
         /// <param name="value"></param>
         public static string ReadString(this Stream stream)
         {
-            var length = stream.ReadIntBE();
+            var length = stream.ReadInt32BE();
             var bytes = stream.ReadBytes(length);
             return Encoding.UTF8.GetString(bytes);
         }
@@ -362,16 +363,6 @@ namespace AnywhereNET
             }
             buffer = new byte[length];
             stream.Read(buffer, 0, length);
-            //var remaining = buffer.Length;
-            //while (remaining > 0)
-            //{
-            //    int read = stream.Read(buffer, buffer.Length - remaining, remaining);
-            //    remaining -= read;
-            //    if (read == 0 && remaining > 0)
-            //    {
-            //        return false;
-            //    }
-            //}
             return true;
         }
 

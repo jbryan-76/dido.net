@@ -6,18 +6,18 @@ namespace AnywhereNET
     {
         public delegate void DataAvailableHandler(Channel channel);
 
-        public event DataAvailableHandler? OnDataAvailable;
+        public event DataAvailableHandler? OnDataAvailable = null;
 
         private long IsDisposed = 0;
 
         private MemoryStream WriteBuffer = new MemoryStream();
-        
-        private Thread? WriteThread;
-        
-        private Exception? WriteThreadException;
+
+        private Thread? WriteThread = null;
+
+        private Exception? WriteThreadException = null;
 
         private ConcurrentQueue<byte[]> DataQueue = new ConcurrentQueue<byte[]>();
-        
+
         private int CurrentSegmentOffset = 0;
 
         public ushort ChannelNumber { get; private set; }
@@ -28,6 +28,11 @@ namespace AnywhereNET
 
         public bool IsConnected { get { return Connection != null && Connection.IsConnected; } }
 
+        /// <summary>
+        /// Create a new channel using the given connection and with the given (unique) channel number.
+        /// </summary>
+        /// <param name="connection"></param>
+        /// <param name="channelNumber"></param>
         internal Channel(Connection connection, ushort channelNumber)
         {
             Connection = connection;
@@ -37,16 +42,25 @@ namespace AnywhereNET
         }
 
         /// <summary>
-        /// Finalizer is necessary when inheriting from Stream.
+        /// A finalizer is necessary when inheriting from Stream.
         /// </summary>
         ~Channel()
         {
             Dispose(false);
         }
 
-        public Task WaitForDataAsync()
+        /// <summary>
+        /// Returns a task that yields true when data is available to read,
+        /// else false if the underlying connection closes. If 'throwIfClosed' is true,
+        /// an IOException will be thrown instead of returning true.
+        /// <para/>Note: since this call utilizes a thread in the thread pool, only use in
+        /// situations where the caller does not expect to wait very long for data to arrive.
+        /// </summary>
+        /// <param name="connection"></param>
+        /// <returns></returns>
+        public Task<bool> WaitForDataAsync(bool throwIfClosed = false)
         {
-            var source = new TaskCompletionSource();
+            var source = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             Task.Run(() =>
             {
                 while (!IsDataAvailable)
@@ -55,10 +69,15 @@ namespace AnywhereNET
 
                     if (!IsConnected)
                     {
-                        source.SetException(new InvalidOperationException("Channel disconnected"));
+                        if (throwIfClosed)
+                        {
+                            throw new IOException("Connection closed.");
+                        }
+                        source.SetResult(true);
+                        break;
                     }
                 }
-                source.SetResult();
+                source.SetResult(false);
             });
             return source.Task;
         }
@@ -178,6 +197,8 @@ namespace AnywhereNET
                     Thread.Sleep(1);
                     lock (WriteBuffer)
                     {
+                        // write the contents of the buffer to the underlying connection
+                        // as one or more channel data frames
                         int offset = 0;
                         int remaining = (int)WriteBuffer.Length;
                         while (remaining > 0)
@@ -185,14 +206,7 @@ namespace AnywhereNET
                             int size = Math.Min(remaining, Frame.MaxFrameSize);
                             var bytes = new byte[size];
                             Buffer.BlockCopy(WriteBuffer.GetBuffer(), offset, bytes, 0, size);
-                            var frame = new Frame
-                            {
-                                FrameType = FrameTypes.ChannelData,
-                                Channel = ChannelNumber,
-                                Length = size,
-                                Payload = bytes
-                            };
-                            Connection.EnqueueFrame(frame);
+                            Connection.EnqueueFrame(new ChannelDataFrame(ChannelNumber, bytes));
                             remaining -= size;
                             offset += size;
                         }

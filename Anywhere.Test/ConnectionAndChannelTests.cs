@@ -1,7 +1,7 @@
 ﻿using System;
-using System.IO;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -9,9 +9,20 @@ namespace AnywhereNET.Test
 {
     public class ConnectionAndChannelTests
     {
+        static long NextPort = 8000;
+
+        /// <summary>
+        /// Gets a unique port number so multiple client/server tests can run simultaneously.
+        /// </summary>
+        /// <returns></returns>
+        internal static int GetNextAvailablePort()
+        {
+            return (int)Interlocked.Increment(ref NextPort);
+        }
+
         public ConnectionAndChannelTests(ITestOutputHelper output)
         {
-            var converter = new Converter(output);
+            var converter = new OutputConverter(output);
             Console.SetOut(converter);
         }
 
@@ -19,8 +30,7 @@ namespace AnywhereNET.Test
         public async void ClientServerCommunication()
         {
             // create a local client/server system
-            var port = 8080;
-            using (var clientServerConnection = await ClientServerConnection.CreateAsync(port))
+            using (var clientServerConnection = await ClientServerConnection.CreateAsync(GetNextAvailablePort()))
             {
                 // send a test frame from the client to the server
                 var testFrame = new DebugFrame("hello world");
@@ -61,29 +71,26 @@ namespace AnywhereNET.Test
             }
         }
 
-        private class Converter : TextWriter
+        [Fact]
+        public async void Channel()
         {
-            ITestOutputHelper _output;
-            public Converter(ITestOutputHelper output)
+            // create a local client/server system
+            using (var clientServerConnection = await ClientServerConnection.CreateAsync(GetNextAvailablePort()))
             {
-                _output = output;
-            }
-            public override Encoding Encoding
-            {
-                get { return Encoding.UTF8; }
-            }
-            public override void WriteLine(string message)
-            {
-                _output.WriteLine(message);
-            }
-            public override void WriteLine(string format, params object[] args)
-            {
-                _output.WriteLine(format, args);
-            }
+                // create a logical channel for the client and server to communicate
+                using (var channel1ClientSide = clientServerConnection.ClientConnection.GetChannel(1))
+                using (var channel1ServerSide = clientServerConnection.ServerConnection.GetChannel(1))
+                {
+                    // send a test message to the server
+                    var testMessage = "hello world";
+                    channel1ClientSide.WriteString(testMessage);
 
-            public override void Write(char value)
-            {
-                throw new NotSupportedException("This text writer only supports WriteLine(string) and WriteLine(string, params object[]).");
+                    // wait until the server receives the message, then read it back
+                    await channel1ServerSide.WaitForDataAsync();
+                    // TODO: explore any way to have ReadString block?
+                    var receivedMessage = channel1ServerSide.ReadString();
+                    Assert.Equal(testMessage, receivedMessage);
+                }
             }
         }
 
@@ -91,46 +98,39 @@ namespace AnywhereNET.Test
         public async void Channels()
         {
             // create a local client/server system
-            var port = 8081;
-            using (var clientServerConnection = await ClientServerConnection.CreateAsync(port))
+            using (var clientServerConnection = await ClientServerConnection.CreateAsync(GetNextAvailablePort()))
             {
-
                 // create two logical channels for the client and server to communicate
                 using (var channel1ClientSide = clientServerConnection.ClientConnection.GetChannel(1))
                 using (var channel1ServerSide = clientServerConnection.ServerConnection.GetChannel(1))
-                //var channel2ClientSide = clientServerConnection.ClientConnection.GetChannel(2);
-                //var channel2ServerSide = clientServerConnection.ServerConnection.GetChannel(2);
+                using (var channel2ClientSide = clientServerConnection.ClientConnection.GetChannel(2))
+                using (var channel2ServerSide = clientServerConnection.ServerConnection.GetChannel(2))
                 {
-                    var testMessage = "hello world";
-                    channel1ClientSide.WriteString(testMessage);
+                    // send test messages on each channel
+                    var test1_c2s = "test 1 - c2s";
+                    var test1_s2c = "test 1 - s2c";
+                    channel1ClientSide.WriteString(test1_c2s);
+                    channel1ServerSide.WriteString(test1_s2c);
+                    var test2_c2s = "test 2 - c2s";
+                    var test2_s2c = "test 2 - s2c";
+                    channel2ClientSide.WriteString(test2_c2s);
+                    channel2ServerSide.WriteString(test2_s2c);
 
-                    // block until something has been received
-                    Console.WriteLine("start waiting");
-                    await channel1ServerSide.WaitForDataAsync();
-                    //while (!channel1ServerSide.IsDataAvailable)
-                    //{
-                    //    Thread.Sleep(1);
+                    // await data received on all channels
+                    Task.WaitAll(channel1ClientSide.WaitForDataAsync(),
+                        channel1ServerSide.WaitForDataAsync(),
+                        channel2ClientSide.WaitForDataAsync(),
+                        channel2ServerSide.WaitForDataAsync());
 
-                    //    if (!channel1ServerSide.IsConnected)
-                    //    {
-                    //        throw new InvalidOperationException("Channel disconnected");
-                    //    }
-                    //}
-                    Console.WriteLine("got some data");
-                    ////channel1ServerSide.OnDataAvailable
-                    ////await Task.Run(() =>
-                    ////{
-
-                    ////});
-                    var receivedMessage = channel1ServerSide.ReadString();
-                    Assert.Equal(testMessage, receivedMessage);
-                    Console.WriteLine($"Confirmed: message {receivedMessage} matches");
+                    // confirm all messages
+                    Assert.Equal(test1_c2s, channel1ServerSide.ReadString());
+                    Assert.Equal(test1_s2c, channel1ClientSide.ReadString());
+                    Assert.Equal(test2_c2s, channel2ServerSide.ReadString());
+                    Assert.Equal(test2_s2c, channel2ClientSide.ReadString());
                 }
-
-                // cleanup
-                Console.WriteLine("starting connection close");
-                clientServerConnection.Close();
             }
         }
+
+        // TODO: add test to send a lot of data to confirm multiple frames are created
     }
 }
