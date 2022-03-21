@@ -9,36 +9,42 @@ namespace AnywhereNET
 {
     public class Connection : IDisposable
     {
+        internal delegate void FrameMonitor(Frame frame);
+
+        internal FrameMonitor? UnitTestReceiveFrameMonitor;
+
+        internal FrameMonitor? UnitTestTransmitFrameMonitor;
+
         private readonly TcpClient Client;
+
         private readonly SslStream Stream;
+
         private readonly ConcurrentQueue<Frame> FrameQueue = new ConcurrentQueue<Frame>();
 
-        //private Task? ReadTask;
-        //private Task? WriteTask;
-
         private Thread? ReadThread;
+
         private Thread? WriteThread;
+
         private Exception? ReadThreadException;
+
         private Exception? WriteThreadException;
 
         private MemoryStream ReadBuffer = new MemoryStream();
 
-        //private bool IsDisposed = false;
         private long Connected = 0;
 
         private Dictionary<ushort, Channel> Channels = new Dictionary<ushort, Channel>();
 
         public string Name { get; private set; } = "";
 
-        private void Log(string message)
+        /// <summary>
+        /// Indicates whether the connection is active and healthy.
+        /// </summary>
+        public bool IsConnected
         {
-            if (!string.IsNullOrWhiteSpace(Name))
+            get
             {
-                Console.WriteLine($"[{DateTimeOffset.UtcNow.ToString("o")}] ({Name}) {message}");
-            }
-            else
-            {
-                Console.WriteLine($"[{DateTimeOffset.UtcNow.ToString("o")}] {message}");
+                return Interlocked.Read(ref Connected) == 1;
             }
         }
 
@@ -127,14 +133,6 @@ namespace AnywhereNET
                 ReadBuffer.Dispose();
             }
 
-            //if (!IsDisposed)
-            //{
-            //    Log("disposing connection");
-
-            //    // TODO: dispose any managed objects
-            //    IsDisposed = true;
-
-            //}
             Log("disposed connection");
             GC.SuppressFinalize(this);
         }
@@ -159,21 +157,11 @@ namespace AnywhereNET
             WriteFrame(frame);
 
             Log("FinishDisconnecting");
-            // signal all threads to stop
+            // signal all threads to stop, wait for all threads to terminate, then aggregate any exceptions
             Interlocked.Exchange(ref Connected, 0);
-            //ReadThread!.Join(1000);
-            //WriteThread!.Join(1000);
-
-            // wait for all threads to terminate, and aggregate any exceptions
+            ReadThread!.Join(1000);
+            WriteThread!.Join(1000);
             var exceptions = new List<Exception>();
-            if (!ReadThread!.Join(1000))
-            {
-                //exceptions.Add(new TimeoutException("The read thread did not join after disconnect within the time allotted."));
-            }
-            if (!WriteThread!.Join(1000))
-            {
-                //exceptions.Add(new TimeoutException("The write thread did not join after disconnect within the time allotted."));
-            }
             if (ReadThreadException != null)
             {
                 exceptions.Add(ReadThreadException);
@@ -191,40 +179,7 @@ namespace AnywhereNET
             }
         }
 
-        /// <summary>
-        /// Indicates whether the connection is active and healthy.
-        /// </summary>
-        public bool IsConnected
-        {
-            get
-            {
-                return Interlocked.Read(ref Connected) == 1;
-            }
-        }
-
-        //public async Task DisconnectAsync()
-        //{
-        //    if (Interlocked.Read(ref IsConnected) == 0)
-        //    {
-        //        return;
-        //    }
-
-        //    // enqueue a "close" (ie graceful disconnect) frame
-        //    FrameQueue.Enqueue(new DisconnectFrame());
-
-        //    // indicate we are disconnecting
-        //    Log("disconnecting");
-        //    Interlocked.Exchange(ref IsConnected, 0);
-
-        //    // wait for the tasks to terminate
-        //    Log("awaiting read and write tasks");
-        //    await ReadTask;
-        //    await WriteTask;
-
-        //    Log("disconnected");
-        //}
-
-        public async Task DebugAsync(string message)
+        public void Debug(string message)
         {
             FrameQueue.Enqueue(new DebugFrame(message));
         }
@@ -251,10 +206,6 @@ namespace AnywhereNET
                 FrameQueue.Enqueue(frame);
             }
         }
-
-        internal delegate void FrameMonitor(Frame frame);
-        internal FrameMonitor? UnitTestReceiveFrameMonitor;
-        internal FrameMonitor? UnitTestTransmitFrameMonitor;
 
         private void FinishConnecting()
         {
@@ -306,6 +257,9 @@ namespace AnywhereNET
         /// </summary>
         private void ReadLoop()
         {
+            // TODO: expore async read optimization strategies
+            // https://devblogs.microsoft.com/pfxteam/awaiting-socket-operations/
+
             // set a timeout so read methods do not block too long.
             // this allows for periodically checking the Connected status to 
             // exit the loop when this object disconnects
@@ -428,7 +382,7 @@ namespace AnywhereNET
             }
         }
 
-        public void WriteFrame(Frame frame)
+        private void WriteFrame(Frame frame)
         {
             Stream.WriteByte(frame.Type);
             Stream.WriteUInt16BE(frame.Channel);
@@ -442,6 +396,17 @@ namespace AnywhereNET
             Stream.Flush();
         }
 
+        private void Log(string message)
+        {
+            if (!string.IsNullOrWhiteSpace(Name))
+            {
+                Console.WriteLine($"[{DateTimeOffset.UtcNow.ToString("o")}] ({Name}) {message}");
+            }
+            else
+            {
+                Console.WriteLine($"[{DateTimeOffset.UtcNow.ToString("o")}] {message}");
+            }
+        }
 
         // The following method is invoked by the RemoteCertificateValidationDelegate.
         private static bool ValidateServerCertificate(

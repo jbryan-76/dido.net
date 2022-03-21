@@ -96,6 +96,7 @@ namespace AnywhereNET
 
         // TODO configure remote or local. remote needs some kind of connection string
         public ExecutionModes ExecutionMode = ExecutionModes.Local;
+
         // TODO the connection string to the orchestrator. ip+port?
         public string ConnectionString;
 

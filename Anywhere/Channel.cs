@@ -8,6 +8,18 @@ namespace AnywhereNET
 
         public event DataAvailableHandler? OnDataAvailable;
 
+        private long IsDisposed = 0;
+
+        private MemoryStream WriteBuffer = new MemoryStream();
+        
+        private Thread? WriteThread;
+        
+        private Exception? WriteThreadException;
+
+        private ConcurrentQueue<byte[]> DataQueue = new ConcurrentQueue<byte[]>();
+        
+        private int CurrentSegmentOffset = 0;
+
         public ushort ChannelNumber { get; private set; }
 
         public Connection Connection { get; private set; }
@@ -15,6 +27,22 @@ namespace AnywhereNET
         public bool IsDataAvailable { get { return !DataQueue.IsEmpty; } }
 
         public bool IsConnected { get { return Connection != null && Connection.IsConnected; } }
+
+        internal Channel(Connection connection, ushort channelNumber)
+        {
+            Connection = connection;
+            ChannelNumber = channelNumber;
+            WriteThread = new Thread(() => WriteLoop());
+            WriteThread.Start();
+        }
+
+        /// <summary>
+        /// Finalizer is necessary when inheriting from Stream.
+        /// </summary>
+        ~Channel()
+        {
+            Dispose(false);
+        }
 
         public Task WaitForDataAsync()
         {
@@ -62,7 +90,6 @@ namespace AnywhereNET
 
         public override int Read(byte[] buffer, int offset, int count)
         {
-            //Console.WriteLine($"reading {count} bytes @ {offset} into buffer[{buffer.Length}]");
             int read = 0;
             int remaining = count;
             while (remaining > 0)
@@ -75,8 +102,6 @@ namespace AnywhereNET
                     // how many bytes can be copied in this loop iteration?
                     int size = Math.Min(remaining, remainingInSegment);
                     // copy the bytes from the segment to the buffer
-                    //Console.WriteLine($"Copying {size} bytes from array [{CurrentSegmentOffset}]({segment.Length}) to buffer [{offset}]");
-                    //Console.WriteLine("bytes=" + string.Join(' ', segment.AsSpan(offset, size).ToArray().Select(b => b.ToString())));
                     Buffer.BlockCopy(segment, CurrentSegmentOffset, buffer, offset, size);
                     // update counters
                     offset += size;
@@ -100,42 +125,20 @@ namespace AnywhereNET
             return read;
         }
 
-        // TODO: use a buffer to queue bytes in a frame until some time or size limit is reached to avoid sending tons of little frames
         public override void Write(byte[] buffer, int offset, int count)
         {
-            //Console.WriteLine($"writing {count} bytes @ {offset} from buffer[{buffer.Length}]");
-            //Console.WriteLine("bytes=" + string.Join(' ', buffer.AsSpan(offset, count).ToArray().Select(b => b.ToString())));
-
             lock (WriteBuffer)
             {
                 WriteBuffer.Write(buffer, offset, count);
             }
-
-            //int remaining = count;
-            //while (remaining > 0)
-            //{
-            //    int size = Math.Min(remaining, Frame.MaxFrameSize);
-            //    var bytes = new byte[size];
-            //    Buffer.BlockCopy(buffer, offset, bytes, 0, size);
-            //    var frame = new Frame
-            //    {
-            //        FrameType = FrameTypes.ChannelData,
-            //        Channel = ChannelNumber,
-            //        Length = size,
-            //        Payload = bytes//new ArraySegment<byte>(buffer, offset, size)
-            //    };
-            //    Connection.EnqueueFrame(frame);
-            //    remaining -= size;
-            //    offset += size;
-            //}
         }
 
-        /// <summary>
-        /// Finalizer is necessary when inheriting from Stream.
-        /// </summary>
-        ~Channel()
+        internal void Receive(byte[] bytes)
         {
-            Dispose(false);
+            // when the connection receives data for this channel, enqueue it to be later read by a consumer
+            DataQueue.Enqueue(bytes);
+            // notify all event handlers new data is available
+            OnDataAvailable?.Invoke(this);
         }
 
         /// <summary>
@@ -147,11 +150,11 @@ namespace AnywhereNET
             base.Dispose(disposing);
             if (Interlocked.Read(ref IsDisposed) == 0)
             {
-                //IsDisposed = true;
                 // signal the write thread to terminate
                 Interlocked.Exchange(ref IsDisposed, 1);
                 // wait for the write thread to finish
                 WriteThread!.Join();
+                // propagate any exceptions
                 if (WriteThreadException != null)
                 {
                     throw WriteThreadException;
@@ -181,7 +184,6 @@ namespace AnywhereNET
                         {
                             int size = Math.Min(remaining, Frame.MaxFrameSize);
                             var bytes = new byte[size];
-                            //Console.WriteLine($"building frame of {size} bytes from buffer[{remaining}] @ {offset}");
                             Buffer.BlockCopy(WriteBuffer.GetBuffer(), offset, bytes, 0, size);
                             var frame = new Frame
                             {
@@ -205,32 +207,6 @@ namespace AnywhereNET
                 Console.WriteLine($"Channel Unhandled Exception: {e.GetType()} {e.Message}");
                 WriteThreadException = e;
             }
-        }
-
-        //private bool IsDisposed = false;
-        private long IsDisposed = 0;
-        private MemoryStream WriteBuffer = new MemoryStream();
-        private Thread? WriteThread;
-        private Exception? WriteThreadException;
-
-        private ConcurrentQueue<byte[]> DataQueue = new ConcurrentQueue<byte[]>();
-        private int CurrentSegmentOffset = 0;
-
-        internal Channel(Connection connection, ushort channelNumber)
-        {
-            Connection = connection;
-            ChannelNumber = channelNumber;
-            WriteThread = new Thread(() => WriteLoop());
-            WriteThread.Start();
-        }
-
-        internal void Receive(byte[] bytes)
-        {
-            //Console.WriteLine("queueing data=" + string.Join(' ', bytes.Select(b => b.ToString())));
-            // when the connection receives data for this channel, enqueue it to be later read by a caller
-            DataQueue.Enqueue(bytes);
-            // notify all event handlers new data is available
-            OnDataAvailable?.Invoke(this);
         }
     }
 

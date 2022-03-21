@@ -73,7 +73,7 @@ namespace foo
                 // send a debug message to confirm the client can receive
                 _ = Task.Delay(0).ContinueWith((task) =>
                 {
-                    _ = connection.DebugAsync("Hello from the server");
+                    connection.Debug("Hello from the server");
                 });
 #endif
             }

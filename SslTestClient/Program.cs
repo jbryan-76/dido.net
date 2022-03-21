@@ -29,7 +29,7 @@ namespace foo
                     break;
                 }
 
-                await connection.DebugAsync(input);
+                connection.Debug(input);
             }
 
             // close the connection
