@@ -11,25 +11,25 @@ namespace AnywhereNET
         // TODO: add "context" to allow caching assemblies associated with a particular app
         public static async Task<MethodModel?> DeserializeAsync(Environment env, string data)
         {
-            // TODO: how to deserialize back to a lambda to inject the ExecutionContext?
-
             var triedAssemblies = new HashSet<string>();
 
             MethodModel? model = null;
             bool created = false;
             while (!created)
             {
-                // deserialize to the strongly typed model to start trying to load the assemblies needed
-                // to execute the encoded lambda
-                model = JsonConvert.DeserializeObject<MethodModel>(data);
-
-                if (model == null)
-                {
-                    return model;
-                }
-
                 try
                 {
+                    // deserialize to the strongly typed model to start trying to load the assemblies needed
+                    // to execute the encoded lambda
+                    model = JsonConvert.DeserializeObject<MethodModel>(data);
+
+                    if (model == null)
+                    {
+                        return model;
+                    }
+
+                    // TODO: explore using AssemblyDependencyResolver to load assemblies instead of doing through try-catch
+
                     // get the instance assembly and type
                     var assembly = Assembly.Load(model.Instance.Type.AssemblyName);
                     var type = assembly.GetType(model.Instance.Type.Name, true);
@@ -89,7 +89,7 @@ namespace AnywhereNET
                     }
 
                     // assembly not found. try to resolve it
-                    var stream = await env.ResolveRemoteAssembly(env, assemblyName);
+                    var stream = await env.ResolveRemoteAssemblyAsync(env, assemblyName);
 
                     if (stream == null)
                     {

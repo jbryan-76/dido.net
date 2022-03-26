@@ -279,12 +279,12 @@ namespace AnywhereNET
                 }
                 else if (a is ParameterExpression)
                 {
-                    // TODO: if arg is of type ExecutionContext, use a placeholder
                     var exp = (ParameterExpression)a;
                     if (exp.Type != typeof(ExecutionContext))
                     {
                         throw new InvalidOperationException($"Only a single {typeof(ExecutionContext)} parameter is supported for lambda expressions");
                     }
+                    // argument is a parameter of type ExecutionContext
                     args.Add(new ValueModel
                     {
                         Value = null,

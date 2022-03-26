@@ -59,8 +59,12 @@ namespace AnywhereNET.Test.Common
 
             Environment = new Environment
             {
-                 //ApplicationChannel
-                 ResolveRemoteAssemblyAsync = UnitTestRemoteAssemblyResolver
+                //ApplicationChannel
+                ResolveRemoteAssemblyAsync = UnitTestRemoteAssemblyResolver,
+                Context = new ExecutionContext
+                {
+                    ExecutionMode = ExecutionModes.Local,
+                }
             };
         }
 

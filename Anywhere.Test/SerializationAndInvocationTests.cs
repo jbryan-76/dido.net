@@ -2,6 +2,8 @@ using AnywhereNET.Test.Common;
 using AnywhereNET.TestLib;
 using AnywhereNET.TestLibDependency;
 using System;
+using System.Linq.Expressions;
+using System.Reflection;
 using Xunit;
 
 namespace AnywhereNET.Test
@@ -34,7 +36,7 @@ namespace AnywhereNET.Test
 
         internal static string Foo(ExecutionContext context, int constantVal, string closureVal)
         {
-            return constantVal.ToString() + closureVal;
+            return constantVal.ToString() + closureVal + context.ExecutionMode.ToString();
         }
 
         /// <summary>
@@ -118,6 +120,28 @@ namespace AnywhereNET.Test
             var expectedResult = Foo(TestFixture.Environment.Context, 23, closureVal);
 
             Assert.Equal(expectedResult, actualResult);
+        }
+
+        [Fact]
+        public async void TestExplicityCreatedLambda()
+        {
+            var obj = Expression.Constant(FakeObject);
+            var thisObj = Expression.Constant(this);
+            var contextParam = Expression.Parameter(typeof(ExecutionContext), "context");
+            var methodInfo = typeof(SampleWorkerClass).GetMethod(nameof(SampleWorkerClass.SimpleMemberMethod));
+            var objEx = Expression.MakeMemberAccess(thisObj, typeof(SerializationAndInvocationTests).GetField(nameof(FakeObject), BindingFlags.Instance | BindingFlags.NonPublic));
+            var argEx = Expression.MakeMemberAccess(thisObj, typeof(SerializationAndInvocationTests).GetField(nameof(FakeArgument), BindingFlags.Instance | BindingFlags.NonPublic));
+            var body = Expression.Call(objEx, methodInfo, argEx);
+            var lambda = Expression.Lambda<Func<ExecutionContext, int>>(body, contextParam);
+
+            var data0 = TestFixture.Anywhere.Serialize((context) => FakeObject.SimpleMemberMethod(FakeArgument));
+            var data = TestFixture.Anywhere.Serialize(lambda);
+            Assert.Equal(data0, data);
+
+            var method = await MethodModelDeserializer.DeserializeAsync(TestFixture.Environment, data);
+            var result = method.Invoke();
+
+            Assert.Equal(FakeArgument, result);
         }
     }
 }
