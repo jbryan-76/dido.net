@@ -40,13 +40,14 @@ namespace AnywhereNET.Test
         }
 
         /// <summary>
-        /// Generate sample lambda method calls, then serialize and save them to a common shared folder
+        /// Generate a variety of sample lambda method calls, then serialize and save them to a common shared folder
         /// to be deserialized and executed by the Anywhere.TestEnv project.
+        /// <para/>
+        /// NOTE this unit test must be run before any test from Anywhere.TestEnv.DeserializationAndInvocationTests.
         /// </summary>
         [Fact]
         public void GenerateSerializedMethodInvocationData()
         {
-
             // serialize a lambda expression invoking a member method
             var data = TestFixture.Anywhere.Serialize((context) => FakeObject.SimpleMemberMethod(FakeArgument));
             // save the serialized model
@@ -78,6 +79,10 @@ namespace AnywhereNET.Test
             System.IO.File.WriteAllText(path, Newtonsoft.Json.JsonConvert.SerializeObject(dependencyResult));
         }
 
+        /// <summary>
+        /// This test verifies a lambda invoking a member method on a class is properly 
+        /// (de)serialized and invoked.
+        /// </summary>
         [Fact]
         public async void TestMemberMethod()
         {
@@ -89,6 +94,10 @@ namespace AnywhereNET.Test
             Assert.Equal(FakeArgument, result);
         }
 
+        /// <summary>
+        /// This test verifies a lambda invoking a static method on a class is properly 
+        /// (de)serialized and invoked.
+        /// </summary>
         [Fact]
         public async void TestStaticMethod()
         {
@@ -99,6 +108,10 @@ namespace AnywhereNET.Test
             Assert.Equal(FakeArgument, result);
         }
 
+        /// <summary>
+        /// This test verifies a lambda using code with additional assembly dependencies is properly 
+        /// (de)serialized and invoked.
+        /// </summary>
         [Fact]
         public async void TestMemberMethodWithDependency()
         {
@@ -110,6 +123,10 @@ namespace AnywhereNET.Test
             Assert.Equal(expectedResult, actualResult);
         }
 
+        /// <summary>
+        /// This test verifies a lambda using the ambient ExecutionContext is properly 
+        /// (de)serialized and invoked.
+        /// </summary>
         [Fact]
         public async void TestStaticMethodWithContext()
         {
@@ -122,26 +139,57 @@ namespace AnywhereNET.Test
             Assert.Equal(expectedResult, actualResult);
         }
 
+        /// <summary>
+        /// This test verifies an explicitly created lambda expression matches an equivalent
+        /// lambda expression in code. This is critical to confirm some tests in Anywhere.TestEnv
+        /// that will not have the necessary assemblies loaded.
+        /// </summary>
         [Fact]
         public async void TestExplicityCreatedLambda()
         {
-            var obj = Expression.Constant(FakeObject);
-            var thisObj = Expression.Constant(this);
-            var contextParam = Expression.Parameter(typeof(ExecutionContext), "context");
+            // this is the target expected lambda expression, which is created using the assemblies and models
+            // already loaded as dependencies to this unit test project. like the other unit tests
+            // in this class, it is simply a lambda that invokes a single-argument method on an object.
+            Expression<Func<ExecutionContext, int>> expectedLambda = 
+                (context) => FakeObject.SimpleMemberMethod(FakeArgument);
+
+            // the below statements are explicitly creating a lambda expression that is
+            // equivalent to the target expression above, except technically without needing the actual
+            // assemblies containing the referenced classes to be loaded
+
+            // an expression referring to 'this' object (ie the test class instance)
+            var thisObjEx = Expression.Constant(this);
+
+            // an expression referring to the "FakeObject" member of this class
+            var objEx = Expression.MakeMemberAccess(thisObjEx, typeof(SerializationAndInvocationTests).GetField(nameof(FakeObject), BindingFlags.Instance | BindingFlags.NonPublic));
+
+            // an expression referring to the "FakeArgument" member of this class
+            var argEx = Expression.MakeMemberAccess(thisObjEx, typeof(SerializationAndInvocationTests).GetField(nameof(FakeArgument), BindingFlags.Instance | BindingFlags.NonPublic));
+
+            // the method info for the member method "SimpleMemberMethod" of the SampleWorkerClass
             var methodInfo = typeof(SampleWorkerClass).GetMethod(nameof(SampleWorkerClass.SimpleMemberMethod));
-            var objEx = Expression.MakeMemberAccess(thisObj, typeof(SerializationAndInvocationTests).GetField(nameof(FakeObject), BindingFlags.Instance | BindingFlags.NonPublic));
-            var argEx = Expression.MakeMemberAccess(thisObj, typeof(SerializationAndInvocationTests).GetField(nameof(FakeArgument), BindingFlags.Instance | BindingFlags.NonPublic));
-            var body = Expression.Call(objEx, methodInfo, argEx);
-            var lambda = Expression.Lambda<Func<ExecutionContext, int>>(body, contextParam);
+            
+            // an expression to call the member method on the FakeObject instance using the FakeArgument argument
+            var bodyEx = Expression.Call(objEx, methodInfo, argEx);
 
-            var data0 = TestFixture.Anywhere.Serialize((context) => FakeObject.SimpleMemberMethod(FakeArgument));
-            var data = TestFixture.Anywhere.Serialize(lambda);
-            Assert.Equal(data0, data);
+            // an expression referring to the ExecutionContext lambda parameter
+            var contextParamEx = Expression.Parameter(typeof(ExecutionContext), "context");
 
-            var method = await MethodModelDeserializer.DeserializeAsync(TestFixture.Environment, data);
-            var result = method.Invoke();
+            // finally, the lambda expression that uses the single lambda parameter and executes the lambda body
+            var lambda = Expression.Lambda<Func<ExecutionContext, int>>(bodyEx, contextParamEx);
 
-            Assert.Equal(FakeArgument, result);
+            // serialize both lambdas and confirm they match
+            var expectedData = TestFixture.Anywhere.Serialize(expectedLambda);
+            var actualData = TestFixture.Anywhere.Serialize(lambda);
+            Assert.Equal(expectedData, actualData);
+
+            // deserialize and execute both lambdas and confirm the results match
+            var expectedMethod = await MethodModelDeserializer.DeserializeAsync(TestFixture.Environment, expectedData);
+            var expectedResult = expectedMethod.Invoke();
+            var actualMethod = await MethodModelDeserializer.DeserializeAsync(TestFixture.Environment, actualData);
+            var actualResult = actualMethod.Invoke();
+
+            Assert.Equal(expectedResult, actualResult);
         }
     }
 }
