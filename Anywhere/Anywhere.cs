@@ -111,21 +111,18 @@ namespace AnywhereNET
         /// <summary>
         /// A delegate method for resolving local runtime assemblies used by the host application.
         /// </summary>
-        public LocalAssemblyResolver? ResolveLocalAssembly = DefaultLocalAssemblyResolver.ResolveAssembly;
+        public LocalAssemblyResolver? ResolveLocalAssemblyAsync = DefaultLocalAssemblyResolver.ResolveAssembly;
 
         public async Task<Tprop> Execute<Tprop>(Expression<Func<ExecutionContext, Tprop>> lambda)
         {
-            if (ExecutionMode == ExecutionModes.Local)
+            switch (ExecutionMode)
             {
-                return await LocalExecute<Tprop>(lambda);
-            }
-            else if (ExecutionMode == ExecutionModes.Remote)
-            {
-                return await RemoteExecute<Tprop>(lambda);
-            }
-            else
-            {
-                throw new InvalidOperationException($"Illegal or unknown value for '{nameof(ExecutionMode)}': {ExecutionMode}");
+                case ExecutionModes.Local:
+                    return await LocalExecute<Tprop>(lambda);
+                case ExecutionModes.Remote:
+                    return await RemoteExecute<Tprop>(lambda);
+                default:
+                    throw new InvalidOperationException($"Illegal or unknown value for '{nameof(ExecutionMode)}': {ExecutionMode}");
             }
         }
 

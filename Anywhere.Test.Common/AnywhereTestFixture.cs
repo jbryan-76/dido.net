@@ -52,7 +52,7 @@ namespace AnywhereNET.Test.Common
             Anywhere = new Anywhere
             {
                 ExecutionMode = ExecutionModes.Local,
-                ResolveLocalAssembly = UnitTestLocalAssemblyResolver
+                ResolveLocalAssemblyAsync = UnitTestLocalAssemblyResolver
             };
 
             //Anywhere.ResolveAssembly = UnitTestAssemblyResolver;
@@ -60,7 +60,7 @@ namespace AnywhereNET.Test.Common
             Environment = new Environment
             {
                  //ApplicationChannel
-                 ResolveRemoteAssembly = UnitTestRemoteAssemblyResolver
+                 ResolveRemoteAssemblyAsync = UnitTestRemoteAssemblyResolver
             };
         }
 

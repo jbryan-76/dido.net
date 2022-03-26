@@ -17,7 +17,7 @@
         /// <summary>
         /// A delegate method for resolving remote runtime assemblies used by the host application.
         /// </summary>
-        public RemoteAssemblyResolver ResolveRemoteAssembly = DefaultRemoteAssemblyResolver.ResolveAssembly;
+        public RemoteAssemblyResolver ResolveRemoteAssemblyAsync = DefaultRemoteAssemblyResolver.ResolveAssembly;
 
         // TODO: the actual resolver needs to call back to the current ambient Anywhere library running in the application
         // TODO: this stream can be an SslStream for normal ops, or eg a custom loopback stream for unit testing

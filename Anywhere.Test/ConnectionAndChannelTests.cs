@@ -150,12 +150,10 @@ namespace AnywhereNET.Test
                 {
                     data[i] = (byte)i;
                 }
-
                 channelClientSide.Write(data, 0, data.Length);
+        
+                // read the data
                 channelServerSide.BlockingReads = true;
-
-                await channelServerSide.WaitForDataAsync();
-
                 var resultData = channelServerSide.ReadBytes(data.Length);
 
                 // verify the communication
