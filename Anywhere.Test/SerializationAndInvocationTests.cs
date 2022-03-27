@@ -94,6 +94,42 @@ namespace AnywhereNET.Test
             Assert.Equal(FakeArgument, result);
         }
 
+        [Fact]
+        public async void TestLocalObjects()
+        {
+            var obj = new SampleWorkerClass();
+            int arg = 123;
+
+            var data = TestFixture.Anywhere.Serialize((context) => obj.SimpleMemberMethod(arg));
+            var method = await MethodModelDeserializer.DeserializeAsync(TestFixture.Environment, data);
+            var result = method.Invoke();
+
+            Assert.Equal(arg, result);
+        }
+
+        [Fact]
+        public async void TestCastObjects()
+        {
+            object obj = new SampleWorkerClass();
+            int arg = 123;
+
+            var data = TestFixture.Anywhere.Serialize((context) => ((SampleWorkerClass)obj).SimpleMemberMethod(arg));
+            var method = await MethodModelDeserializer.DeserializeAsync(TestFixture.Environment, data);
+            var result = method.Invoke();
+
+            Assert.Equal(arg, result);
+        }
+
+        [Fact]
+        public async void Test1()
+        {
+            object obj = new SampleWorkerClass();
+            int arg = 123;
+
+            var node = TestFixture.Anywhere.SerializeGeneric((context) => ((SampleWorkerClass)obj).SimpleMemberMethod(arg));
+            // TODO: deserialize the node to a lambda and execute
+        }
+
         /// <summary>
         /// This test verifies a lambda invoking a static method on a class is properly 
         /// (de)serialized and invoked.
@@ -165,6 +201,62 @@ namespace AnywhereNET.Test
 
             // an expression referring to the "FakeArgument" member of this class
             var argEx = Expression.MakeMemberAccess(thisObjEx, typeof(SerializationAndInvocationTests).GetField(nameof(FakeArgument), BindingFlags.Instance | BindingFlags.NonPublic));
+
+            // the method info for the member method "SimpleMemberMethod" of the SampleWorkerClass
+            var methodInfo = typeof(SampleWorkerClass).GetMethod(nameof(SampleWorkerClass.SimpleMemberMethod));
+            
+            // an expression to call the member method on the FakeObject instance using the FakeArgument argument
+            var bodyEx = Expression.Call(objEx, methodInfo, argEx);
+
+            // an expression referring to the ExecutionContext lambda parameter
+            var contextParamEx = Expression.Parameter(typeof(ExecutionContext), "context");
+
+            // finally, the lambda expression that uses the single lambda parameter and executes the lambda body
+            var lambda = Expression.Lambda<Func<ExecutionContext, int>>(bodyEx, contextParamEx);
+
+            // serialize both lambdas and confirm they match
+            var expectedData = TestFixture.Anywhere.Serialize(expectedLambda);
+            var actualData = TestFixture.Anywhere.Serialize(lambda);
+            Assert.Equal(expectedData, actualData);
+
+            // deserialize and execute both lambdas and confirm the results match
+            var expectedMethod = await MethodModelDeserializer.DeserializeAsync(TestFixture.Environment, expectedData);
+            var expectedResult = expectedMethod.Invoke();
+            var actualMethod = await MethodModelDeserializer.DeserializeAsync(TestFixture.Environment, actualData);
+            var actualResult = actualMethod.Invoke();
+
+            Assert.Equal(expectedResult, actualResult);
+        }
+
+        [Fact]
+        public async void TestExplicityCreatedLambda2()
+        {
+            var obj = new SampleWorkerClass();
+            int arg = 123;
+
+            // this is the target expected lambda expression, which is created using the assemblies and models
+            // already loaded as dependencies to this unit test project. like the other unit tests
+            // in this class, it is simply a lambda that invokes a single-argument method on an object.
+            Expression<Func<ExecutionContext, int>> expectedLambda = 
+                (context) => obj.SimpleMemberMethod(arg);
+
+            // the below statements are explicitly creating a lambda expression that is
+            // equivalent to the target expression above, except technically without needing the actual
+            // assemblies containing the referenced classes to be loaded
+
+            //// an expression referring to 'this' object (ie the test class instance)
+            //var thisObjEx = Expression.Constant(this);
+
+            //// an expression referring to the "FakeObject" member of this class
+            //var objEx = Expression.MakeMemberAccess(thisObjEx, typeof(SerializationAndInvocationTests).GetField(nameof(FakeObject), BindingFlags.Instance | BindingFlags.NonPublic));
+
+            //// an expression referring to the "FakeArgument" member of this class
+            //var argEx = Expression.MakeMemberAccess(thisObjEx, typeof(SerializationAndInvocationTests).GetField(nameof(FakeArgument), BindingFlags.Instance | BindingFlags.NonPublic));
+
+            //var objEx = Expression.MakeMemberAccess(thisObjEx, typeof(SerializationAndInvocationTests).GetField(nameof(FakeObject), BindingFlags.Instance | BindingFlags.NonPublic));
+            var objEx = Expression.Variable(typeof(SampleWorkerClass));
+            var argEx = Expression.Variable(typeof(int));
+            //var argEx = Expression.Constant(arg);
 
             // the method info for the member method "SimpleMemberMethod" of the SampleWorkerClass
             var methodInfo = typeof(SampleWorkerClass).GetMethod(nameof(SampleWorkerClass.SimpleMemberMethod));

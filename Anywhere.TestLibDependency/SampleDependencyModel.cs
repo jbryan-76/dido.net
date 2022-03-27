@@ -6,9 +6,13 @@
     /// </summary>
     public class SampleDependencyModel
     {
+        public static int MyStaticInt = 10;
+
         public int MyInt { get; set; }
         public bool MyBool { get; set; }
         public DateTimeOffset MyDateTimeOffset { get; set; }
+
+        public static void Increment() { MyStaticInt++; }
 
         public string MyFormatDate()
         {

@@ -96,6 +96,16 @@ namespace AnywhereNET
                         throw new InvalidOperationException($"Could not resolve assembly '{assemblyName}'", e);
                     }
 
+                    // TODO: this is worth pursuing for proper code isolation,
+                    // TODO: but JsonConvert.DeserializeObject will not be able to locate the assemblies to instantiate
+                    // TODO: type instances unless the assemblies are in AssemblyLoadContext.Default
+                    //var contextName = env.AssemblyLoadContextName ?? nameof(AssemblyLoadContext.Default);
+                    //var context = AssemblyLoadContext.All.FirstOrDefault(x => x.Name == contextName);
+                    //if( context == null)
+                    //{
+                    //    throw new InvalidOperationException($"Could not find {nameof(AssemblyLoadContext)} name '{contextName}' in which to load assembly {assemblyName}");
+                    //}
+                    //context.LoadFromStream(stream);
                     AssemblyLoadContext.Default.LoadFromStream(stream);
 
                     stream.Dispose();
@@ -111,7 +121,6 @@ namespace AnywhereNET
             }
 
             return model;
-
         }
 
         public static async Task<T> DeserializeAndExecuteAsync<T>(Environment env, string data)

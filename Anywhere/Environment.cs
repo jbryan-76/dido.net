@@ -22,6 +22,11 @@
         // TODO: the actual resolver needs to call back to the current ambient Anywhere library running in the application
         // TODO: this stream can be an SslStream for normal ops, or eg a custom loopback stream for unit testing
 
+        // TODO: this is worth pursuing for proper code isolation,
+        // TODO: but JsonConvert.DeserializeObject will not be able to locate the assemblies to instantiate
+        // TODO: type instances unless the assemblies are in AssemblyLoadContext.Default
+        public string? AssemblyLoadContextName;
+
         /// <summary>
         /// A bi-directional communications channel to the application.
         /// </summary>
