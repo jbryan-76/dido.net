@@ -123,11 +123,20 @@ namespace AnywhereNET.Test
         [Fact]
         public async void Test1()
         {
+            // set up the test
             object obj = new SampleWorkerClass();
             int arg = 123;
+            var expectedResult = ((SampleWorkerClass)obj).SimpleMemberMethod(arg);
 
-            var node = TestFixture.Anywhere.SerializeGeneric((context) => ((SampleWorkerClass)obj).SimpleMemberMethod(arg));
-            // TODO: deserialize the node to a lambda and execute
+            // serialize the lambda expression to a transmittable form
+            var node = Serializer.SerializeGeneric((context) => ((SampleWorkerClass)obj).SimpleMemberMethod(arg));
+            
+            // deserialize back to a lambda expression and execute
+            var lambda = Serializer.DeserializeGeneric<object>(node);
+            var result = lambda.Invoke(TestFixture.Environment.Context);
+
+            // confirm the result
+            Assert.Equal(expectedResult, result);
         }
 
         /// <summary>
@@ -186,7 +195,7 @@ namespace AnywhereNET.Test
             // this is the target expected lambda expression, which is created using the assemblies and models
             // already loaded as dependencies to this unit test project. like the other unit tests
             // in this class, it is simply a lambda that invokes a single-argument method on an object.
-            Expression<Func<ExecutionContext, int>> expectedLambda = 
+            Expression<Func<ExecutionContext, int>> expectedLambda =
                 (context) => FakeObject.SimpleMemberMethod(FakeArgument);
 
             // the below statements are explicitly creating a lambda expression that is
@@ -204,7 +213,7 @@ namespace AnywhereNET.Test
 
             // the method info for the member method "SimpleMemberMethod" of the SampleWorkerClass
             var methodInfo = typeof(SampleWorkerClass).GetMethod(nameof(SampleWorkerClass.SimpleMemberMethod));
-            
+
             // an expression to call the member method on the FakeObject instance using the FakeArgument argument
             var bodyEx = Expression.Call(objEx, methodInfo, argEx);
 
@@ -237,7 +246,7 @@ namespace AnywhereNET.Test
             // this is the target expected lambda expression, which is created using the assemblies and models
             // already loaded as dependencies to this unit test project. like the other unit tests
             // in this class, it is simply a lambda that invokes a single-argument method on an object.
-            Expression<Func<ExecutionContext, int>> expectedLambda = 
+            Expression<Func<ExecutionContext, int>> expectedLambda =
                 (context) => obj.SimpleMemberMethod(arg);
 
             // the below statements are explicitly creating a lambda expression that is
@@ -260,7 +269,7 @@ namespace AnywhereNET.Test
 
             // the method info for the member method "SimpleMemberMethod" of the SampleWorkerClass
             var methodInfo = typeof(SampleWorkerClass).GetMethod(nameof(SampleWorkerClass.SimpleMemberMethod));
-            
+
             // an expression to call the member method on the FakeObject instance using the FakeArgument argument
             var bodyEx = Expression.Call(objEx, methodInfo, argEx);
 
