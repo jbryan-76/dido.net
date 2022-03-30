@@ -1,5 +1,6 @@
 ﻿using AnywhereNET.Test.Common;
 using System;
+using System.IO;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.Loader;
@@ -72,7 +73,19 @@ namespace AnywhereNET.TestEnv
             // finally, the lambda expression that uses the single lambda parameter and executes the lambda body
             var lambda = Expression.Lambda<Func<ExecutionContext, int>>(bodyEx, contextParamEx);
 
-            var actualData = TestFixture.Anywhere.Serialize(lambda);
+            using (var stream = new MemoryStream())
+            {
+                ExpressionSerializer.Serialize(lambda, stream);
+                stream.Position = 0;
+                var decodedLambda = ExpressionSerializer.Deserialize<object>(stream);
+
+                var result = decodedLambda.Invoke(TestFixture.Environment.Context);
+            }
+            //var transmittedModel = ExpressionSerializer.Encode(lambda);
+
+
+
+            //var actualData = TestFixture.Anywhere.Serialize(lambda);
 
             context.Unload();
         }
@@ -98,57 +111,57 @@ namespace AnywhereNET.TestEnv
 
         }
 
-        [Fact]
-        public async void Foo()
-        {
-            var stream = await TestFixture.Anywhere.ResolveLocalAssemblyAsync("Anywhere.TestLibDependency, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null");
+        //[Fact]
+        //public async void Foo()
+        //{
+        //    var stream = await TestFixture.Anywhere.ResolveLocalAssemblyAsync("Anywhere.TestLibDependency, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null");
 
-            var context1 = new AssemblyLoadContext("Test 1", true);
-            var asm1 = context1.LoadFromStream(stream);
-            var obj1 = asm1.CreateInstance("AnywhereNET.TestLibDependency.SampleDependencyModel");
-            obj1.GetType().GetMethod("Increment", BindingFlags.Static | BindingFlags.Public).Invoke(null, null);
-            var info1 = obj1.GetType().GetField("MyStaticInt");
-            var myStaticInt1 = info1.GetValue(obj1);
+        //    var context1 = new AssemblyLoadContext("Test 1", true);
+        //    var asm1 = context1.LoadFromStream(stream);
+        //    var obj1 = asm1.CreateInstance("AnywhereNET.TestLibDependency.SampleDependencyModel");
+        //    obj1.GetType().GetMethod("Increment", BindingFlags.Static | BindingFlags.Public).Invoke(null, null);
+        //    var info1 = obj1.GetType().GetField("MyStaticInt");
+        //    var myStaticInt1 = info1.GetValue(obj1);
 
-            var context2 = new AssemblyLoadContext("Test 2", true);
-            stream.Position = 0;
-            var asm2 = context2.LoadFromStream(stream);
-            var obj2 = asm2.CreateInstance("AnywhereNET.TestLibDependency.SampleDependencyModel");
-            var info2 = obj2.GetType().GetField("MyStaticInt");
-            var myStaticInt2 = info2.GetValue(obj1);
-        }
+        //    var context2 = new AssemblyLoadContext("Test 2", true);
+        //    stream.Position = 0;
+        //    var asm2 = context2.LoadFromStream(stream);
+        //    var obj2 = asm2.CreateInstance("AnywhereNET.TestLibDependency.SampleDependencyModel");
+        //    var info2 = obj2.GetType().GetField("MyStaticInt");
+        //    var myStaticInt2 = info2.GetValue(obj1);
+        //}
 
         // TODO: load a server in one context and a client in another context and make them 
         // TODO: do a full end-to-end serialize/invoke cycle
 
-        [Fact]
-        public async void Bar()
-        {
-            //var anywhere = new Anywhere();
-            var asmStream1 = await TestFixture.Anywhere.ResolveLocalAssemblyAsync("Anywhere.TestLibDependency, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null");
-            var context1 = new AssemblyLoadContext("Test 1", true);
-            var asm1 = context1.LoadFromStream(asmStream1);
+        //[Fact]
+        //public async void Bar()
+        //{
+        //    //var anywhere = new Anywhere();
+        //    var asmStream1 = await TestFixture.Anywhere.ResolveLocalAssemblyAsync("Anywhere.TestLibDependency, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null");
+        //    var context1 = new AssemblyLoadContext("Test 1", true);
+        //    var asm1 = context1.LoadFromStream(asmStream1);
 
-            var all = AssemblyLoadContext.All;
+        //    var all = AssemblyLoadContext.All;
 
-            //var obj1 = asm1.CreateInstance("AnywhereNET.TestLibDependency.SampleDependencyModel");
-            var type1 = asm1.GetType("AnywhereNET.TestLibDependency.SampleDependencyModel");
-            //var type1 = Type.GetType("AnywhereNET.TestLibDependency.SampleDependencyModel"); // this won't work unless the assembly is loaded into the Default context
-            var obj1 = Activator.CreateInstance(type1);
-            obj1.GetType().GetMethod("Increment", BindingFlags.Static | BindingFlags.Public).Invoke(null, null);
-            var info1 = obj1.GetType().GetField("MyStaticInt");
-            var myStaticInt1 = info1.GetValue(obj1);
+        //    //var obj1 = asm1.CreateInstance("AnywhereNET.TestLibDependency.SampleDependencyModel");
+        //    var type1 = asm1.GetType("AnywhereNET.TestLibDependency.SampleDependencyModel");
+        //    //var type1 = Type.GetType("AnywhereNET.TestLibDependency.SampleDependencyModel"); // this won't work unless the assembly is loaded into the Default context
+        //    var obj1 = Activator.CreateInstance(type1);
+        //    obj1.GetType().GetMethod("Increment", BindingFlags.Static | BindingFlags.Public).Invoke(null, null);
+        //    var info1 = obj1.GetType().GetField("MyStaticInt");
+        //    var myStaticInt1 = info1.GetValue(obj1);
 
-            var asmStream2 = await TestFixture.Anywhere.ResolveLocalAssemblyAsync("Anywhere.TestLib, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null");
-            var context2 = new AssemblyLoadContext("Test 2", true);
-            var asm2 = context2.LoadFromStream(asmStream2);
-            var type2 = asm2.GetType("AnywhereNET.TestLib.SampleModelClass");
-            //var type2 = Type.GetType("AnywhereNET.TestLib.SampleModelClass"); // this won't work unless the assembly is loaded into the Default context
-            var obj2 = Activator.CreateInstance(type2);
-            //var obj2 = asm2.CreateInstance("AnywhereNET.TestLib.SampleModelClass");
-            var info2 = obj2.GetType().GetMethod("MySetIntMethod");
-            var result = info2.Invoke(obj2, new object[] { 23 });
-            //var myStaticInt2 = info2.GetValue(obj1);
-        }
+        //    var asmStream2 = await TestFixture.Anywhere.ResolveLocalAssemblyAsync("Anywhere.TestLib, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null");
+        //    var context2 = new AssemblyLoadContext("Test 2", true);
+        //    var asm2 = context2.LoadFromStream(asmStream2);
+        //    var type2 = asm2.GetType("AnywhereNET.TestLib.SampleModelClass");
+        //    //var type2 = Type.GetType("AnywhereNET.TestLib.SampleModelClass"); // this won't work unless the assembly is loaded into the Default context
+        //    var obj2 = Activator.CreateInstance(type2);
+        //    //var obj2 = asm2.CreateInstance("AnywhereNET.TestLib.SampleModelClass");
+        //    var info2 = obj2.GetType().GetMethod("MySetIntMethod");
+        //    var result = info2.Invoke(obj2, new object[] { 23 });
+        //    //var myStaticInt2 = info2.GetValue(obj1);
+        //}
     }
 }

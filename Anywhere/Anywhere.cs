@@ -222,8 +222,6 @@ namespace AnywhereNET
                 throw new InvalidOperationException($"{nameof(expression)} must be a lambda expression");
             }
 
-            Serialize(expression);
-
             // convert the expression into a serializable model and serialize it
             var model = BuildModelFromExpression(expression);
             return JsonConvert.SerializeObject(model);

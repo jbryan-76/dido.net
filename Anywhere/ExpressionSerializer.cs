@@ -1,6 +1,9 @@
 ﻿using Newtonsoft.Json;
+using Newtonsoft.Json.Bson;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Runtime.Serialization;
+using System.Text;
 
 namespace AnywhereNET
 {
@@ -41,17 +44,53 @@ namespace AnywhereNET
         }
     }
 
-    public class Serializer
+    public class ExpressionSerializer
     {
-        public static Node SerializeGeneric<TReturn>(Expression<Func<ExecutionContext, TReturn>> expression)
+        internal static BindingFlags AllMembers = BindingFlags.Instance | BindingFlags.Public
+            | BindingFlags.NonPublic | BindingFlags.Static;
+
+        public class SerializeSettings
         {
-            return SerializeOtherGeneric(expression);
+            public enum Formats
+            {
+                Json,
+                Bson,
+
+                // TODO: explore serializing the node tree to a stream as optimized binary data.
+                // TODO: for example, since types will probably be reused, the most compact way might be 
+                // TODO: to store the types separately, then store the tree?
+                // Binary 
+            }
+
+            public Formats Format { get; set; } = Formats.Json;
+
+            public bool LeaveOpen { get; set; } = true;
+
+
+            Environment Environment;
         }
 
-        public static Func<ExecutionContext, TResult> DeserializeGeneric<TResult>(Node node)
+        public static void Serialize<TResult>(Expression<Func<ExecutionContext, TResult>> expression, Stream stream, SerializeSettings? settings = null)
+        {
+            var node = Encode(expression);
+            Serialize(node, stream, settings);
+        }
+
+        public static Func<ExecutionContext, TResult> Deserialize<TResult>(Stream stream, SerializeSettings? settings = null)
+        {
+            var node = Deserialize(stream, settings);
+            return Decode<TResult>(node);
+        }
+
+        public static Node Encode<TResult>(Expression<Func<ExecutionContext, TResult>> expression)
+        {
+            return EncodeFromExpression(expression);
+        }
+
+        public static Func<ExecutionContext, TResult> Decode<TResult>(Node node)
         {
             // deserialize the encoded expression tree, which by design will be a lambda expression
-            var exp = DeserializeOtherGeneric(node);
+            var exp = DecodeToExpression(node);
             var lambda = (LambdaExpression)exp;
 
             // the return type of the lambda expression will not necessarily match the desired
@@ -66,20 +105,66 @@ namespace AnywhereNET
             return (Func<ExecutionContext, TResult>)lambda.Compile();
         }
 
-        public class Node
+        public static void Serialize(Node node, Stream stream, SerializeSettings? settings = null)
         {
-            public ExpressionType ExpressionType { get; set; }
+            settings = settings ?? new SerializeSettings();
+
+            switch (settings.Format)
+            {
+                case SerializeSettings.Formats.Json:
+                    using (var streamWriter = new StreamWriter(stream: stream, leaveOpen: settings.LeaveOpen == true))
+                    using (var jsonWriter = new JsonTextWriter(streamWriter))
+                    {
+                        var jsonSerializer = new JsonSerializer();
+                        jsonSerializer.TypeNameHandling = TypeNameHandling.Objects;
+                        jsonSerializer.Serialize(jsonWriter, node);
+                    }
+                    break;
+                case SerializeSettings.Formats.Bson:
+                    using (var binaryWriter = new BinaryWriter(stream, Encoding.Default, settings.LeaveOpen == true))
+                    using (var bsonWriter = new BsonDataWriter(binaryWriter))
+                    {
+                        var jsonSerializer = new JsonSerializer();
+                        jsonSerializer.TypeNameHandling = TypeNameHandling.Objects;
+                        jsonSerializer.Serialize(bsonWriter, node);
+                    }
+                    break;
+                default:
+                    throw new NotSupportedException($"Serialization format '{settings.Format}' unknown or unsupported.");
+            }
         }
 
-        public class ConstantNode : Node
+        public static Node Deserialize(Stream stream, SerializeSettings? settings = null)
         {
-            public TypeNode Type { get; set; }
-            public object Value { get; set; }
+            settings = settings ?? new SerializeSettings();
+
+            switch (settings.Format)
+            {
+                case SerializeSettings.Formats.Json:
+                    using (var streamReader = new StreamReader(stream: stream, leaveOpen: settings.LeaveOpen == true))
+                    using (var jsonReader = new JsonTextReader(streamReader))
+                    {
+                        var jsonSerializer = new JsonSerializer();
+                        jsonSerializer.TypeNameHandling = TypeNameHandling.Objects;
+                        return jsonSerializer.Deserialize<Node>(jsonReader)!;
+                    }
+                case SerializeSettings.Formats.Bson:
+                    using (var binaryReader = new BinaryReader(stream, Encoding.Default, settings.LeaveOpen == true))
+                    using (var jsonReader = new BsonDataReader(binaryReader))
+                    {
+                        var jsonSerializer = new JsonSerializer();
+                        jsonSerializer.TypeNameHandling = TypeNameHandling.Objects;
+                        return jsonSerializer.Deserialize<Node>(jsonReader)!;
+                    }
+                default:
+                    throw new NotSupportedException($"Serialization format '{settings.Format}' unknown or unsupported.");
+            }
         }
 
-        public class TypeNode
+        public class TypeModel
         {
-            public TypeNode(Type type)
+            public TypeModel() { }
+            public TypeModel(Type type)
             {
                 Name = type.AssemblyQualifiedName;
                 AssemblyName = type.Assembly.FullName;
@@ -95,40 +180,70 @@ namespace AnywhereNET
             }
         }
 
-        public class MethodInfoNode
+        public class MethodInfoModel : MemberInfoModel
         {
-            public string Name { get; set; }
-            public TypeNode DeclaringType { get; set; }
-            public TypeNode ReturnType { get; set; }
-            public MethodInfoNode(MethodInfo info)
+            public TypeModel ReturnType { get; set; }
+            public MethodInfoModel() { }
+            public MethodInfoModel(MethodInfo info) : base(info)
             {
-                Name = info.Name;
-                DeclaringType = new TypeNode(info.DeclaringType);
-                ReturnType = new TypeNode(info.ReturnType);
+                ReturnType = new TypeModel(info.ReturnType);
             }
 
-            public MethodInfo ToInfo()
+            public new MethodInfo ToInfo()
             {
                 var declaringType = DeclaringType.ToType();
-                return declaringType.GetMethod(Name);
+                return declaringType.GetMethod(Name, AllMembers);
             }
         }
 
-        public class MemberInfoNode
+        public class MemberInfoModel
         {
             public string Name { get; set; }
-            public TypeNode DeclaringType { get; set; }
+            public TypeModel DeclaringType { get; set; }
 
-            public MemberInfoNode(MemberInfo info)
+            public MemberInfoModel() { }
+            public MemberInfoModel(MemberInfo info)
             {
                 Name = info.Name;
-                DeclaringType = new TypeNode(info.DeclaringType);
+                DeclaringType = new TypeModel(info.DeclaringType);
             }
 
             public MemberInfo ToInfo()
             {
                 var declaringType = DeclaringType.ToType();
-                return declaringType.GetMember(Name).FirstOrDefault();
+                return declaringType.GetMember(Name, AllMembers).FirstOrDefault();
+            }
+        }
+
+        public class Node
+        {
+            public ExpressionType ExpressionType { get; set; }
+        }
+
+        public class ConstantNode : Node
+        {
+            public TypeModel Type { get; set; }
+            public object Value { get; set; }
+
+            /// <summary>
+            /// Some serializers (eg json) will deserialize values to the "largest"
+            /// compatible type (eg any integer is deserialized to long/Int64).
+            /// This method is automatically invoked after deserializing the object
+            /// and is used to convert values back to the proper type, if necessary.
+            /// </summary>
+            /// <param name="context"></param>
+            [OnDeserialized]
+            internal void OnDeserializedMethod(StreamingContext context)
+            {
+                if (Value != null)
+                {
+                    var intendedType = Type.ToType();
+                    var currentType = Value.GetType();
+                    if (intendedType != currentType && intendedType != typeof(object))
+                    {
+                        Value = Convert.ChangeType(Value, intendedType);
+                    }
+                }
             }
         }
 
@@ -137,18 +252,18 @@ namespace AnywhereNET
             public Node Body { get; set; }
             public Node[] Parameters { get; set; }
             public string? Name { get; set; }
-            public TypeNode ReturnType { get; set; }
+            public TypeModel ReturnType { get; set; }
         }
 
         public class MemberNode : Node
         {
             public Node Expression { get; set; }
-            public MemberInfoNode Member { get; set; }
+            public MemberInfoModel Member { get; set; }
         }
 
         public class MethodCallNode : Node
         {
-            public MethodInfoNode Method { get; set; }
+            public MethodInfoModel Method { get; set; }
             public Node[] Arguments { get; set; }
             // the instance object the method is called on, or null if it's a static method
             public Node Object { get; set; }
@@ -157,17 +272,17 @@ namespace AnywhereNET
         public class ParameterNode : Node
         {
             public string? Name { get; set; }
-            public TypeNode Type { get; set; }
+            public TypeModel Type { get; set; }
         }
 
         public class UnaryNode : Node
         {
-            public MethodInfoNode? Method { get; set; }
+            public MethodInfoModel? Method { get; set; }
             public Node Operand { get; set; }
-            public TypeNode Type { get; set; }
+            public TypeModel Type { get; set; }
         }
 
-        public static Node SerializeOtherGeneric(Expression expression, Expression? parent = null)
+        internal static Node EncodeFromExpression(Expression expression, Expression? parent = null)
         {
             while (expression.CanReduce)
             {
@@ -189,28 +304,9 @@ namespace AnywhereNET
                     var node = new ConstantNode
                     {
                         ExpressionType = exp.NodeType,
-                        Type = new TypeNode(exp.Type),
+                        Type = new TypeModel(exp.Type),
                         Value = exp.Value
                     };
-                    // TODO: if expression is a constant, get the value
-                    //object container = exp.Value;
-                    //if (parent is MemberExpression)
-                    //{
-                    //    var memberExpression = parent as MemberExpression;
-                    //    switch (memberExpression.Member)
-                    //    {
-                    //        case FieldInfo info:
-                    //            node.Type = new TypeNode(((FieldInfo)memberExpression.Member).FieldType);
-                    //            node.Value = ((FieldInfo)memberExpression.Member).GetValue(node.Value);
-                    //            break;
-                    //        case PropertyInfo info:
-                    //            node.Type = new TypeNode(((PropertyInfo)memberExpression.Member).PropertyType);
-                    //            node.Value = ((PropertyInfo)memberExpression.Member).GetValue(node.Value);
-                    //            break;
-                    //        default:
-                    //            throw new NotImplementedException($"While converting {nameof(ConstantExpression)}: member type {memberExpression.Member.GetType()} is not supported.");
-                    //    }
-                    //}
                     return node;
                 case DebugInfoExpression exp:
                     throw new NotImplementedException();
@@ -237,10 +333,10 @@ namespace AnywhereNET
                     return new LambdaNode
                     {
                         ExpressionType = exp.NodeType,
-                        Body = SerializeOtherGeneric(exp.Body, exp),
-                        Parameters = exp.Parameters.Select(p => SerializeOtherGeneric(p, exp)).ToArray(),
+                        Body = EncodeFromExpression(exp.Body, exp),
+                        Parameters = exp.Parameters.Select(p => EncodeFromExpression(p, exp)).ToArray(),
                         Name = exp.Name,
-                        ReturnType = new TypeNode(exp.ReturnType),
+                        ReturnType = new TypeModel(exp.ReturnType),
                     };
                 case ListInitExpression exp:
                     throw new NotImplementedException();
@@ -249,15 +345,15 @@ namespace AnywhereNET
                     throw new NotImplementedException();
                     break;
                 case MemberExpression exp:
-                    // TODO: convert a closure member reference to a constant value
+                    // convert a closure member reference to a constant value
                     if (exp.Expression.Type.IsCompilerGeneratedType())
                     {
-                        if( exp.GetConstantValue(out Type type, out object value))
+                        if (exp.GetConstantValue(out Type type, out object value))
                         {
                             return new ConstantNode
                             {
                                 ExpressionType = ExpressionType.Constant,
-                                Type = new TypeNode(type),
+                                Type = new TypeModel(type),
                                 Value = value
                             };
                         }
@@ -266,8 +362,8 @@ namespace AnywhereNET
                     return new MemberNode
                     {
                         ExpressionType = exp.NodeType,
-                        Expression = SerializeOtherGeneric(exp.Expression, exp),
-                        Member = new MemberInfoNode(exp.Member)
+                        Expression = EncodeFromExpression(exp.Expression, exp),
+                        Member = new MemberInfoModel(exp.Member)
                     };
                 case MemberInitExpression exp:
                     throw new NotImplementedException();
@@ -276,9 +372,9 @@ namespace AnywhereNET
                     return new MethodCallNode
                     {
                         ExpressionType = exp.NodeType,
-                        Object = exp.Object != null ? SerializeOtherGeneric(exp.Object, exp) : null,
-                        Arguments = exp.Arguments.Select(a => SerializeOtherGeneric(a, exp)).ToArray(),
-                        Method = new MethodInfoNode(exp.Method)
+                        Object = exp.Object != null ? EncodeFromExpression(exp.Object, exp) : null,
+                        Arguments = exp.Arguments.Select(a => EncodeFromExpression(a, exp)).ToArray(),
+                        Method = new MethodInfoModel(exp.Method)
                     };
                 case NewArrayExpression exp:
                     throw new NotImplementedException();
@@ -291,7 +387,7 @@ namespace AnywhereNET
                     {
                         ExpressionType = exp.NodeType,
                         Name = exp.Name,
-                        Type = new TypeNode(exp.Type)
+                        Type = new TypeModel(exp.Type)
                     };
                 case RuntimeVariablesExpression exp:
                     throw new NotImplementedException();
@@ -309,33 +405,33 @@ namespace AnywhereNET
                     return new UnaryNode
                     {
                         ExpressionType = exp.NodeType,
-                        Operand = SerializeOtherGeneric(exp.Operand, exp),
-                        Method = exp.Method != null ? new MethodInfoNode(exp.Method) : null,
-                        Type = new TypeNode(exp.Type)
+                        Operand = EncodeFromExpression(exp.Operand, exp),
+                        Method = exp.Method != null ? new MethodInfoModel(exp.Method) : null,
+                        Type = new TypeModel(exp.Type)
                     };
                 default:
                     throw new NotSupportedException();
             }
         }
 
-        public static Expression DeserializeOtherGeneric(Node node)
+        internal static Expression DecodeToExpression(Node node)
         {
             switch (node)
             {
                 case ConstantNode n:
                     return Expression.Constant(n.Value, n.Type.ToType());
                 case LambdaNode n:
-                    var body = DeserializeOtherGeneric(n.Body);
-                    var parameters = n.Parameters.Select(p => (ParameterExpression)DeserializeOtherGeneric(p)).ToArray();
+                    var body = DecodeToExpression(n.Body);
+                    var parameters = n.Parameters.Select(p => (ParameterExpression)DecodeToExpression(p)).ToArray();
                     return Expression.Lambda(body, n.Name, parameters);
                 case MemberNode n:
-                    return Expression.MakeMemberAccess(DeserializeOtherGeneric(n.Expression), n.Member.ToInfo());
+                    return Expression.MakeMemberAccess(DecodeToExpression(n.Expression), n.Member.ToInfo());
                 case MethodCallNode n:
-                    return Expression.Call(DeserializeOtherGeneric(n.Object), n.Method.ToInfo(), n.Arguments.Select(a => DeserializeOtherGeneric(a)).ToArray());
+                    return Expression.Call(DecodeToExpression(n.Object), n.Method.ToInfo(), n.Arguments.Select(a => DecodeToExpression(a)).ToArray());
                 case ParameterNode n:
                     return Expression.Parameter(n.Type.ToType(), n.Name);
                 case UnaryNode n:
-                    return Expression.MakeUnary(n.ExpressionType, DeserializeOtherGeneric(n.Operand), n.Type.ToType());
+                    return Expression.MakeUnary(n.ExpressionType, DecodeToExpression(n.Operand), n.Type.ToType());
                 default:
                     throw new NotSupportedException($"Node type {node.GetType()} not yet supported.");
             }
