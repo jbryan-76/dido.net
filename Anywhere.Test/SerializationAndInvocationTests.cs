@@ -130,12 +130,15 @@ namespace AnywhereNET.Test
                 };
                 ExpressionSerializer.Serialize(transmittedModel, stream, settings);
 
+                var bytes = stream.ToArray();
+                var json = System.Text.Encoding.UTF8.GetString(bytes);
+
                 stream.Position = 0;
                 receivedModel = ExpressionSerializer.Deserialize(stream, settings);
             }
 
             // decode the model back to a lambda expression and execute it
-            var lambda = ExpressionSerializer.Decode<object>(receivedModel);
+            var lambda = await ExpressionSerializer.DecodeAsync<object>(receivedModel, TestFixture.Environment);
             var result = lambda.Invoke(TestFixture.Environment.Context);
 
             // confirm the result
@@ -163,7 +166,7 @@ namespace AnywhereNET.Test
 
                 // deserialize it
                 stream.Position = 0;
-                var lambda = ExpressionSerializer.Deserialize<object>(stream, settings);
+                var lambda = await ExpressionSerializer.DeserializeAsync<object>(stream, TestFixture.Environment, settings);
 
                 // execute it
                 var result = lambda.Invoke(TestFixture.Environment.Context);

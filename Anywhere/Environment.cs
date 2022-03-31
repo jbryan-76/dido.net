@@ -1,4 +1,6 @@
-﻿namespace AnywhereNET
+﻿using System.Reflection;
+
+namespace AnywhereNET
 {
     /// <summary>
     /// Specifies the global static runtime configuration for an Anywhere Environment service application.
@@ -35,5 +37,7 @@
         // TODO: create this when the env starts
         // TODO: make internal?
         public ExecutionContext Context;
+
+        public Dictionary<string, Assembly> LoadedAssemblies = new Dictionary<string, Assembly>();
     }
 }
