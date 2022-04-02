@@ -52,35 +52,49 @@ namespace AnywhereNET.Test
         {
             // serialize a lambda expression invoking a member method
             //var data = TestFixture.Anywhere.Serialize((context) => FakeObject.SimpleMemberMethod(FakeArgument));
+            FakeArgument = 111;
             var bytes = await TestFixture.Anywhere.SerializeNew((context) => FakeObject.SimpleMemberMethod(FakeArgument));
             // save the serialized model
-            var path = System.IO.Path.Combine(TestFixture.SharedTestDataPath, AnywhereTestFixture.MemberMethodFile);
-            System.IO.File.WriteAllBytes(path, bytes);
-            //System.IO.File.WriteAllText(path, data);
+            var path = Path.Combine(TestFixture.SharedTestDataPath, AnywhereTestFixture.MemberMethodFile);
+            File.WriteAllBytes(path, bytes);
+            //File.WriteAllText(path, data);
             // save the expected result
             var result = FakeObject.SimpleMemberMethod(FakeArgument);
-            path = System.IO.Path.Combine(TestFixture.SharedTestDataPath, AnywhereTestFixture.MemberResultFile);
-            System.IO.File.WriteAllText(path, Newtonsoft.Json.JsonConvert.SerializeObject(result));
+            path = Path.Combine(TestFixture.SharedTestDataPath, AnywhereTestFixture.MemberResultFile);
+            File.WriteAllText(path, Newtonsoft.Json.JsonConvert.SerializeObject(result));
 
             // serialize a lambda expression invoking a static method
-            var data = TestFixture.Anywhere.Serialize((context) => SampleWorkerClass.SimpleStaticMethod(FakeArgument));
+            //var data = TestFixture.Anywhere.Serialize((context) => SampleWorkerClass.SimpleStaticMethod(FakeArgument));
+            FakeArgument = 222;
+            bytes = await TestFixture.Anywhere.SerializeNew((context) => SampleWorkerClass.SimpleStaticMethod(FakeArgument));
             // save the serialized model
-            path = System.IO.Path.Combine(TestFixture.SharedTestDataPath, AnywhereTestFixture.StaticMethodFile);
-            System.IO.File.WriteAllText(path, data);
+            path = Path.Combine(TestFixture.SharedTestDataPath, AnywhereTestFixture.StaticMethodFile);
+            File.WriteAllBytes(path, bytes);
+            //File.WriteAllText(path, data);
             // save the expected result
             result = SampleWorkerClass.SimpleStaticMethod(FakeArgument);
-            path = System.IO.Path.Combine(TestFixture.SharedTestDataPath, AnywhereTestFixture.StaticResultFile);
-            System.IO.File.WriteAllText(path, Newtonsoft.Json.JsonConvert.SerializeObject(result));
+            path = Path.Combine(TestFixture.SharedTestDataPath, AnywhereTestFixture.StaticResultFile);
+            File.WriteAllText(path, Newtonsoft.Json.JsonConvert.SerializeObject(result));
 
             // serialize a lambda expression that uses dependent assemblies
-            data = TestFixture.Anywhere.Serialize((context) => FakeObject.MemberMethodWithDependency(DependencyModel));
+            FakeArgument = 333;
+            DependencyModel.MyString = "test";
+            DependencyModel.MyModel = new SampleDependencyModel
+            {
+                MyBool = false,
+                MyDateTimeOffset = new DateTimeOffset(new DateTime(2000, 2, 2, 2, 2, 2)),
+                MyInt = 42
+            };
+            bytes = await TestFixture.Anywhere.SerializeNew((context) => FakeObject.MemberMethodWithDependency(DependencyModel));
+            //data = TestFixture.Anywhere.Serialize((context) => FakeObject.MemberMethodWithDependency(DependencyModel));
             // save the serialized model
-            path = System.IO.Path.Combine(TestFixture.SharedTestDataPath, AnywhereTestFixture.DependencyMethodFile);
-            System.IO.File.WriteAllText(path, data);
+            path = Path.Combine(TestFixture.SharedTestDataPath, AnywhereTestFixture.DependencyMethodFile);
+            File.WriteAllBytes(path, bytes);
+            //File.WriteAllText(path, data);
             // save the expected result
             var dependencyResult = FakeObject.MemberMethodWithDependency(DependencyModel);
-            path = System.IO.Path.Combine(TestFixture.SharedTestDataPath, AnywhereTestFixture.DependencyResultFile);
-            System.IO.File.WriteAllText(path, Newtonsoft.Json.JsonConvert.SerializeObject(dependencyResult));
+            path = Path.Combine(TestFixture.SharedTestDataPath, AnywhereTestFixture.DependencyResultFile);
+            File.WriteAllText(path, Newtonsoft.Json.JsonConvert.SerializeObject(dependencyResult));
         }
 
         /// <summary>

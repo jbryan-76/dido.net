@@ -132,35 +132,38 @@ namespace AnywhereNET.Test.Common
         /// <returns></returns>
         Task<Stream?> UnitTestLocalAssemblyResolver(string assemblyName)
         {
-            // TODO: memoize this
-            var files = Directory.EnumerateFiles(TestLibAssembliesFolder, $"*.{AnywhereNET.OS.AssemblyExtension}");
-            //files = files.Concat(Directory.EnumerateFiles(CurrentTestAssembliesFolder, $"*.{AnywhereNET.OS.AssemblyExtension}"));
-            foreach (var file in files)
+            lock (Anywhere)
             {
-                try
+                // TODO: memoize this
+                var files = Directory.EnumerateFiles(TestLibAssembliesFolder, $"*.{AnywhereNET.OS.AssemblyExtension}");
+                //files = files.Concat(Directory.EnumerateFiles(CurrentTestAssembliesFolder, $"*.{AnywhereNET.OS.AssemblyExtension}"));
+                foreach (var file in files)
                 {
-                    AssemblyName name = AssemblyName.GetAssemblyName(file);
-                    if (name.FullName == assemblyName)
+                    try
                     {
-                        return Task.FromResult<Stream?>(File.Open(file, FileMode.Open, FileAccess.Read));
+                        AssemblyName name = AssemblyName.GetAssemblyName(file);
+                        if (name.FullName == assemblyName)
+                        {
+                            return Task.FromResult<Stream?>(File.Open(file, FileMode.Open, FileAccess.Read));
+                        }
+                    }
+                    catch (Exception)
+                    {
+                        // exception will be thrown if the file is not a .NET assembly, in which case simply ignore
+                        continue;
                     }
                 }
-                catch (Exception)
+
+                // as a backstop, see if the desired assembly is actually already loaded
+                var asm = AssemblyLoadContext.Default.Assemblies.FirstOrDefault(a => a.FullName == assemblyName);
+                if (asm != null && !string.IsNullOrEmpty(asm.Location))
                 {
-                    // exception will be thrown if the file is not a .NET assembly, in which case simply ignore
-                    continue;
+                    return Task.FromResult<Stream?>(File.Open(asm.Location, FileMode.Open, FileAccess.Read, FileShare.Read));
                 }
-            }
 
-            // as a backstop, see if the desired assembly is actually already loaded
-            var asm = AssemblyLoadContext.Default.Assemblies.FirstOrDefault(a => a.FullName == assemblyName);
-            if( asm != null)
-            {
-                return Task.FromResult<Stream?>(File.Open(asm.Location, FileMode.Open, FileAccess.Read, FileShare.Read));
+                // return null if no matching assembly could be found
+                return Task.FromResult<Stream?>(null);
             }
-
-            // return null if no matching assembly could be found
-            return Task.FromResult<Stream?>(null);
         }
 
         /// <summary>

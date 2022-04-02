@@ -44,7 +44,7 @@ namespace AnywhereNET.TestEnv
             }
             var expectedResult = Newtonsoft.Json.JsonConvert.DeserializeObject(File.ReadAllText(path));
 
-            // deserialize the method lambda, using the custom resolver to resolve dependencies
+            // deserialize the method lambda, using the custom resolver to resolve dependencies.
             // NOTE: the original saved expression was an int32, but here the return type is explicitly
             // being set to an int64 (long) because the json deserializer deserializes all integers to int64
             var method = await TestFixture.Anywhere.DeserializeNew<long>(bytes, TestFixture.Environment);
@@ -73,8 +73,10 @@ namespace AnywhereNET.TestEnv
             {
                 throw new InvalidOperationException($"Could not find pre-requisite '{path}'");
             }
-            var data = File.ReadAllText(path);
-            if (data == null)
+            //var data = File.ReadAllText(path);
+            var bytes = File.ReadAllBytes(path);
+            if (bytes == null)
+            //if (data == null)
             {
                 throw new InvalidOperationException($"Could not load '{path}'");
             }
@@ -87,18 +89,22 @@ namespace AnywhereNET.TestEnv
             }
             var expectedResult = Newtonsoft.Json.JsonConvert.DeserializeObject(File.ReadAllText(path));
 
-            // deserialize the method lambda, using the custom resolver to resolve dependencies
-            var method = await MethodModelDeserializer.DeserializeAsync(TestFixture.Environment, data);//, AssemblyResolver);
+            // deserialize the method lambda, using the custom resolver to resolve dependencies.
+            // NOTE: the original saved expression was an int32, but here the return type is explicitly
+            // being set to an int64 (long) because the json deserializer deserializes all integers to int64
+            var method = await TestFixture.Anywhere.DeserializeNew<long>(bytes, TestFixture.Environment);
+            //var method = await MethodModelDeserializer.DeserializeAsync(TestFixture.Environment, data);//, AssemblyResolver);
             if (method == null)
             {
                 throw new InvalidOperationException($"Could not deserialize method from '{path}'");
             }
+            var actualResult = method.Invoke(TestFixture.Environment.Context);
 
             // invoke the method and confirm its result matches the expected result
-            var actualResult = method.Invoke();
+            //var actualResult = method.Invoke();
             // serialize and deserialize the actual result to coerce to the same data type as the expected result
             // (otherwise eg comparing an int32 and int64 will fail the below assertion)
-            actualResult = Newtonsoft.Json.JsonConvert.DeserializeObject(Newtonsoft.Json.JsonConvert.SerializeObject(actualResult));
+            //actualResult = Newtonsoft.Json.JsonConvert.DeserializeObject(Newtonsoft.Json.JsonConvert.SerializeObject(actualResult));
 
             Assert.Equal(expectedResult, actualResult);
         }
@@ -112,8 +118,10 @@ namespace AnywhereNET.TestEnv
             {
                 throw new InvalidOperationException($"Could not find pre-requisite '{path}'");
             }
-            var data = File.ReadAllText(path);
-            if (data == null)
+            //var data = File.ReadAllText(path);
+            var bytes = File.ReadAllBytes(path);
+            if (bytes == null)
+            //if (data == null)
             {
                 throw new InvalidOperationException($"Could not load '{path}'");
             }
@@ -127,17 +135,19 @@ namespace AnywhereNET.TestEnv
             var expectedResult = Newtonsoft.Json.JsonConvert.DeserializeObject(File.ReadAllText(path));
 
             // deserialize the method lambda, using the custom resolver to resolve dependencies
-            var method = await MethodModelDeserializer.DeserializeAsync(TestFixture.Environment, data);//, AssemblyResolver);
+            var method = await TestFixture.Anywhere.DeserializeNew<string>(bytes, TestFixture.Environment);
+            //var method = await MethodModelDeserializer.DeserializeAsync(TestFixture.Environment, data);//, AssemblyResolver);
             if (method == null)
             {
                 throw new InvalidOperationException($"Could not deserialize method from '{path}'");
             }
+            var actualResult = method.Invoke(TestFixture.Environment.Context);
 
             // invoke the method and confirm its result matches the expected result
-            var actualResult = method.Invoke();
+            //var actualResult = method.Invoke();
             // serialize and deserialize the actual result to coerce to the same data type as the expected result
             // (otherwise eg comparing an int32 and int64 will fail the below assertion)
-            actualResult = Newtonsoft.Json.JsonConvert.DeserializeObject(Newtonsoft.Json.JsonConvert.SerializeObject(actualResult));
+            //actualResult = Newtonsoft.Json.JsonConvert.DeserializeObject(Newtonsoft.Json.JsonConvert.SerializeObject(actualResult));
 
             Assert.Equal(expectedResult, actualResult);
         }
