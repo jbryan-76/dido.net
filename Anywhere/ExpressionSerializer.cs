@@ -1,22 +1,13 @@
 ﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Bson;
+using Newtonsoft.Json.Serialization;
 using System.Linq.Expressions;
 using System.Reflection;
 using System.Runtime.Loader;
-using System.Runtime.Serialization;
 using System.Text;
 
 namespace AnywhereNET
 {
-
-    public static class TypeExtensions
-    {
-        public static bool IsCompilerGeneratedType(this Type type)
-        {
-            return type.FullName.Contains("<>");
-        }
-    }
-
     public static class MemberExpressionExtensions
     {
         public static bool GetConstantValue(this MemberExpression exp, out Type type, out object value)
@@ -39,7 +30,7 @@ namespace AnywhereNET
                     value = ((PropertyInfo)exp.Member).GetValue(container);
                     break;
                 default:
-                    throw new NotImplementedException($"Cound not get constant value from member expression: {exp.Member.GetType()} is not supported.");
+                    throw new NotImplementedException($"Could not get constant value from member expression: {exp.Member.GetType()} is not supported.");
             }
             return true;
         }
@@ -94,16 +85,96 @@ namespace AnywhereNET
             var exp = await DecodeToExpressionAsync(node, env);
             var lambda = (LambdaExpression)exp;
 
-            // the return type of the lambda expression will not necessarily match the desired
-            // type, even if the types are compatible/convertable. so wrap the expression in
-            // another lambda that converts to the generic type the caller is expecting.
+            // the return type of the lambda expression will not necessarily match the indicated
+            // generic return type, even if the types are compatible/convertable. so wrap the expression
+            // in another lambda that converts to the generic type the caller is expecting.
             // if for some reason the types are not compatible, the caller will need to handle
             // the exception
             var convert = Expression.Convert(lambda.Body, typeof(TResult));
             lambda = Expression.Lambda(typeof(Func<ExecutionContext, TResult>), convert, lambda.Parameters);
 
-            // finally compile the lambda into an invokable function and cast it to the proper return type
+            // finally, compile the lambda into an invokable function and cast it to the proper return type
             return (Func<ExecutionContext, TResult>)lambda.Compile();
+        }
+
+        //public class SerializeTypeBinder : ISerializationBinder
+        //{
+        //    /// <summary>
+        //    /// Used during deserialization to find the type corresponding to the provided
+        //    /// assembly and type.
+        //    /// </summary>
+        //    /// <param name="assemblyName"></param>
+        //    /// <param name="typeName"></param>
+        //    /// <returns></returns>
+        //    public Type BindToType(string assemblyName, string typeName)
+        //    {
+        //        throw new NotImplementedException();
+        //        //return Type.GetType(typeName);
+        //        //return KnownTypes.SingleOrDefault(t => t.Name == typeName);
+        //    }
+
+        //    /// <summary>
+        //    /// Used during serialization to output the specific assembly and type names for
+        //    /// an object.
+        //    /// </summary>
+        //    /// <param name="serializedType"></param>
+        //    /// <param name="assemblyName"></param>
+        //    /// <param name="typeName"></param>
+        //    public void BindToName(Type serializedType, out string assemblyName, out string typeName)
+        //    {
+        //        // NOTE: there appears to be a bug/feature in Newtonsoft.Json where even when providing
+        //        // the assembly full name, it is truncated to just the assembly name
+        //        assemblyName = serializedType.Assembly.FullName;
+        //        typeName = serializedType.FullName;
+        //        //assemblyName = null;
+        //        //typeName = serializedType.Name;
+        //    }
+
+        //}
+
+        public class DeserializeTypeBinder : ISerializationBinder
+        {
+            Environment Environment;
+
+            public DeserializeTypeBinder(Environment environment)
+            {
+                Environment = environment;
+            }
+
+            /// <summary>
+            /// Used during deserialization to find the type corresponding to the provided
+            /// assembly and type.
+            /// </summary>
+            /// <param name="assemblyName"></param>
+            /// <param name="typeName"></param>
+            /// <returns></returns>
+            public Type BindToType(string assemblyName, string typeName)
+            {
+                if (Environment.LoadedAssemblies.TryGetValue(assemblyName, out Assembly asm))
+                {
+                    return asm.GetType(typeName);
+                }
+                throw new FileNotFoundException($"Could not resolve assembly '{assemblyName}' from current Environment.", assemblyName);
+                //throw new InvalidOperationException($"Could not resolve assembly '{assemblyName}' from current Environment.");
+                //return Type.GetType(typeName);
+                //return KnownTypes.SingleOrDefault(t => t.Name == typeName);
+            }
+
+            /// <summary>
+            /// Used during serialization to output the specific assembly and type names for
+            /// an object.
+            /// </summary>
+            /// <param name="serializedType"></param>
+            /// <param name="assemblyName"></param>
+            /// <param name="typeName"></param>
+            public void BindToName(Type serializedType, out string assemblyName, out string typeName)
+            {
+                throw new NotImplementedException();
+                //assemblyName = serializedType.Assembly.FullName;
+                //typeName = serializedType.FullName;
+                //assemblyName = null;
+                //typeName = serializedType.Name;
+            }
         }
 
         public static void Serialize(Node node, Stream stream, SerializeSettings? settings = null)
@@ -117,7 +188,8 @@ namespace AnywhereNET
                     using (var jsonWriter = new JsonTextWriter(streamWriter))
                     {
                         var jsonSerializer = new JsonSerializer();
-                        jsonSerializer.TypeNameHandling = TypeNameHandling.Objects;
+                        jsonSerializer.TypeNameHandling = TypeNameHandling.All;
+                        //jsonSerializer.SerializationBinder = new TypeBinder();
                         jsonSerializer.Serialize(jsonWriter, node);
                     }
                     //System.Text.Json.JsonSerializer.Serialize(streamWriter, node, new System.Text.Json.JsonSerializerOptions
@@ -130,7 +202,8 @@ namespace AnywhereNET
                     using (var bsonWriter = new BsonDataWriter(binaryWriter))
                     {
                         var jsonSerializer = new JsonSerializer();
-                        jsonSerializer.TypeNameHandling = TypeNameHandling.Objects;
+                        jsonSerializer.TypeNameHandling = TypeNameHandling.All;
+                        //jsonSerializer.SerializationBinder = new TypeBinder();
                         jsonSerializer.Serialize(bsonWriter, node);
                     }
                     break;
@@ -151,7 +224,8 @@ namespace AnywhereNET
                     using (var jsonReader = new JsonTextReader(streamReader))
                     {
                         var jsonSerializer = new JsonSerializer();
-                        jsonSerializer.TypeNameHandling = TypeNameHandling.Objects;
+                        jsonSerializer.TypeNameHandling = TypeNameHandling.All;
+                        //jsonSerializer.SerializationBinder = new TypeBinder();
                         // TODO: this is trying to deserialize a value in a constant node and failing
                         return jsonSerializer.Deserialize<Node>(jsonReader)!;
                     }
@@ -160,7 +234,8 @@ namespace AnywhereNET
                     using (var jsonReader = new BsonDataReader(binaryReader))
                     {
                         var jsonSerializer = new JsonSerializer();
-                        jsonSerializer.TypeNameHandling = TypeNameHandling.Objects;
+                        jsonSerializer.TypeNameHandling = TypeNameHandling.All;
+                        //jsonSerializer.SerializationBinder = new TypeBinder();
                         return jsonSerializer.Deserialize<Node>(jsonReader)!;
                     }
                 default:
@@ -271,79 +346,116 @@ namespace AnywhereNET
         {
             public TypeModel Type { get; set; }
 
-            //[JsonIgnore]
-            //// TODO: may need to serialize this value if it's a complex object?
-            //public object Value
+            [JsonIgnore]
+            public Environment Environment
+            {
+                get { return environment; }
+                set
+                {
+                    environment = value;
+                    typeBinder = new DeserializeTypeBinder(environment);
+                }
+            }
+
+            //public ConstantNode() { }
+
+            //public ConstantNode(bool serializing)
             //{
-            //    get
+            //    if (serializing)
             //    {
-            //        //if (_valueObject == null)
-            //        {
-            //            using (var stream = new MemoryStream(_value))
-            //            using (var streamReader = new StreamReader(stream: stream, leaveOpen: true))
-            //            using (var jsonReader = new JsonTextReader(streamReader))
-            //            {
-            //                var jsonSerializer = new JsonSerializer();
-            //                jsonSerializer.TypeNameHandling = TypeNameHandling.Objects;
-            //                // TODO: this is trying to deserialize a value in a constant node and failing
-            //                var foo = jsonSerializer.Deserialize(jsonReader)!;
-            //                var type = foo.GetType();
-            //                return foo;
-            //            }
-            //        }
-            //        //return _valueObject;
-            //    }
-            //    set
-            //    {
-            //        using (var stream = new MemoryStream())
-            //        {
-            //            using (var streamWriter = new StreamWriter(stream: stream, leaveOpen: true))
-            //            using (var jsonWriter = new JsonTextWriter(streamWriter))
-            //            {
-            //                var jsonSerializer = new JsonSerializer();
-            //                jsonSerializer.TypeNameHandling = TypeNameHandling.Objects;
-            //                jsonSerializer.Serialize(jsonWriter, value);
-            //            }
-            //            _value = stream.ToArray();
-            //        }
-            //        //_valueObject = value;
+            //        //typeBinder = new SerializeTypeBinder();
             //    }
             //}
 
-            public void SetValue(object value)
-            {
-                using (var stream = new MemoryStream())
-                {
-                    using (var streamWriter = new StreamWriter(stream: stream, leaveOpen: true))
-                    using (var jsonWriter = new JsonTextWriter(streamWriter))
-                    {
-                        var jsonSerializer = new JsonSerializer();
-                        jsonSerializer.TypeNameHandling = TypeNameHandling.Objects;
-                        jsonSerializer.Serialize(jsonWriter, value);
-                    }
-                    _value = stream.ToArray();
-                }
-                _valueObject = value;
-            }
+            private ISerializationBinder typeBinder;
+            private Environment environment;
 
-            public object GetValue()
+            [JsonIgnore]
+            public object Value
             {
-                if (_valueObject == null)
+                get
                 {
-                    using (var stream = new MemoryStream(_value))
-                    using (var streamReader = new StreamReader(stream: stream, leaveOpen: true))
-                    using (var jsonReader = new JsonTextReader(streamReader))
+                    if (_valueObject == null)
                     {
-                        var jsonSerializer = new JsonSerializer();
-                        jsonSerializer.TypeNameHandling = TypeNameHandling.Objects;
-                        // TODO: this is trying to deserialize a value in a constant node and failing
-                        var foo = jsonSerializer.Deserialize(jsonReader)!;
-                        var type = foo.GetType();
-                        _valueObject = foo;
-                        //return foo;
+                        using (var stream = new MemoryStream(_value))
+                        using (var streamReader = new StreamReader(stream: stream, leaveOpen: true))
+                        using (var jsonReader = new JsonTextReader(streamReader))
+                        {
+                            var jsonSerializer = new JsonSerializer();
+                            jsonSerializer.TypeNameHandling = TypeNameHandling.All;
+                            jsonSerializer.TypeNameAssemblyFormatHandling = TypeNameAssemblyFormatHandling.Full;
+                            if (typeBinder != null)
+                            {
+                                jsonSerializer.SerializationBinder = typeBinder;
+                            }
+                            // TODO: this is trying to deserialize a value in a constant node and failing
+                            var foo = jsonSerializer.Deserialize(jsonReader)!;
+                            var type = foo.GetType();
+                            _valueObject = foo;
+                            //return foo;
+                        }
+
+                        // since the value was serialized as json,
+                        // if the constant value has a numeric type that differes from the deserialized
+                        // type, convert it
+                        if (
+                            (_valueObject.GetType() == typeof(long) && Type != typeof(long)) ||
+                            (_valueObject.GetType() == typeof(double) && Type != typeof(double))
+                            )
+                        {
+                            _valueObject = Convert.ChangeType(_valueObject, Type.ToType());
+                        }
                     }
+                    return _valueObject;
+                    //if (_valueObject == null)
+                    //{
+                    //    using (var stream = new MemoryStream(_value))
+                    //    using (var streamReader = new StreamReader(stream: stream, leaveOpen: true))
+                    //    using (var jsonReader = new JsonTextReader(streamReader))
+                    //    {
+                    //        var jsonSerializer = new JsonSerializer();
+                    //        jsonSerializer.TypeNameHandling = TypeNameHandling.Objects;
+                    //        // TODO: this is trying to deserialize a value in a constant node and failing
+                    //        var foo = jsonSerializer.Deserialize(jsonReader)!;
+                    //        var type = foo.GetType();
+                    //        return foo;
+                    //    }
+                    //}
+                    //return _valueObject;
                 }
-                return _valueObject;
+                set
+                {
+                    using (var stream = new MemoryStream())
+                    {
+                        using (var streamWriter = new StreamWriter(stream: stream, leaveOpen: true))
+                        using (var jsonWriter = new JsonTextWriter(streamWriter))
+                        {
+                            var jsonSerializer = new JsonSerializer();
+                            jsonSerializer.TypeNameHandling = TypeNameHandling.All;
+                            jsonSerializer.TypeNameAssemblyFormatHandling = TypeNameAssemblyFormatHandling.Full;
+                            if (typeBinder != null)
+                            {
+                                jsonSerializer.SerializationBinder = typeBinder;
+                            }
+                            jsonSerializer.Serialize(jsonWriter, value);
+                        }
+                        _value = stream.ToArray();
+                    }
+                    //var json = System.Text.Encoding.UTF8.GetString(_value);
+                    _valueObject = value;
+                    //using (var stream = new MemoryStream())
+                    //{
+                    //    using (var streamWriter = new StreamWriter(stream: stream, leaveOpen: true))
+                    //    using (var jsonWriter = new JsonTextWriter(streamWriter))
+                    //    {
+                    //        var jsonSerializer = new JsonSerializer();
+                    //        jsonSerializer.TypeNameHandling = TypeNameHandling.Objects;
+                    //        jsonSerializer.Serialize(jsonWriter, value);
+                    //    }
+                    //    _value = stream.ToArray();
+                    //}
+                    //_valueObject = value;
+                }
             }
 
             [JsonProperty]
@@ -351,55 +463,6 @@ namespace AnywhereNET
 
             [JsonIgnore]
             private object _valueObject;
-
-            //public void SetValue(object obj)
-            //{
-            //    using (var stream = new MemoryStream())
-            //    {
-            //        var serializer = new BinaryFormatter();
-            //        serializer.Serialize(stream, obj);
-            //    }
-            //}
-
-            //public object GetValue()
-            //{
-
-            //}
-
-            /// <summary>
-            /// Some serializers (eg json) will deserialize values to the "largest"
-            /// compatible type (eg any integer is deserialized to long/Int64).
-            /// This method is automatically invoked after deserializing the object
-            /// and is used to convert values back to the proper type, if necessary.
-            /// </summary>
-            /// <param name="context"></param>
-            [OnDeserialized]
-            internal void OnDeserializedMethod(StreamingContext context)
-            {
-                if (_value != null)
-                {
-                    //var currentType = Value.GetType();
-                    //if( currentType == typeof(Int64)
-                    //&& Type != typeof(Int64))
-                    if (Type == typeof(byte)
-                        || Type == typeof(short)
-                        || Type == typeof(ushort)
-                        || Type == typeof(int)
-                        || Type == typeof(uint)
-                        || Type == typeof(long)
-                        || Type == typeof(ulong)
-                        || Type == typeof(float)
-                        || Type == typeof(double)
-                    )
-                    //if (intendedType != currentType && intendedType != typeof(object))
-                    {
-                        var intendedType = Type.ToType();
-                        //_valueObject = Convert.ChangeType(Value, intendedType);
-                        //Value = Convert.ChangeType(Value, intendedType);
-                        SetValue(Convert.ChangeType(GetValue(), intendedType));
-                    }
-                }
-            }
         }
 
         public class LambdaNode : Node
@@ -456,13 +519,14 @@ namespace AnywhereNET
                     throw new NotImplementedException();
                     break;
                 case ConstantExpression exp:
+                    SchemaChecks.CheckSerializableProperties(exp.Type);
                     var node = new ConstantNode
                     {
                         ExpressionType = exp.NodeType,
                         Type = new TypeModel(exp.Type),
-                        //Value = exp.Value
+                        Value = exp.Value
                     };
-                    node.SetValue(exp.Value);
+                    //node.SetValue(exp.Value);
                     return node;
                 case DebugInfoExpression exp:
                     throw new NotImplementedException();
@@ -510,9 +574,9 @@ namespace AnywhereNET
                             {
                                 ExpressionType = ExpressionType.Constant,
                                 Type = new TypeModel(type),
-                                //Value = value
+                                Value = value
                             };
-                            foo.SetValue(value);
+                            //foo.SetValue(value);
                             return foo;
                         }
                     }
@@ -577,8 +641,8 @@ namespace AnywhereNET
             switch (node)
             {
                 case ConstantNode n:
-                    return Expression.Constant(n.GetValue(), n.Type.ToType());
-                    //return Expression.Constant(n.Value, n.Type.ToType());
+                    //return Expression.Constant(n.GetValue(), n.Type.ToType());
+                    return Expression.Constant(n.Value, n.Type.ToType());
                 case LambdaNode n:
                     var body = DecodeToExpression(n.Body);
                     var parameters = n.Parameters.Select(p => (ParameterExpression)DecodeToExpression(p)).ToArray();
@@ -606,13 +670,17 @@ namespace AnywhereNET
                     switch (node)
                     {
                         case ConstantNode n:
+                            // ensure the node has the environment so it can access the 
+                            // loaded assemblies while deserializing the value
+                            n.Environment = env;
                             //return Expression.Constant(n.Value, n.Type.ToType());
-                            // materialize the intended type first otherwise the deserialization
-                            // in GetValue will use the wrong assembly!?
+                            // IMPORTANT: materialize the intended type before the value.
+                            // otherwise the deserialization and type binding used in Constant.Value
+                            // will not always resolve the correct assembly
                             var intendedType = n.Type.ToType();
-                            var actualType = n.GetValue().GetType();
-                            var sameType = actualType.Equals(intendedType);
-                            var val = n.GetValue();
+                            //var actualType = n.GetValue().GetType();
+                            //var sameType = actualType.Equals(intendedType);
+                            var val = n.Value;// GetValue();
                             return Expression.Constant(val, intendedType);// n.Type.ToType());
                         case LambdaNode n:
                             var body = await DecodeToExpressionAsync(n.Body, env);
@@ -641,46 +709,11 @@ namespace AnywhereNET
                 }
                 catch (Exception e) when (e is FileLoadException || e is FileNotFoundException)
                 {
-                    string assemblyName = "";
-                    if (e is FileNotFoundException)
-                    {
-                        assemblyName = (e as FileNotFoundException).FileName;
-                    }
-                    else
-                    {
-                        assemblyName = (e as FileLoadException).FileName;
-                    }
-
-                    // TODO: first try to load the assembly from cache
-
-                    if (env.LoadedAssemblies.ContainsKey(assemblyName))
-                    {
-                        throw new InvalidOperationException($"Could not resolve assembly '{assemblyName}'", e);
-                    }
-
-                    // assembly not found. try to resolve it
-                    var stream = await env.ResolveRemoteAssemblyAsync(env, assemblyName);
-
-                    if (stream == null)
-                    {
-                        throw new InvalidOperationException($"Could not resolve assembly '{assemblyName}'", e);
-                    }
-
-                    // TODO: this is worth pursuing for proper code isolation,
-                    // TODO: but JsonConvert.DeserializeObject will not be able to locate the assemblies to instantiate
-                    // TODO: type instances unless the assemblies are in AssemblyLoadContext.Default
-                    //var contextName = env.AssemblyLoadContextName ?? nameof(AssemblyLoadContext.Default);
-                    //var context = AssemblyLoadContext.All.FirstOrDefault(x => x.Name == contextName);
-                    //if( context == null)
-                    //{
-                    //    throw new InvalidOperationException($"Could not find {nameof(AssemblyLoadContext)} name '{contextName}' in which to load assembly {assemblyName}");
-                    //}
-                    //context.LoadFromStream(stream);
-                    var asm = AssemblyLoadContext.Default.LoadFromStream(stream);
-
-                    stream.Dispose();
-
-                    env.LoadedAssemblies.Add(assemblyName, asm);
+                    HandleMissingAssemblyException(e, env);
+                }
+                catch (JsonSerializationException e)
+                {
+                    HandleMissingAssemblyException(e.InnerException, env);
                 }
                 catch (Exception e)
                 {
@@ -691,5 +724,57 @@ namespace AnywhereNET
             }
         }
 
+        internal static async void HandleMissingAssemblyException(Exception e, Environment env)
+        {
+            string assemblyName = "";
+            if (e is FileNotFoundException)
+            {
+                assemblyName = (e as FileNotFoundException).FileName;
+            }
+            else if (e is FileLoadException)
+            {
+                assemblyName = (e as FileLoadException).FileName;
+            }
+            else
+            {
+                throw new InvalidOperationException($"Cannot handle missing assembly from exception {e.GetType()}", e);
+            }
+
+            // TODO: first try to load the assembly from a disk cache using Environment.AssemblyCachePath
+
+            // this conditional should never evaluate to true, but keep it here to prevent
+            // potential infinite loops: if the correct assembly exists in Environment.LoadedAssemblies,
+            // that means it was successfully loaded already, but if an exception was thrown indicating
+            // it could not be found, then something else must be going on
+            // TODO: better understand whether this can ever happen, and how to handle it when it does
+            if (env.LoadedAssemblies.ContainsKey(assemblyName))
+            {
+                throw new InvalidOperationException($"Could not resolve assembly '{assemblyName}'", e);
+            }
+
+            // assembly not found. try to resolve it
+            var stream = await env.ResolveRemoteAssemblyAsync(env, assemblyName);
+
+            if (stream == null)
+            {
+                throw new InvalidOperationException($"Could not resolve assembly '{assemblyName}'", e);
+            }
+
+            // TODO: this is worth pursuing for proper code isolation,
+            // TODO: but JsonConvert.DeserializeObject will not be able to locate the assemblies to instantiate
+            // TODO: type instances unless the assemblies are in AssemblyLoadContext.Default
+            //var contextName = env.AssemblyLoadContextName ?? nameof(AssemblyLoadContext.Default);
+            //var context = AssemblyLoadContext.All.FirstOrDefault(x => x.Name == contextName);
+            //if( context == null)
+            //{
+            //    throw new InvalidOperationException($"Could not find {nameof(AssemblyLoadContext)} name '{contextName}' in which to load assembly {assemblyName}");
+            //}
+            //context.LoadFromStream(stream);
+            var asm = AssemblyLoadContext.Default.LoadFromStream(stream);
+
+            stream.Dispose();
+
+            env.LoadedAssemblies.Add(assemblyName, asm);
+        }
     }
 }

@@ -39,5 +39,8 @@ namespace AnywhereNET
         public ExecutionContext Context;
 
         public Dictionary<string, Assembly> LoadedAssemblies = new Dictionary<string, Assembly>();
+
+        // TODO: cache previously fetched assemblies to disk to avoid a network round trip
+        public string AssemblyCachePath;
     }
 }
