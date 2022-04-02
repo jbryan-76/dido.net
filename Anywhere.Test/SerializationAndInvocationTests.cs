@@ -88,6 +88,7 @@ namespace AnywhereNET.Test
         [Fact]
         public async void TestMemberMethod()
         {
+            FakeArgument = 456;
             var data = await TestFixture.Anywhere.SerializeNew((context) => FakeObject.SimpleMemberMethod(FakeArgument));
             var lambda = await TestFixture.Anywhere.DeserializeNew<int>(data, TestFixture.Environment);
             var result = lambda.Invoke(TestFixture.Environment.Context);
@@ -192,6 +193,7 @@ namespace AnywhereNET.Test
         [Fact]
         public async void TestStaticMethod()
         {
+            FakeArgument = 456;
             var data = await TestFixture.Anywhere.SerializeNew((context) => SampleWorkerClass.SimpleStaticMethod(FakeArgument));
             var lambda = await TestFixture.Anywhere.DeserializeNew<int>(data, TestFixture.Environment);
             var result = lambda.Invoke(TestFixture.Environment.Context);
@@ -208,7 +210,7 @@ namespace AnywhereNET.Test
         /// (de)serialized and invoked.
         /// </summary>
         [Fact]
-        public async void TestMemberMethodWithDependency()
+        public async void TestMemberMethodWithClosureDependency()
         {
             var depModel = new SampleDependencyClass
             {
@@ -231,6 +233,20 @@ namespace AnywhereNET.Test
             var expectedResult = FakeObject.MemberMethodWithDependency(depModel);
             //var expectedResult = FakeObject.MemberMethodWithDependency(DependencyModel);
 
+            Assert.Equal(expectedResult, actualResult);
+        }
+
+        /// <summary>
+        /// This test verifies a lambda using code with additional assembly dependencies is properly 
+        /// (de)serialized and invoked.
+        /// </summary>
+        [Fact]
+        public async void TestMemberMethodWithDependency()
+        {
+            var data = await TestFixture.Anywhere.SerializeNew((context) => FakeObject.MemberMethodWithDependency(DependencyModel));
+            var lambda = await TestFixture.Anywhere.DeserializeNew<string>(data, TestFixture.Environment);
+            var actualResult = lambda.Invoke(TestFixture.Environment.Context);
+            var expectedResult = FakeObject.MemberMethodWithDependency(DependencyModel);
             Assert.Equal(expectedResult, actualResult);
         }
 

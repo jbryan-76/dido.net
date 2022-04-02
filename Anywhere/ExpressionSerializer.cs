@@ -569,11 +569,14 @@ namespace AnywhereNET
                     throw new NotImplementedException();
                     break;
                 case MemberExpression exp:
-                    // convert a closure member reference to a constant value
-                    if (exp.Expression.Type.IsCompilerGeneratedType())
+                    // if the expression is actually for a constant,
+                    // convert it to a concrete constant value.
+                    // this is commonly needed to properly handle closures.
+                    if (exp.GetConstantValue(out Type type, out object value))
                     {
-                        if (exp.GetConstantValue(out Type type, out object value))
+                        //if (exp.Expression.Type.IsCompilerGeneratedType())
                         {
+                            SchemaChecks.CheckSerializableProperties(type);
                             return new ConstantNode
                             {
                                 ExpressionType = ExpressionType.Constant,
