@@ -48,20 +48,22 @@ namespace AnywhereNET.Test
         /// NOTE this unit test must be run before any test from Anywhere.TestEnv.DeserializationAndInvocationTests.
         /// </summary>
         [Fact]
-        public void GenerateSerializedMethodInvocationData()
+        public async void GenerateSerializedMethodInvocationData()
         {
             // serialize a lambda expression invoking a member method
-            var data = TestFixture.Anywhere.Serialize((context) => FakeObject.SimpleMemberMethod(FakeArgument));
+            //var data = TestFixture.Anywhere.Serialize((context) => FakeObject.SimpleMemberMethod(FakeArgument));
+            var bytes = await TestFixture.Anywhere.SerializeNew((context) => FakeObject.SimpleMemberMethod(FakeArgument));
             // save the serialized model
             var path = System.IO.Path.Combine(TestFixture.SharedTestDataPath, AnywhereTestFixture.MemberMethodFile);
-            System.IO.File.WriteAllText(path, data);
+            System.IO.File.WriteAllBytes(path, bytes);
+            //System.IO.File.WriteAllText(path, data);
             // save the expected result
             var result = FakeObject.SimpleMemberMethod(FakeArgument);
             path = System.IO.Path.Combine(TestFixture.SharedTestDataPath, AnywhereTestFixture.MemberResultFile);
             System.IO.File.WriteAllText(path, Newtonsoft.Json.JsonConvert.SerializeObject(result));
 
             // serialize a lambda expression invoking a static method
-            data = TestFixture.Anywhere.Serialize((context) => SampleWorkerClass.SimpleStaticMethod(FakeArgument));
+            var data = TestFixture.Anywhere.Serialize((context) => SampleWorkerClass.SimpleStaticMethod(FakeArgument));
             // save the serialized model
             path = System.IO.Path.Combine(TestFixture.SharedTestDataPath, AnywhereTestFixture.StaticMethodFile);
             System.IO.File.WriteAllText(path, data);

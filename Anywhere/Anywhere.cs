@@ -176,9 +176,10 @@ namespace AnywhereNET
                     Context = context
                     //ResolveRemoteAssembly
                 };
-                var data = Serialize(expression);
-                var result = await MethodModelDeserializer.DeserializeAndExecuteAsync<Tprop>(env, data);
-                return result;
+                //var data = Serialize(expression);
+                //var result = await MethodModelDeserializer.DeserializeAndExecuteAsync<Tprop>(env, data);
+                //return result;
+                return default(Tprop);
             }
             catch (Exception e)
             {
@@ -193,7 +194,7 @@ namespace AnywhereNET
         {
             try
             {
-                var data = Serialize(expression);
+                //var data = Serialize(expression);
                 // TODO: open a connection to the orchestrator
                 // TODO: request an available runtime destination from the orchestrator
                 // TODO: receive the runtime
