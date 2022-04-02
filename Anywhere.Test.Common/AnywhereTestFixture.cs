@@ -1,4 +1,5 @@
 ﻿using System.Reflection;
+using System.Runtime.Loader;
 
 namespace AnywhereNET.Test.Common
 {
@@ -30,6 +31,11 @@ namespace AnywhereNET.Test.Common
         /// The folder containing the assemblies of the sibling TestLib project.
         /// </summary>
         readonly string TestLibAssembliesFolder = FindTestLibAssembliesFolder();
+
+        /// <summary>
+        /// The folder containing the assemblies of the currently executing unit test project.
+        /// </summary>
+        //readonly string CurrentTestAssembliesFolder = System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
 
         /// <summary>
         /// The name of the folder stored in the system temp area where files can be shared
@@ -128,6 +134,7 @@ namespace AnywhereNET.Test.Common
         {
             // TODO: memoize this
             var files = Directory.EnumerateFiles(TestLibAssembliesFolder, $"*.{AnywhereNET.OS.AssemblyExtension}");
+            //files = files.Concat(Directory.EnumerateFiles(CurrentTestAssembliesFolder, $"*.{AnywhereNET.OS.AssemblyExtension}"));
             foreach (var file in files)
             {
                 try
@@ -143,6 +150,13 @@ namespace AnywhereNET.Test.Common
                     // exception will be thrown if the file is not a .NET assembly, in which case simply ignore
                     continue;
                 }
+            }
+
+            // as a backstop, see if the desired assembly is actually already loaded
+            var asm = AssemblyLoadContext.Default.Assemblies.FirstOrDefault(a => a.FullName == assemblyName);
+            if( asm != null)
+            {
+                return Task.FromResult<Stream?>(File.Open(asm.Location, FileMode.Open, FileAccess.Read, FileShare.Read));
             }
 
             // return null if no matching assembly could be found

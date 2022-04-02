@@ -57,15 +57,13 @@ namespace AnywhereNET
             public Formats Format { get; set; } = Formats.Json;
 
             public bool LeaveOpen { get; set; } = true;
-
-
-            Environment Environment;
         }
 
-        public static void Serialize<TResult>(Expression<Func<ExecutionContext, TResult>> expression, Stream stream, SerializeSettings? settings = null)
+        public static Task SerializeAsync<TResult>(Expression<Func<ExecutionContext, TResult>> expression, Stream stream, SerializeSettings? settings = null)
         {
             var node = Encode(expression);
             Serialize(node, stream, settings);
+            return Task.CompletedTask;
         }
 
         public static Task<Func<ExecutionContext, TResult>> DeserializeAsync<TResult>(Stream stream, Environment env, SerializeSettings? settings = null)
@@ -81,8 +79,9 @@ namespace AnywhereNET
 
         public static async Task<Func<ExecutionContext, TResult>> DecodeAsync<TResult>(Node node, Environment env)
         {
+            var state = new ExpressionVisitorState();
             // deserialize the encoded expression tree, which by design will be a lambda expression
-            var exp = await DecodeToExpressionAsync(node, env);
+            var exp = await DecodeToExpressionAsync(node, env, state);
             var lambda = (LambdaExpression)exp;
 
             // the return type of the lambda expression will not necessarily match the indicated
@@ -392,6 +391,7 @@ namespace AnywhereNET
                             var foo = jsonSerializer.Deserialize(jsonReader)!;
                             var type = foo.GetType();
                             _valueObject = foo;
+                            var json = System.Text.Encoding.UTF8.GetString(_value);
                             //return foo;
                         }
 
@@ -437,11 +437,12 @@ namespace AnywhereNET
                             {
                                 jsonSerializer.SerializationBinder = typeBinder;
                             }
+                            // TODO: serializing a closure object
                             jsonSerializer.Serialize(jsonWriter, value);
                         }
                         _value = stream.ToArray();
                     }
-                    //var json = System.Text.Encoding.UTF8.GetString(_value);
+                    var json = System.Text.Encoding.UTF8.GetString(_value);
                     _valueObject = value;
                     //using (var stream = new MemoryStream())
                     //{
@@ -500,6 +501,11 @@ namespace AnywhereNET
             public TypeModel Type { get; set; }
         }
 
+        internal class ExpressionVisitorState
+        {
+            public ParameterExpression? ContextExpression { get; set; }
+        }
+
         internal static Node EncodeFromExpression(Expression expression, Expression? parent = null)
         {
             while (expression.CanReduce)
@@ -520,14 +526,12 @@ namespace AnywhereNET
                     break;
                 case ConstantExpression exp:
                     SchemaChecks.CheckSerializableProperties(exp.Type);
-                    var node = new ConstantNode
+                    return new ConstantNode
                     {
                         ExpressionType = exp.NodeType,
                         Type = new TypeModel(exp.Type),
                         Value = exp.Value
                     };
-                    //node.SetValue(exp.Value);
-                    return node;
                 case DebugInfoExpression exp:
                     throw new NotImplementedException();
                     break;
@@ -570,14 +574,12 @@ namespace AnywhereNET
                     {
                         if (exp.GetConstantValue(out Type type, out object value))
                         {
-                            var foo = new ConstantNode
+                            return new ConstantNode
                             {
                                 ExpressionType = ExpressionType.Constant,
                                 Type = new TypeModel(type),
                                 Value = value
                             };
-                            //foo.SetValue(value);
-                            return foo;
                         }
                     }
 
@@ -636,31 +638,31 @@ namespace AnywhereNET
             }
         }
 
-        internal static Expression DecodeToExpression(Node node)
-        {
-            switch (node)
-            {
-                case ConstantNode n:
-                    //return Expression.Constant(n.GetValue(), n.Type.ToType());
-                    return Expression.Constant(n.Value, n.Type.ToType());
-                case LambdaNode n:
-                    var body = DecodeToExpression(n.Body);
-                    var parameters = n.Parameters.Select(p => (ParameterExpression)DecodeToExpression(p)).ToArray();
-                    return Expression.Lambda(body, n.Name, parameters);
-                case MemberNode n:
-                    return Expression.MakeMemberAccess(DecodeToExpression(n.Expression), n.Member.ToInfo());
-                case MethodCallNode n:
-                    return Expression.Call(DecodeToExpression(n.Object), n.Method.ToInfo(), n.Arguments.Select(a => DecodeToExpression(a)).ToArray());
-                case ParameterNode n:
-                    return Expression.Parameter(n.Type.ToType(), n.Name);
-                case UnaryNode n:
-                    return Expression.MakeUnary(n.ExpressionType, DecodeToExpression(n.Operand), n.Type.ToType());
-                default:
-                    throw new NotSupportedException($"Node type {node.GetType()} not yet supported.");
-            }
-        }
+        //internal static Expression DecodeToExpression(Node node)
+        //{
+        //    switch (node)
+        //    {
+        //        case ConstantNode n:
+        //            //return Expression.Constant(n.GetValue(), n.Type.ToType());
+        //            return Expression.Constant(n.Value, n.Type.ToType());
+        //        case LambdaNode n:
+        //            var body = DecodeToExpression(n.Body);
+        //            var parameters = n.Parameters.Select(p => (ParameterExpression)DecodeToExpression(p)).ToArray();
+        //            return Expression.Lambda(body, n.Name, parameters);
+        //        case MemberNode n:
+        //            return Expression.MakeMemberAccess(DecodeToExpression(n.Expression), n.Member.ToInfo());
+        //        case MethodCallNode n:
+        //            return Expression.Call(DecodeToExpression(n.Object), n.Method.ToInfo(), n.Arguments.Select(a => DecodeToExpression(a)).ToArray());
+        //        case ParameterNode n:
+        //            return Expression.Parameter(n.Type.ToType(), n.Name);
+        //        case UnaryNode n:
+        //            return Expression.MakeUnary(n.ExpressionType, DecodeToExpression(n.Operand), n.Type.ToType());
+        //        default:
+        //            throw new NotSupportedException($"Node type {node.GetType()} not yet supported.");
+        //    }
+        //}
 
-        internal static async Task<Expression> DecodeToExpressionAsync(Node node, Environment env)
+        internal static async Task<Expression> DecodeToExpressionAsync(Node node, Environment env, ExpressionVisitorState state)
         {
             // TODO: don't try forever
             while (true)
@@ -683,26 +685,42 @@ namespace AnywhereNET
                             var val = n.Value;// GetValue();
                             return Expression.Constant(val, intendedType);// n.Type.ToType());
                         case LambdaNode n:
-                            var body = await DecodeToExpressionAsync(n.Body, env);
+                            var body = await DecodeToExpressionAsync(n.Body, env, state);
                             var parameters = n.Parameters
-                                .Select(async p => (ParameterExpression)(await DecodeToExpressionAsync(p, env)))
+                                .Select(async p => (ParameterExpression)(await DecodeToExpressionAsync(p, env, state)))
                                 .Select(t => t.Result)
                                 .ToArray();
                             return Expression.Lambda(body, n.Name, parameters);
                         case MemberNode n:
-                            return Expression.MakeMemberAccess(await DecodeToExpressionAsync(n.Expression, env), n.Member.ToInfo());
+                            return Expression.MakeMemberAccess(await DecodeToExpressionAsync(n.Expression, env, state), n.Member.ToInfo());
                         case MethodCallNode n:
-                            return Expression.Call(await DecodeToExpressionAsync(n.Object, env),
+                            return Expression.Call(
+                                n.Object == null ? null : await DecodeToExpressionAsync(n.Object, env, state),
                                 n.Method.ToInfo(),
                                 n.Arguments
-                                    .Select(async a => await DecodeToExpressionAsync(a, env))
+                                    .Select(async a => await DecodeToExpressionAsync(a, env, state))
                                     .Select(t => t.Result)
                                     .ToArray()
                                     );
                         case ParameterNode n:
-                            return Expression.Parameter(n.Type.ToType(), n.Name);
+                            var exp = Expression.Parameter(n.Type.ToType(), n.Name);
+                            // by design, the only supported expressions are lambdas with a single ExecutionContext parameter.
+                            // as soon as a parameter with this type is encountered, remember its ParameterExpression
+                            // so it can be reused/substituted throuhgout the rest of the lambda body expressions.
+                            if (exp.Type == typeof(ExecutionContext))
+                            {
+                                if (state.ContextExpression == null)
+                                {
+                                    state.ContextExpression = exp;
+                                }
+                                return state.ContextExpression;
+                            }
+                            else
+                            {
+                                return exp;
+                            }
                         case UnaryNode n:
-                            return Expression.MakeUnary(n.ExpressionType, await DecodeToExpressionAsync(n.Operand, env), n.Type.ToType());
+                            return Expression.MakeUnary(n.ExpressionType, await DecodeToExpressionAsync(n.Operand, env, state), n.Type.ToType());
                         default:
                             throw new NotSupportedException($"Node type {node.GetType()} not yet supported.");
                     }

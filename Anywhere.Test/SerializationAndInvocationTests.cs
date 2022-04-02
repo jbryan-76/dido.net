@@ -88,10 +88,15 @@ namespace AnywhereNET.Test
         [Fact]
         public async void TestMemberMethod()
         {
-            var data = TestFixture.Anywhere.Serialize((context) => FakeObject.SimpleMemberMethod(FakeArgument));
-            //var method = MethodModelBuilder.Deserialize(data);
-            var method = await MethodModelDeserializer.DeserializeAsync(TestFixture.Environment, data);
-            var result = method.Invoke();
+            var data = await TestFixture.Anywhere.SerializeNew((context) => FakeObject.SimpleMemberMethod(FakeArgument));
+            var lambda = await TestFixture.Anywhere.DeserializeNew<int>(data, TestFixture.Environment);
+            var result = lambda.Invoke(TestFixture.Environment.Context);
+
+            //var data = TestFixture.Anywhere.Serialize((context) => FakeObject.SimpleMemberMethod(FakeArgument));
+            //var data = TestFixture.Anywhere.Serialize((context) => FakeObject.SimpleMemberMethod(FakeArgument));
+            ////var method = MethodModelBuilder.Deserialize(data);
+            //var method = await MethodModelDeserializer.DeserializeAsync(TestFixture.Environment, data);
+            //var result = method.Invoke();
 
             Assert.Equal(FakeArgument, result);
         }
@@ -102,9 +107,13 @@ namespace AnywhereNET.Test
             var obj = new SampleWorkerClass();
             int arg = 123;
 
-            var data = TestFixture.Anywhere.Serialize((context) => obj.SimpleMemberMethod(arg));
-            var method = await MethodModelDeserializer.DeserializeAsync(TestFixture.Environment, data);
-            var result = method.Invoke();
+            var data = await TestFixture.Anywhere.SerializeNew((context) => obj.SimpleMemberMethod(arg));
+            var lambda = await TestFixture.Anywhere.DeserializeNew<int>(data, TestFixture.Environment);
+            var result = lambda.Invoke(TestFixture.Environment.Context);
+
+            //var data = TestFixture.Anywhere.Serialize((context) => obj.SimpleMemberMethod(arg));
+            //var method = await MethodModelDeserializer.DeserializeAsync(TestFixture.Environment, data);
+            //var result = method.Invoke();
 
             Assert.Equal(arg, result);
         }
@@ -162,7 +171,7 @@ namespace AnywhereNET.Test
                 };
 
                 // serialize a lambda expression
-                ExpressionSerializer.Serialize((context) => ((SampleWorkerClass)obj).SimpleMemberMethod(arg), stream, settings);
+                await ExpressionSerializer.SerializeAsync((context) => ((SampleWorkerClass)obj).SimpleMemberMethod(arg), stream, settings);
 
                 // deserialize it
                 stream.Position = 0;
@@ -183,9 +192,13 @@ namespace AnywhereNET.Test
         [Fact]
         public async void TestStaticMethod()
         {
-            var data = TestFixture.Anywhere.Serialize((context) => SampleWorkerClass.SimpleStaticMethod(FakeArgument));
-            var method = await MethodModelDeserializer.DeserializeAsync(TestFixture.Environment, data);
-            var result = method.Invoke();
+            var data = await TestFixture.Anywhere.SerializeNew((context) => SampleWorkerClass.SimpleStaticMethod(FakeArgument));
+            var lambda = await TestFixture.Anywhere.DeserializeNew<int>(data, TestFixture.Environment);
+            var result = lambda.Invoke(TestFixture.Environment.Context);
+
+            //var data = TestFixture.Anywhere.Serialize((context) => SampleWorkerClass.SimpleStaticMethod(FakeArgument));
+            //var method = await MethodModelDeserializer.DeserializeAsync(TestFixture.Environment, data);
+            //var result = method.Invoke();
 
             Assert.Equal(FakeArgument, result);
         }
@@ -197,10 +210,26 @@ namespace AnywhereNET.Test
         [Fact]
         public async void TestMemberMethodWithDependency()
         {
-            var data = TestFixture.Anywhere.Serialize((context) => FakeObject.MemberMethodWithDependency(DependencyModel));
-            var method = await MethodModelDeserializer.DeserializeAsync(TestFixture.Environment, data);
-            var actualResult = method.Invoke();
-            var expectedResult = FakeObject.MemberMethodWithDependency(DependencyModel);
+            var depModel = new SampleDependencyClass
+            {
+                MyString = "my string",
+                MyModel = new SampleDependencyModel
+                {
+                    MyBool = true,
+                    MyInt = 456,
+                    MyDateTimeOffset = DateTimeOffset.Now,
+                }
+            };
+            var data = await TestFixture.Anywhere.SerializeNew((context) => FakeObject.MemberMethodWithDependency(depModel));
+            //var data = await TestFixture.Anywhere.SerializeNew((context) => FakeObject.MemberMethodWithDependency(DependencyModel));
+            var lambda = await TestFixture.Anywhere.DeserializeNew<string>(data, TestFixture.Environment);
+            var actualResult = lambda.Invoke(TestFixture.Environment.Context);
+
+            //var data = TestFixture.Anywhere.Serialize((context) => FakeObject.MemberMethodWithDependency(DependencyModel));
+            //var method = await MethodModelDeserializer.DeserializeAsync(TestFixture.Environment, data);
+            //var actualResult = method.Invoke();
+            var expectedResult = FakeObject.MemberMethodWithDependency(depModel);
+            //var expectedResult = FakeObject.MemberMethodWithDependency(DependencyModel);
 
             Assert.Equal(expectedResult, actualResult);
         }
@@ -213,9 +242,14 @@ namespace AnywhereNET.Test
         public async void TestStaticMethodWithContext()
         {
             string closureVal = "hello world";
-            var data = TestFixture.Anywhere.Serialize((context) => Foo(context, 23, closureVal));
-            var method = await MethodModelDeserializer.DeserializeAsync(TestFixture.Environment, data);
-            var actualResult = method.Invoke();
+
+            var data = await TestFixture.Anywhere.SerializeNew((context) => Foo(context, 23, closureVal));
+            var lambda = await TestFixture.Anywhere.DeserializeNew<string>(data, TestFixture.Environment);
+            var actualResult = lambda.Invoke(TestFixture.Environment.Context);
+
+            //var data = TestFixture.Anywhere.Serialize((context) => Foo(context, 23, closureVal));
+            //var method = await MethodModelDeserializer.DeserializeAsync(TestFixture.Environment, data);
+            //var actualResult = method.Invoke();
             var expectedResult = Foo(TestFixture.Environment.Context, 23, closureVal);
 
             Assert.Equal(expectedResult, actualResult);
@@ -261,17 +295,27 @@ namespace AnywhereNET.Test
             var lambda = Expression.Lambda<Func<ExecutionContext, int>>(bodyEx, contextParamEx);
 
             // serialize both lambdas and confirm they match
-            var expectedData = TestFixture.Anywhere.Serialize(expectedLambda);
-            var actualData = TestFixture.Anywhere.Serialize(lambda);
-            Assert.Equal(expectedData, actualData);
+            var expectedData2 = await TestFixture.Anywhere.SerializeNew(expectedLambda);
+            var actualData2 = await TestFixture.Anywhere.SerializeNew(lambda);
+            Assert.True(System.Linq.Enumerable.SequenceEqual(expectedData2, actualData2));
+
+            //var expectedData = TestFixture.Anywhere.Serialize(expectedLambda);
+            //var actualData = TestFixture.Anywhere.Serialize(lambda);
+            //Assert.Equal(expectedData, actualData);
 
             // deserialize and execute both lambdas and confirm the results match
-            var expectedMethod = await MethodModelDeserializer.DeserializeAsync(TestFixture.Environment, expectedData);
-            var expectedResult = expectedMethod.Invoke();
-            var actualMethod = await MethodModelDeserializer.DeserializeAsync(TestFixture.Environment, actualData);
-            var actualResult = actualMethod.Invoke();
+            var expectedMethod2 = await TestFixture.Anywhere.DeserializeNew<int>(expectedData2, TestFixture.Environment);
+            var expectedResult2 = expectedMethod2.Invoke(TestFixture.Environment.Context);
+            var actualMethod2 = await TestFixture.Anywhere.DeserializeNew<int>(actualData2, TestFixture.Environment);
+            var actualResult2 = actualMethod2.Invoke(TestFixture.Environment.Context);
+            Assert.Equal(expectedResult2, actualResult2);
 
-            Assert.Equal(expectedResult, actualResult);
+            //var expectedMethod = await MethodModelDeserializer.DeserializeAsync(TestFixture.Environment, expectedData);
+            //var expectedResult = expectedMethod.Invoke();
+            //var actualMethod = await MethodModelDeserializer.DeserializeAsync(TestFixture.Environment, actualData);
+            //var actualResult = actualMethod.Invoke();
+
+            //Assert.Equal(expectedResult, actualResult);
         }
 
         //[Fact]

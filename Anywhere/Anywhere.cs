@@ -227,6 +227,34 @@ namespace AnywhereNET
             return JsonConvert.SerializeObject(model);
         }
 
+        public async Task<byte[]> SerializeNew<Tprop>(Expression<Func<ExecutionContext, Tprop>> expression)
+        {
+            // first verify the expression is a lambda expression
+            if (expression as LambdaExpression == null)
+            {
+                throw new InvalidOperationException($"{nameof(expression)} must be a lambda expression");
+            }
+
+            using (var stream = new MemoryStream())
+            {
+                await ExpressionSerializer.SerializeAsync(expression, stream);
+                //return Convert.ToBase64String(stream.ToArray());
+                return stream.ToArray();
+            }
+
+            //// convert the expression into a serializable model and serialize it
+            //var model = BuildModelFromExpression(expression);
+            //return JsonConvert.SerializeObject(model);
+        }
+
+        public Task<Func<ExecutionContext, Tprop>> DeserializeNew<Tprop>(byte[] data, Environment env)
+        {
+            using (var stream = new MemoryStream(data))
+            {
+                return ExpressionSerializer.DeserializeAsync<Tprop>(stream, env);
+            }
+        }
+
         internal MethodModel BuildModelFromExpression<Tprop>(Expression<Func<ExecutionContext, Tprop>> expression)
         {
             // https://stackoverflow.com/questions/3607464/how-to-get-the-instance-of-a-reffered-instance-from-a-lambda-expression

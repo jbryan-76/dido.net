@@ -90,7 +90,7 @@ namespace AnywhereNET.TestEnv
             using (var stream = new MemoryStream())
             {
                 // serialize the expression to simulate transmission on a stream
-                ExpressionSerializer.Serialize(lambda, stream);
+                await ExpressionSerializer.SerializeAsync(lambda, stream);
                 bytes = stream.ToArray();
             }
 
