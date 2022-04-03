@@ -47,7 +47,7 @@ namespace AnywhereNET.TestEnv
             // deserialize the method lambda, using the custom resolver to resolve dependencies.
             // NOTE: the original saved expression was an int32, but here the return type is explicitly
             // being set to an int64 (long) because the json deserializer deserializes all integers to int64
-            var method = await TestFixture.Anywhere.DeserializeNew<long>(bytes, TestFixture.Environment);
+            var method = await TestFixture.Anywhere.Deserialize<long>(bytes, TestFixture.Environment);
             //var method = await MethodModelDeserializer.DeserializeAsync(TestFixture.Environment, data);//, AssemblyResolver);
             if (method == null)
             {
@@ -92,7 +92,7 @@ namespace AnywhereNET.TestEnv
             // deserialize the method lambda, using the custom resolver to resolve dependencies.
             // NOTE: the original saved expression was an int32, but here the return type is explicitly
             // being set to an int64 (long) because the json deserializer deserializes all integers to int64
-            var method = await TestFixture.Anywhere.DeserializeNew<long>(bytes, TestFixture.Environment);
+            var method = await TestFixture.Anywhere.Deserialize<long>(bytes, TestFixture.Environment);
             //var method = await MethodModelDeserializer.DeserializeAsync(TestFixture.Environment, data);//, AssemblyResolver);
             if (method == null)
             {
@@ -135,7 +135,7 @@ namespace AnywhereNET.TestEnv
             var expectedResult = Newtonsoft.Json.JsonConvert.DeserializeObject(File.ReadAllText(path));
 
             // deserialize the method lambda, using the custom resolver to resolve dependencies
-            var method = await TestFixture.Anywhere.DeserializeNew<string>(bytes, TestFixture.Environment);
+            var method = await TestFixture.Anywhere.Deserialize<string>(bytes, TestFixture.Environment);
             //var method = await MethodModelDeserializer.DeserializeAsync(TestFixture.Environment, data);//, AssemblyResolver);
             if (method == null)
             {

@@ -215,163 +215,44 @@ namespace AnywhereNET
             }
         }
 
-        //public string Serialize<Tprop>(Expression<Func<ExecutionContext, Tprop>> expression)
-        //{
-        //    // first verify the expression is a lambda expression
-        //    if (expression as LambdaExpression == null)
-        //    {
-        //        throw new InvalidOperationException($"{nameof(expression)} must be a lambda expression");
-        //    }
-
-        //    // convert the expression into a serializable model and serialize it
-        //    var model = BuildModelFromExpression(expression);
-        //    return JsonConvert.SerializeObject(model);
-        //}
-
-        public async Task<byte[]> SerializeNew<Tprop>(Expression<Func<ExecutionContext, Tprop>> expression)
+        /// <summary>
+        /// Serialize the given lambda expression to a byte array. The resulting array
+        /// can either be stored or transmitted, and later deserialized and executed.
+        /// </summary>
+        /// <typeparam name="Tprop"></typeparam>
+        /// <param name="expression"></param>
+        /// <returns></returns>
+        /// <exception cref="InvalidOperationException"></exception>
+        public async Task<byte[]> Serialize<Tprop>(Expression<Func<ExecutionContext, Tprop>> expression)
         {
-            // first verify the expression is a lambda expression
-            if (expression as LambdaExpression == null)
+            if (expression == null)
             {
-                throw new InvalidOperationException($"{nameof(expression)} must be a lambda expression");
+                throw new ArgumentNullException(nameof(expression));
             }
 
             using (var stream = new MemoryStream())
             {
                 await ExpressionSerializer.SerializeAsync(expression, stream);
-                //return Convert.ToBase64String(stream.ToArray());
                 return stream.ToArray();
             }
-
-            //// convert the expression into a serializable model and serialize it
-            //var model = BuildModelFromExpression(expression);
-            //return JsonConvert.SerializeObject(model);
         }
 
-        public Task<Func<ExecutionContext, Tprop>> DeserializeNew<Tprop>(byte[] data, Environment env)
+        /// <summary>
+        /// Deserialize a lambda expression from a byte array, using the provided environment
+        /// to resolve any required assemblies and load them into the proper runtime assembly
+        /// context.
+        /// <para/>NOTE the byte array must be created with Serialize().
+        /// </summary>
+        /// <typeparam name="Tprop"></typeparam>
+        /// <param name="data"></param>
+        /// <param name="env"></param>
+        /// <returns></returns>
+        public Task<Func<ExecutionContext, Tprop>> Deserialize<Tprop>(byte[] data, Environment env)
         {
             using (var stream = new MemoryStream(data))
             {
                 return ExpressionSerializer.DeserializeAsync<Tprop>(stream, env);
             }
         }
-
-        //internal MethodModel BuildModelFromExpression<Tprop>(Expression<Func<ExecutionContext, Tprop>> expression)
-        //{
-        //    // https://stackoverflow.com/questions/3607464/how-to-get-the-instance-of-a-reffered-instance-from-a-lambda-expression
-        //    // https://stackoverflow.com/questions/35231897/get-name-and-value-of-static-class-properties-using-expression-trees
-
-        //    // TODO: how to serialize a lambda to inject the ExecutionContext?
-
-        //    // The expression is a lambda expression...
-        //    var lambdaExp = expression as LambdaExpression;
-
-        //    // ...with a method call body...
-        //    var methodCallExp = (MethodCallExpression)lambdaExp.Body;
-
-        //    // ...and a set of expected parameters to the expression.
-        //    var parameters = lambdaExp.Parameters;
-
-        //    // TODO: confirm methodCallExp is not null
-        //    // TODO: confirm parameters is either empty, or only contains 1 value with Type = ExecutionContext
-
-        //    // The method call has a list of arguments.
-        //    var args = new List<ValueModel>();
-        //    foreach (var a in methodCallExp.Arguments)
-        //    {
-        //        var type = a.Type;
-
-        //        if (a is ConstantExpression)
-        //        {
-        //            // argument is an expression with a constant value
-        //            var exp = (ConstantExpression)a;
-        //            // add an argument with the constant value
-        //            args.Add(new ValueModel
-        //            {
-        //                Value = exp.Value,
-        //                Type = new TypeModel(type)
-        //            });
-        //        }
-        //        else if (a is MemberExpression)
-        //        {
-        //            // argument is an expression accessing a field or property
-        //            var exp = (MemberExpression)a;
-        //            var constExp = (ConstantExpression)exp.Expression;
-        //            var fieldInfo = (FieldInfo)exp.Member;
-        //            var obj = ((FieldInfo)exp.Member).GetValue((exp.Expression as ConstantExpression).Value);
-        //            // add an argument with the member value
-        //            args.Add(new ValueModel
-        //            {
-        //                Value = obj,
-        //                Type = new TypeModel(type)
-        //            });
-        //        }
-        //        else if (a is ParameterExpression)
-        //        {
-        //            var exp = (ParameterExpression)a;
-        //            if (exp.Type != typeof(ExecutionContext))
-        //            {
-        //                throw new InvalidOperationException($"Only a single {typeof(ExecutionContext)} parameter is supported for lambda expressions");
-        //            }
-        //            // argument is a parameter of type ExecutionContext
-        //            args.Add(new ValueModel
-        //            {
-        //                Value = null,
-        //                Type = new TypeModel(typeof(ExecutionContext))
-        //            });
-        //        }
-        //        else
-        //        {
-        //            throw new InvalidOperationException($"Unknown, unsupported, or unexpected expression type");
-        //        }
-        //    }
-
-        //    // The method is called on a member of some instance.
-        //    var instanceExp = methodCallExp.Object;
-
-        //    // Start building the invoker.
-        //    var invoker = new MethodModel
-        //    {
-        //        ReturnType = new TypeModel(methodCallExp.Method.ReturnType),
-        //        Method = methodCallExp.Method,
-        //        MethodName = methodCallExp.Method.Name,
-        //        Arguments = args.ToArray()
-        //    };
-
-        //    // The instance expression is either null or not null.
-        //    if (instanceExp == null)
-        //    {
-        //        // If null, then the method is a static method (and therefore not called on an actual instance).
-        //        invoker.IsStatic = true;
-        //        invoker.Instance = new ValueModel
-        //        {
-        //            Value = null,
-        //            Type = new TypeModel(methodCallExp.Method.DeclaringType)
-        //        };
-        //    }
-        //    else
-        //    {
-        //        // If not null, then the expression contains an instance of the class that defines the method.
-        //        var unaryExp = instanceExp as UnaryExpression;
-        //        var memberExp = instanceExp as MemberExpression;
-
-        //        var constant = (ConstantExpression)memberExp.Expression;
-        //        var anonymousClassInstance = constant.Value;
-        //        var calledClassField = (FieldInfo)memberExp.Member;
-
-        //        var underlyingType = calledClassField.FieldType;
-        //        var instanceMethodIsCalledOn = calledClassField.GetValue(anonymousClassInstance);
-
-        //        invoker.Instance = new ValueModel
-        //        {
-        //            Value = instanceMethodIsCalledOn,
-        //            Type = new TypeModel(underlyingType)
-        //        };
-        //    }
-
-        //    return invoker;
-        //}
-
-
     }
 }
