@@ -33,11 +33,6 @@ namespace AnywhereNET.Test.Common
         readonly string TestLibAssembliesFolder = FindTestLibAssembliesFolder();
 
         /// <summary>
-        /// The folder containing the assemblies of the currently executing unit test project.
-        /// </summary>
-        //readonly string CurrentTestAssembliesFolder = System.IO.Path.GetDirectoryName(System.Reflection.Assembly.GetExecutingAssembly().Location);
-
-        /// <summary>
         /// The name of the folder stored in the system temp area where files can be shared
         /// between unit test projects.
         /// </summary>

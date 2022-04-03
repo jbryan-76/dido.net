@@ -37,15 +37,8 @@ namespace AnywhereNET.TestEnv
             TestFixture = fixture;
         }
 
-
-        //class Dummy
-        //{
-        //    public object TestObject;
-        //    public int TestArgument = 123;
-        //}
-
         [Fact]
-        public async void CreateLambdaFromLoadedAssembly()
+        public async void CreateLambdaFromDynamicLoadedAssembly_LocalClosure()
         {
             var context = new AssemblyLoadContext("TestContext", true);
             var testLibStream = await TestFixture.Anywhere.ResolveLocalAssemblyAsync("Anywhere.TestLib, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null");
@@ -55,27 +48,90 @@ namespace AnywhereNET.TestEnv
             var testLibDependencyAssembly = context.LoadFromStream(testLibDependencyStream);
             testLibDependencyStream.Dispose();
 
-            //var dummy = new Dummy();
-
             var sampleWorkerType = testLibAssembly.GetType("AnywhereNET.TestLib.SampleWorkerClass");
-            var TestObject = testLibAssembly.CreateInstance("AnywhereNET.TestLib.SampleWorkerClass");
             var methodInfo = sampleWorkerType.GetMethod("SimpleMemberMethod");
 
-            int TestArgument = 123;
+            var testObject = testLibAssembly.CreateInstance("AnywhereNET.TestLib.SampleWorkerClass");
+            int testArgument = 123;
+
+            // a constant referring to the local SampleWorkerClass test object
+            var objEx = Expression.Constant(testObject);
+
+            // a constant referring to the local int test argument
+            var argEx = Expression.Constant(testArgument);
+
+            // cast the generic test object to a concrete type (SampleWorkerClass)
+            var convertEx = Expression.Convert(objEx, sampleWorkerType);
+
+            // call a method (SimpleMemberMethod) on the cast object, passing the argument
+            var bodyEx = Expression.Call(convertEx, methodInfo, argEx);
+
+            // the one and only supported parameter to the lambda function: the ExecutionContext
+            var contextParamEx = Expression.Parameter(typeof(ExecutionContext), "context");
+
+            // finally, the lambda expression that uses the single parameter and executes the body
+            var lambda = Expression.Lambda<Func<ExecutionContext, int>>(bodyEx, contextParamEx);
+
+            // compile and execute the lambda to get the expected result
+            var expectedResult = lambda.Compile().Invoke(TestFixture.Environment.Context);
+
+            // serialize the lambda expression to simulate transmission on a stream
+            byte[] bytes;
+            using (var stream = new MemoryStream())
+            {
+                await ExpressionSerializer.SerializeAsync(lambda, stream);
+                bytes = stream.ToArray();
+            }
+
+            // unload the assembly context to be sure all needed assemblies are resolved dynamically
+            context.Unload();
+
+            using (var stream = new MemoryStream(bytes))
+            {
+                // deserialize the stream to an invokable lambda
+                var json = System.Text.Encoding.UTF8.GetString(bytes);
+                var decodedLambda = await ExpressionSerializer.DeserializeAsync<object>(stream, TestFixture.Environment);
+
+                // invoke the lambda and confirm the result
+                var result = decodedLambda.Invoke(TestFixture.Environment.Context);
+                Assert.Equal(expectedResult, result);
+            }
+        }
+
+        class Dummy
+        {
+            public object TestObject;
+            public int TestArgument = 123;
+        }
+
+        [Fact]
+        public async void CreateLambdaFromDynamicLoadedAssembly_AmbientClosure()
+        {
+            var context = new AssemblyLoadContext("TestContext", true);
+            var testLibStream = await TestFixture.Anywhere.ResolveLocalAssemblyAsync("Anywhere.TestLib, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null");
+            var testLibAssembly = context.LoadFromStream(testLibStream);
+            testLibStream.Dispose();
+            var testLibDependencyStream = await TestFixture.Anywhere.ResolveLocalAssemblyAsync("Anywhere.TestLibDependency, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null");
+            var testLibDependencyAssembly = context.LoadFromStream(testLibDependencyStream);
+            testLibDependencyStream.Dispose();
+
+            var dummy = new Dummy();
+
+            var sampleWorkerType = testLibAssembly.GetType("AnywhereNET.TestLib.SampleWorkerClass");
+            dummy.TestObject = testLibAssembly.CreateInstance("AnywhereNET.TestLib.SampleWorkerClass");
+            var methodInfo = sampleWorkerType.GetMethod("SimpleMemberMethod");
+
+            dummy.TestArgument = 456;
 
             // an expression referring to 'this' object (ie the test class instance)
-            //var thisObjEx = Expression.Constant(dummy);
-            var objEx = Expression.Constant(TestObject);
+            var thisObjEx = Expression.Constant(dummy);
 
-            //// an expression referring to the "FakeObject" member of this class
-            //var objEx = Expression.MakeMemberAccess(thisObjEx, typeof(Dummy).GetField(nameof(Dummy.TestObject), BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public));
+            // an expression referring to the "TestObject" member
+            var objEx = Expression.MakeMemberAccess(thisObjEx, typeof(Dummy).GetField(nameof(Dummy.TestObject), BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public));
 
-            //// an expression referring to the "FakeArgument" member of this class
-            //var argEx = Expression.MakeMemberAccess(thisObjEx, typeof(Dummy).GetField(nameof(Dummy.TestArgument), BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public));
+            // an expression referring to the "TestArgument" member
+            var argEx = Expression.MakeMemberAccess(thisObjEx, typeof(Dummy).GetField(nameof(Dummy.TestArgument), BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public));
 
-            //var objEx = Expression.Constant(sampleWorkerObject);
-            //int argument = 123;
-            var argEx = Expression.Constant(TestArgument);
             var convertEx = Expression.Convert(objEx, sampleWorkerType);
             var bodyEx = Expression.Call(convertEx, methodInfo, argEx);
 
@@ -83,7 +139,7 @@ namespace AnywhereNET.TestEnv
 
             // finally, the lambda expression that uses the single lambda parameter and executes the lambda body
             var lambda = Expression.Lambda<Func<ExecutionContext, int>>(bodyEx, contextParamEx);
-            
+
             var expectedResult = lambda.Compile().Invoke(TestFixture.Environment.Context);
 
             byte[] bytes;
@@ -101,7 +157,7 @@ namespace AnywhereNET.TestEnv
                 // deserialize the stream to an invokable lambda
                 var json = System.Text.Encoding.UTF8.GetString(bytes);
                 var decodedLambda = await ExpressionSerializer.DeserializeAsync<object>(stream, TestFixture.Environment);
-                
+
                 // invoke the lambda and confirm the result
                 var result = decodedLambda.Invoke(TestFixture.Environment.Context);
                 Assert.Equal(expectedResult, result);
