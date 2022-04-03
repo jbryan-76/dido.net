@@ -51,8 +51,6 @@ namespace AnywhereNET.Test.Common
 
         private List<string> AssemblyFiles = new List<string>();
 
-        private AssemblyLoadContext TestAssemblyLoadContext;
-
         /// <summary>
         /// Global test setup (only called once)
         /// </summary>
@@ -81,11 +79,8 @@ namespace AnywhereNET.Test.Common
                 {
                     ExecutionMode = ExecutionModes.Local,
                 },
-                AssemblyLoadContextName = "test"
+                AssemblyContext = new AssemblyLoadContext("test", true)
             };
-
-            // create a test context to load assemblies
-            TestAssemblyLoadContext = new AssemblyLoadContext(Environment.AssemblyLoadContextName, true);
         }
 
         /// <summary>

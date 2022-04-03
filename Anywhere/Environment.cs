@@ -1,4 +1,5 @@
 ﻿using System.Reflection;
+using System.Runtime.Loader;
 
 namespace AnywhereNET
 {
@@ -19,28 +20,30 @@ namespace AnywhereNET
         /// <summary>
         /// A delegate method for resolving remote runtime assemblies used by the host application.
         /// </summary>
-        public RemoteAssemblyResolver ResolveRemoteAssemblyAsync = DefaultRemoteAssemblyResolver.ResolveAssembly;
+        public RemoteAssemblyResolver ResolveRemoteAssemblyAsync { get; set; }
+            = DefaultRemoteAssemblyResolver.ResolveAssembly;
 
         // TODO: the actual resolver needs to call back to the current ambient Anywhere library running in the application
         // TODO: this stream can be an SslStream for normal ops, or eg a custom loopback stream for unit testing
 
-        // TODO: this is worth pursuing for proper code isolation,
-        // TODO: but JsonConvert.DeserializeObject will not be able to locate the assemblies to instantiate
-        // TODO: type instances unless the assemblies are in AssemblyLoadContext.Default
-        public string? AssemblyLoadContextName;
+        /// <summary>
+        /// An optional runtime AssemblyLoadContext for loading all needed assemblies.
+        /// </summary>
+        public AssemblyLoadContext? AssemblyContext { get; set; }
 
         /// <summary>
         /// A bi-directional communications channel to the application.
         /// </summary>
-        public Stream? ApplicationChannel;
+        public Stream? ApplicationChannel { get; set; }
 
         // TODO: create this when the env starts
         // TODO: make internal?
-        public ExecutionContext Context;
+        public ExecutionContext Context { get; set; }
 
-        public Dictionary<string, Assembly> LoadedAssemblies = new Dictionary<string, Assembly>();
+        public Dictionary<string, Assembly> LoadedAssemblies { get; set; }
+            = new Dictionary<string, Assembly>();
 
         // TODO: cache previously fetched assemblies to disk to avoid a network round trip
-        public string AssemblyCachePath;
+        public string AssemblyCachePath { get; set; }
     }
 }

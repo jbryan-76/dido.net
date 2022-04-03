@@ -150,9 +150,9 @@ namespace AnywhereNET.Test
             ExpressionSerializer.Node receivedModel;
             using (var stream = new MemoryStream())
             {
-                var settings = new ExpressionSerializer.SerializeSettings
+                var settings = new ExpressionSerializeSettings
                 {
-                    Format = ExpressionSerializer.SerializeSettings.Formats.Json
+                    Format = ExpressionSerializeSettings.Formats.Json
                 };
                 ExpressionSerializer.Serialize(transmittedModel, stream, settings);
 
@@ -182,9 +182,9 @@ namespace AnywhereNET.Test
             // serialize and deserialize the model to simulate transmitting and receiving it
             using (var stream = new MemoryStream())
             {
-                var settings = new ExpressionSerializer.SerializeSettings
+                var settings = new ExpressionSerializeSettings
                 {
-                    Format = ExpressionSerializer.SerializeSettings.Formats.Bson
+                    Format = ExpressionSerializeSettings.Formats.Bson
                 };
 
                 // serialize a lambda expression

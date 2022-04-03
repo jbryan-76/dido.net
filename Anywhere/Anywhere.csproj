@@ -8,13 +8,6 @@
 
   <ItemGroup>
     <None Remove="MethodModelBuilder.cs.DELETE" />
-    <None Remove="TypeModel.cs.DELETE" />
-    <None Remove="ValueModel.cs.DELETE" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Compile Include="TypeModel.cs.DELETE" />
-    <Compile Include="ValueModel.cs.DELETE" />
   </ItemGroup>
 
   <ItemGroup>

@@ -1,5 +1,6 @@
 ﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Bson;
+using Newtonsoft.Json.Converters;
 using Newtonsoft.Json.Serialization;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -8,65 +9,23 @@ using System.Text;
 
 namespace AnywhereNET
 {
-    public static class MemberExpressionExtensions
-    {
-        public static bool GetConstantValue(this MemberExpression exp, out Type type, out object value)
-        {
-            if (!(exp.Expression is ConstantExpression))
-            {
-                type = null;
-                value = null;
-                return false;
-            }
-            object container = ((ConstantExpression)exp.Expression).Value;
-            switch (exp.Member)
-            {
-                case FieldInfo info:
-                    type = ((FieldInfo)exp.Member).FieldType;
-                    value = ((FieldInfo)exp.Member).GetValue(container);
-                    break;
-                case PropertyInfo info:
-                    type = ((PropertyInfo)exp.Member).PropertyType;
-                    value = ((PropertyInfo)exp.Member).GetValue(container);
-                    break;
-                default:
-                    throw new NotImplementedException($"Could not get constant value from member expression: {exp.Member.GetType()} is not supported.");
-            }
-            return true;
-        }
-    }
-
     public class ExpressionSerializer
     {
+        /// <summary>
+        /// Binding flags to filter all members of a class: instance, public, non-public, and static.
+        /// </summary>
         internal static BindingFlags AllMembers = BindingFlags.Instance | BindingFlags.Public
             | BindingFlags.NonPublic | BindingFlags.Static;
 
-        public class SerializeSettings
-        {
-            public enum Formats
-            {
-                Json,
-                Bson,
 
-                // TODO: explore serializing the node tree to a stream as optimized binary data.
-                // TODO: for example, since types will probably be reused, the most compact way might be 
-                // TODO: to store the types separately, then store the tree?
-                // Binary 
-            }
-
-            public Formats Format { get; set; } = Formats.Json;
-
-            public bool LeaveOpen { get; set; } = true;
-        }
-
-        public static Task SerializeAsync<TResult>(Expression<Func<ExecutionContext, TResult>> expression, Stream stream, SerializeSettings? settings = null)
+        public static Task SerializeAsync<TResult>(Expression<Func<ExecutionContext, TResult>> expression, Stream stream, ExpressionSerializeSettings? settings = null)
         {
             var node = Encode(expression);
             Serialize(node, stream, settings);
             return Task.CompletedTask;
         }
 
-        public static Task<Func<ExecutionContext, TResult>> DeserializeAsync<TResult>(Stream stream, Environment env, SerializeSettings? settings = null)
+        public static Task<Func<ExecutionContext, TResult>> DeserializeAsync<TResult>(Stream stream, Environment env, ExpressionSerializeSettings? settings = null)
         {
             var node = Deserialize(stream, settings);
             return DecodeAsync<TResult>(node, env);
@@ -79,16 +38,15 @@ namespace AnywhereNET
 
         public static async Task<Func<ExecutionContext, TResult>> DecodeAsync<TResult>(Node node, Environment env)
         {
-            var state = new ExpressionVisitorState();
             // deserialize the encoded expression tree, which by design will be a lambda expression
+            var state = new ExpressionVisitorState();
             var exp = await DecodeToExpressionAsync(node, env, state);
             var lambda = (LambdaExpression)exp;
 
             // the return type of the lambda expression will not necessarily match the indicated
             // generic return type, even if the types are compatible/convertable. so wrap the expression
-            // in another lambda that converts to the generic type the caller is expecting.
-            // if for some reason the types are not compatible, the caller will need to handle
-            // the exception
+            // in another lambda that performs a type conversion to the generic type the caller is expecting.
+            // if the types are not compatible, the caller will need to handle the resulting exception.
             var convert = Expression.Convert(lambda.Body, typeof(TResult));
             lambda = Expression.Lambda(typeof(Func<ExecutionContext, TResult>), convert, lambda.Parameters);
 
@@ -96,147 +54,59 @@ namespace AnywhereNET
             return (Func<ExecutionContext, TResult>)lambda.Compile();
         }
 
-        //public class SerializeTypeBinder : ISerializationBinder
-        //{
-        //    /// <summary>
-        //    /// Used during deserialization to find the type corresponding to the provided
-        //    /// assembly and type.
-        //    /// </summary>
-        //    /// <param name="assemblyName"></param>
-        //    /// <param name="typeName"></param>
-        //    /// <returns></returns>
-        //    public Type BindToType(string assemblyName, string typeName)
-        //    {
-        //        throw new NotImplementedException();
-        //        //return Type.GetType(typeName);
-        //        //return KnownTypes.SingleOrDefault(t => t.Name == typeName);
-        //    }
-
-        //    /// <summary>
-        //    /// Used during serialization to output the specific assembly and type names for
-        //    /// an object.
-        //    /// </summary>
-        //    /// <param name="serializedType"></param>
-        //    /// <param name="assemblyName"></param>
-        //    /// <param name="typeName"></param>
-        //    public void BindToName(Type serializedType, out string assemblyName, out string typeName)
-        //    {
-        //        // NOTE: there appears to be a bug/feature in Newtonsoft.Json where even when providing
-        //        // the assembly full name, it is truncated to just the assembly name
-        //        assemblyName = serializedType.Assembly.FullName;
-        //        typeName = serializedType.FullName;
-        //        //assemblyName = null;
-        //        //typeName = serializedType.Name;
-        //    }
-
-        //}
-
-        public class DeserializeTypeBinder : ISerializationBinder
+        public static void Serialize(Node node, Stream stream, ExpressionSerializeSettings? settings = null)
         {
-            Environment Environment;
-
-            public DeserializeTypeBinder(Environment environment)
-            {
-                Environment = environment;
-            }
-
-            /// <summary>
-            /// Used during deserialization to find the type corresponding to the provided
-            /// assembly and type.
-            /// </summary>
-            /// <param name="assemblyName"></param>
-            /// <param name="typeName"></param>
-            /// <returns></returns>
-            public Type BindToType(string assemblyName, string typeName)
-            {
-                if (Environment.LoadedAssemblies.TryGetValue(assemblyName, out Assembly asm))
-                {
-                    return asm.GetType(typeName);
-                }
-                throw new FileNotFoundException($"Could not resolve assembly '{assemblyName}' from current Environment.", assemblyName);
-                //throw new InvalidOperationException($"Could not resolve assembly '{assemblyName}' from current Environment.");
-                //return Type.GetType(typeName);
-                //return KnownTypes.SingleOrDefault(t => t.Name == typeName);
-            }
-
-            /// <summary>
-            /// Used during serialization to output the specific assembly and type names for
-            /// an object.
-            /// </summary>
-            /// <param name="serializedType"></param>
-            /// <param name="assemblyName"></param>
-            /// <param name="typeName"></param>
-            public void BindToName(Type serializedType, out string assemblyName, out string typeName)
-            {
-                throw new NotImplementedException();
-                //assemblyName = serializedType.Assembly.FullName;
-                //typeName = serializedType.FullName;
-                //assemblyName = null;
-                //typeName = serializedType.Name;
-            }
-        }
-
-        public static void Serialize(Node node, Stream stream, SerializeSettings? settings = null)
-        {
-            settings = settings ?? new SerializeSettings();
+            settings = settings ?? new ExpressionSerializeSettings();
 
             switch (settings.Format)
             {
-                case SerializeSettings.Formats.Json:
+                case ExpressionSerializeSettings.Formats.Json:
                     using (var streamWriter = new StreamWriter(stream: stream, leaveOpen: settings.LeaveOpen == true))
                     using (var jsonWriter = new JsonTextWriter(streamWriter))
                     {
                         var jsonSerializer = new JsonSerializer();
                         jsonSerializer.TypeNameHandling = TypeNameHandling.All;
-                        //jsonSerializer.SerializationBinder = new TypeBinder();
                         jsonSerializer.Serialize(jsonWriter, node);
                     }
-                    //System.Text.Json.JsonSerializer.Serialize(streamWriter, node, new System.Text.Json.JsonSerializerOptions
-                    //{
-
-                    //});
                     break;
-                case SerializeSettings.Formats.Bson:
+                case ExpressionSerializeSettings.Formats.Bson:
                     using (var binaryWriter = new BinaryWriter(stream, Encoding.Default, settings.LeaveOpen == true))
                     using (var bsonWriter = new BsonDataWriter(binaryWriter))
                     {
                         var jsonSerializer = new JsonSerializer();
                         jsonSerializer.TypeNameHandling = TypeNameHandling.All;
-                        //jsonSerializer.SerializationBinder = new TypeBinder();
                         jsonSerializer.Serialize(bsonWriter, node);
                     }
                     break;
+                // TODO: case ExpressionSerializeSettings.Formats.Binary?
                 default:
                     throw new NotSupportedException($"Serialization format '{settings.Format}' unknown or unsupported.");
             }
         }
 
-        public static Node Deserialize(Stream stream, SerializeSettings? settings = null)
+        public static Node Deserialize(Stream stream, ExpressionSerializeSettings? settings = null)
         {
-            // TODO: this whole thing may need to be wrapped in the exception handler to resolve assemblies
-            settings = settings ?? new SerializeSettings();
+            settings = settings ?? new ExpressionSerializeSettings();
 
             switch (settings.Format)
             {
-                case SerializeSettings.Formats.Json:
+                case ExpressionSerializeSettings.Formats.Json:
                     using (var streamReader = new StreamReader(stream: stream, leaveOpen: settings.LeaveOpen == true))
                     using (var jsonReader = new JsonTextReader(streamReader))
                     {
                         var jsonSerializer = new JsonSerializer();
                         jsonSerializer.TypeNameHandling = TypeNameHandling.All;
-                        //jsonSerializer.SerializationBinder = new TypeBinder();
-                        // TODO: this is trying to deserialize a value in a constant node and failing
                         return jsonSerializer.Deserialize<Node>(jsonReader)!;
                     }
-                case SerializeSettings.Formats.Bson:
+                case ExpressionSerializeSettings.Formats.Bson:
                     using (var binaryReader = new BinaryReader(stream, Encoding.Default, settings.LeaveOpen == true))
                     using (var jsonReader = new BsonDataReader(binaryReader))
                     {
                         var jsonSerializer = new JsonSerializer();
                         jsonSerializer.TypeNameHandling = TypeNameHandling.All;
-                        //jsonSerializer.SerializationBinder = new TypeBinder();
                         return jsonSerializer.Deserialize<Node>(jsonReader)!;
                     }
+                // TODO: case ExpressionSerializeSettings.Formats.Binary?
                 default:
                     throw new NotSupportedException($"Serialization format '{settings.Format}' unknown or unsupported.");
             }
@@ -247,7 +117,7 @@ namespace AnywhereNET
             public TypeModel() { }
             public TypeModel(Type type)
             {
-                Name = type.AssemblyQualifiedName;
+                Name = type.FullName;
                 AssemblyName = type.Assembly.FullName;
                 RuntimeVersion = type.Assembly.ImageRuntimeVersion;
             }
@@ -259,14 +129,9 @@ namespace AnywhereNET
             {
                 if (env.LoadedAssemblies.TryGetValue(AssemblyName, out Assembly asm))
                 {
-                    var types = asm.GetTypes();
-                    var type = asm.GetType(Name);
-                    var name = Name.Split(new char[] { ',' }).FirstOrDefault();
-                    var foo = asm.GetType(name);
-                    return foo;
+                    return asm.GetType(Name);
                 }
                 throw new FileNotFoundException($"Could not resolve assembly '{AssemblyName}' from current Environment.", AssemblyName);
-                //return Type.GetType(Name, true);
             }
 
             public override bool Equals(object? obj)
@@ -279,10 +144,6 @@ namespace AnywhereNET
                 {
                     return true;
                 }
-                //else if (typeof(Type) == obj.GetType())
-                //{
-                //    obj = new TypeModel((Type)obj);
-                //}
                 if (obj.GetType() != typeof(TypeModel))
                 {
                     return false;
@@ -346,94 +207,71 @@ namespace AnywhereNET
 
         public class Node
         {
-            // TODO: serialize as a string instead of integer?
+            [JsonConverter(typeof(StringEnumConverter))]
             public ExpressionType ExpressionType { get; set; }
         }
 
         public class ConstantNode : Node
         {
+            private ISerializationBinder TypeBinder;
+
+            private Environment _environment;
+
+            [JsonProperty]
+            private byte[] EncodedValue;
+
+            private object CachedValue;
+
             public TypeModel Type { get; set; }
 
             [JsonIgnore]
             public Environment Environment
             {
-                get { return environment; }
+                get { return _environment; }
                 set
                 {
-                    environment = value;
-                    typeBinder = new DeserializeTypeBinder(environment);
+                    _environment = value;
+                    TypeBinder = new DeserializeTypeBinder(_environment);
                 }
             }
-
-            //public ConstantNode() { }
-
-            //public ConstantNode(bool serializing)
-            //{
-            //    if (serializing)
-            //    {
-            //        //typeBinder = new SerializeTypeBinder();
-            //    }
-            //}
-
-            private ISerializationBinder typeBinder;
-            private Environment environment;
 
             [JsonIgnore]
             public object Value
             {
                 get
                 {
-                    if (_valueObject == null)
+                    if (CachedValue == null)
                     {
-                        using (var stream = new MemoryStream(_value))
+                        // deserialize the value from the encoded byte array
+                        using (var stream = new MemoryStream(EncodedValue))
                         using (var streamReader = new StreamReader(stream: stream, leaveOpen: true))
                         using (var jsonReader = new JsonTextReader(streamReader))
                         {
                             var jsonSerializer = new JsonSerializer();
                             jsonSerializer.TypeNameHandling = TypeNameHandling.All;
                             jsonSerializer.TypeNameAssemblyFormatHandling = TypeNameAssemblyFormatHandling.Full;
-                            if (typeBinder != null)
+                            if (TypeBinder != null)
                             {
-                                jsonSerializer.SerializationBinder = typeBinder;
+                                jsonSerializer.SerializationBinder = TypeBinder;
                             }
-                            // TODO: this is trying to deserialize a value in a constant node and failing
-                            var foo = jsonSerializer.Deserialize(jsonReader)!;
-                            var type = foo.GetType();
-                            _valueObject = foo;
-                            var json = System.Text.Encoding.UTF8.GetString(_value);
-                            //return foo;
+                            CachedValue = jsonSerializer.Deserialize(jsonReader)!;
                         }
 
-                        // since the value was serialized as json,
-                        // if the constant value has a numeric type that differes from the deserialized
-                        // type, convert it
+                        // since the value was serialized as json, if it is numeric and its
+                        // type differs from the intended deserialized type, convert it
                         if (
-                            (_valueObject.GetType() == typeof(long) && Type != typeof(long)) ||
-                            (_valueObject.GetType() == typeof(double) && Type != typeof(double))
+                            (CachedValue.GetType() == typeof(long) && Type != typeof(long)) ||
+                            (CachedValue.GetType() == typeof(double) && Type != typeof(double))
                             )
                         {
-                            _valueObject = Convert.ChangeType(_valueObject, Type.ToType(environment));
+                            CachedValue = Convert.ChangeType(CachedValue, Type.ToType(_environment));
                         }
                     }
-                    return _valueObject;
-                    //if (_valueObject == null)
-                    //{
-                    //    using (var stream = new MemoryStream(_value))
-                    //    using (var streamReader = new StreamReader(stream: stream, leaveOpen: true))
-                    //    using (var jsonReader = new JsonTextReader(streamReader))
-                    //    {
-                    //        var jsonSerializer = new JsonSerializer();
-                    //        jsonSerializer.TypeNameHandling = TypeNameHandling.Objects;
-                    //        // TODO: this is trying to deserialize a value in a constant node and failing
-                    //        var foo = jsonSerializer.Deserialize(jsonReader)!;
-                    //        var type = foo.GetType();
-                    //        return foo;
-                    //    }
-                    //}
-                    //return _valueObject;
+                    return CachedValue;
                 }
                 set
                 {
+                    // serialize the value to an encoded byte array
                     using (var stream = new MemoryStream())
                     {
                         using (var streamWriter = new StreamWriter(stream: stream, leaveOpen: true))
@@ -442,37 +280,17 @@ namespace AnywhereNET
                             var jsonSerializer = new JsonSerializer();
                             jsonSerializer.TypeNameHandling = TypeNameHandling.All;
                             jsonSerializer.TypeNameAssemblyFormatHandling = TypeNameAssemblyFormatHandling.Full;
-                            if (typeBinder != null)
+                            if (TypeBinder != null)
                             {
-                                jsonSerializer.SerializationBinder = typeBinder;
+                                jsonSerializer.SerializationBinder = TypeBinder;
                             }
-                            // TODO: serializing a closure object
                             jsonSerializer.Serialize(jsonWriter, value);
                         }
-                        _value = stream.ToArray();
+                        EncodedValue = stream.ToArray();
                     }
-                    var json = System.Text.Encoding.UTF8.GetString(_value);
-                    _valueObject = value;
-                    //using (var stream = new MemoryStream())
-                    //{
-                    //    using (var streamWriter = new StreamWriter(stream: stream, leaveOpen: true))
-                    //    using (var jsonWriter = new JsonTextWriter(streamWriter))
-                    //    {
-                    //        var jsonSerializer = new JsonSerializer();
-                    //        jsonSerializer.TypeNameHandling = TypeNameHandling.Objects;
-                    //        jsonSerializer.Serialize(jsonWriter, value);
-                    //    }
-                    //    _value = stream.ToArray();
-                    //}
-                    //_valueObject = value;
+                    CachedValue = value;
                 }
             }
-
-            [JsonProperty]
-            private byte[] _value;
-
-            [JsonIgnore]
-            private object _valueObject;
         }
 
         public class LambdaNode : Node
@@ -493,7 +311,10 @@ namespace AnywhereNET
         {
             public MethodInfoModel Method { get; set; }
             public Node[] Arguments { get; set; }
-            // the instance object the method is called on, or null if it's a static method
+
+            /// <summary>
+            /// The instance object the method is called on, or null if it's a static method.
+            /// </summary>
             public Node Object { get; set; }
         }
 
@@ -508,11 +329,6 @@ namespace AnywhereNET
             public MethodInfoModel? Method { get; set; }
             public Node Operand { get; set; }
             public TypeModel Type { get; set; }
-        }
-
-        internal class ExpressionVisitorState
-        {
-            public ParameterExpression? ContextExpression { get; set; }
         }
 
         internal static Node EncodeFromExpression(Expression expression, Expression? parent = null)
@@ -578,29 +394,28 @@ namespace AnywhereNET
                     throw new NotImplementedException();
                     break;
                 case MemberExpression exp:
-                    // if the expression is actually for a constant,
-                    // convert it to a concrete constant value.
+                    // if the expression is actually for a constant value,
+                    // convert it to a constant node instead.
                     // this is commonly needed to properly handle closures.
                     if (exp.GetConstantValue(out Type type, out object value))
                     {
-                        //if (exp.Expression.Type.IsCompilerGeneratedType())
+                        SchemaChecks.CheckSerializableProperties(type);
+                        return new ConstantNode
                         {
-                            SchemaChecks.CheckSerializableProperties(type);
-                            return new ConstantNode
-                            {
-                                ExpressionType = ExpressionType.Constant,
-                                Type = new TypeModel(type),
-                                Value = value
-                            };
-                        }
+                            ExpressionType = ExpressionType.Constant,
+                            Type = new TypeModel(type),
+                            Value = value
+                        };
                     }
-
-                    return new MemberNode
+                    else
                     {
-                        ExpressionType = exp.NodeType,
-                        Expression = EncodeFromExpression(exp.Expression, exp),
-                        Member = new MemberInfoModel(exp.Member)
-                    };
+                        return new MemberNode
+                        {
+                            ExpressionType = exp.NodeType,
+                            Expression = EncodeFromExpression(exp.Expression, exp),
+                            Member = new MemberInfoModel(exp.Member)
+                        };
+                    }
                 case MemberInitExpression exp:
                     throw new NotImplementedException();
                     break;
@@ -650,31 +465,7 @@ namespace AnywhereNET
             }
         }
 
-        //internal static Expression DecodeToExpression(Node node)
-        //{
-        //    switch (node)
-        //    {
-        //        case ConstantNode n:
-        //            //return Expression.Constant(n.GetValue(), n.Type.ToType());
-        //            return Expression.Constant(n.Value, n.Type.ToType());
-        //        case LambdaNode n:
-        //            var body = DecodeToExpression(n.Body);
-        //            var parameters = n.Parameters.Select(p => (ParameterExpression)DecodeToExpression(p)).ToArray();
-        //            return Expression.Lambda(body, n.Name, parameters);
-        //        case MemberNode n:
-        //            return Expression.MakeMemberAccess(DecodeToExpression(n.Expression), n.Member.ToInfo());
-        //        case MethodCallNode n:
-        //            return Expression.Call(DecodeToExpression(n.Object), n.Method.ToInfo(), n.Arguments.Select(a => DecodeToExpression(a)).ToArray());
-        //        case ParameterNode n:
-        //            return Expression.Parameter(n.Type.ToType(), n.Name);
-        //        case UnaryNode n:
-        //            return Expression.MakeUnary(n.ExpressionType, DecodeToExpression(n.Operand), n.Type.ToType());
-        //        default:
-        //            throw new NotSupportedException($"Node type {node.GetType()} not yet supported.");
-        //    }
-        //}
-
-        internal static async Task<Expression> DecodeToExpressionAsync(Node node, Environment env, ExpressionVisitorState state)
+        private static async Task<Expression> DecodeToExpressionAsync(Node node, Environment env, ExpressionVisitorState state)
         {
             // TODO: don't try forever
             while (true)
@@ -684,18 +475,16 @@ namespace AnywhereNET
                     switch (node)
                     {
                         case ConstantNode n:
-                            // ensure the node has the environment so it can access the 
+                            // ensure the constant node has the current environment so it can access the 
                             // loaded assemblies while deserializing the value
                             n.Environment = env;
-                            //return Expression.Constant(n.Value, n.Type.ToType());
-                            // IMPORTANT: materialize the intended type before the value.
+                            // IMPORTANT: materialize the intended type explicitly first before the value.
+                            // doing so allows any missing/unloaded types to be properly resolved using the
+                            // exception handling code flow which requests the proper corresponding assembly.
                             // otherwise the deserialization and type binding used in Constant.Value
-                            // will not always resolve the correct assembly
+                            // may incorrectly bind to an already loaded assembly in the default context.
                             var intendedType = n.Type.ToType(env);
-                            var val = n.Value;// GetValue();
-                            var actualType = val.GetType();
-                            var sameType = actualType.Equals(intendedType);
-                            return Expression.Constant(val, intendedType);// n.Type.ToType());
+                            return Expression.Constant(n.Value, intendedType);
                         case LambdaNode n:
                             var body = await DecodeToExpressionAsync(n.Body, env, state);
                             var parameters = n.Parameters
@@ -739,25 +528,11 @@ namespace AnywhereNET
                 }
                 catch (Exception e) when (e is FileLoadException || e is FileNotFoundException)
                 {
-                    //try
-                    //{
                     await HandleMissingAssemblyException(e, env);
-                    //}
-                    //catch (Exception ex)
-                    //{
-                    //    throw;
-                    //}
                 }
                 catch (JsonSerializationException e)
                 {
-                    //try
-                    //{
                     await HandleMissingAssemblyException(e.InnerException, env);
-                    //}
-                    //catch (Exception ex)
-                    //{
-                    //    throw;
-                    //}
                 }
                 catch (Exception e)
                 {
@@ -789,7 +564,7 @@ namespace AnywhereNET
             // this conditional should never evaluate to true, but keep it here to prevent
             // potential infinite loops: if the correct assembly exists in Environment.LoadedAssemblies,
             // that means it was successfully loaded already, but if an exception was thrown indicating
-            // it could not be found, then something else must be going on
+            // it could not be found, then something else must be going on.
             // TODO: better understand whether this can ever happen, and how to handle it when it does
             if (env.LoadedAssemblies.ContainsKey(assemblyName))
             {
@@ -812,21 +587,65 @@ namespace AnywhereNET
                 throw new InvalidOperationException($"Could not resolve assembly '{assemblyName}'", e);
             }
 
-            // TODO: this is worth pursuing for proper code isolation,
-            // TODO: but JsonConvert.DeserializeObject will not be able to locate the assemblies to instantiate
-            // TODO: type instances unless the assemblies are in AssemblyLoadContext.Default
-            var contextName = env.AssemblyLoadContextName ?? nameof(AssemblyLoadContext.Default);
-            var context = AssemblyLoadContext.All.FirstOrDefault(x => x.Name == contextName);
-            if (context == null)
-            {
-                throw new InvalidOperationException($"Could not find {nameof(AssemblyLoadContext)} '{contextName}' in which to load assembly {assemblyName}");
-            }
+            // load the assembly into the environment context and cache its reference
+            var context = env.AssemblyContext ?? AssemblyLoadContext.Default;
             asm = context.LoadFromStream(stream);
-            //var asm = AssemblyLoadContext.Default.LoadFromStream(stream);
-
-            stream.Dispose();
-
             env.LoadedAssemblies.Add(assemblyName, asm);
+
+            // cleanup
+            stream.Dispose();
+        }
+
+        /// <summary>
+        /// Maintains state needed while recursively visiting an expression node tree.
+        /// </summary>
+        private class ExpressionVisitorState
+        {
+            /// <summary>
+            /// The single instance of the ExecutionContext referenced
+            /// throughout an encoded lambda expression. This is needed
+            /// to ensure all references to the ExecutionContext parameter use
+            /// the same instance.
+            /// </summary>
+            public ParameterExpression? ContextExpression { get; set; }
+        }
+
+        /// <summary>
+        /// A serialization binder to locate the correct type from the set of loaded assemblies
+        /// in a specific runtime Environment.
+        /// </summary>
+        private class DeserializeTypeBinder : ISerializationBinder
+        {
+            private Environment Environment;
+
+            public DeserializeTypeBinder(Environment environment)
+            {
+                Environment = environment;
+            }
+
+            /// <summary>
+            /// Used during deserialization to find the proper Type corresponding to the provided
+            /// assembly and type name.
+            /// </summary>
+            /// <param name="assemblyName"></param>
+            /// <param name="typeName"></param>
+            /// <returns></returns>
+            public Type BindToType(string assemblyName, string typeName)
+            {
+                if (Environment.LoadedAssemblies.TryGetValue(assemblyName, out Assembly asm))
+                {
+                    return asm.GetType(typeName);
+                }
+                throw new FileNotFoundException($"Could not resolve assembly '{assemblyName}' from current Environment.", assemblyName);
+            }
+
+            /// <summary>
+            /// NOT USED: Only for serialization.
+            /// </summary>
+            public void BindToName(Type serializedType, out string assemblyName, out string typeName)
+            {
+                throw new NotImplementedException();
+            }
         }
     }
 }
