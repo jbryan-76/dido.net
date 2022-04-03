@@ -111,7 +111,7 @@ namespace AnywhereNET
         /// <summary>
         /// A delegate method for resolving local runtime assemblies used by the host application.
         /// </summary>
-        public LocalAssemblyResolver? ResolveLocalAssemblyAsync = DefaultLocalAssemblyResolver.ResolveAssembly;
+        public LocalAssemblyResolver? ResolveLocalAssemblyAsync = new DefaultLocalAssemblyResolver().ResolveAssembly;
 
         public async Task<Tprop> Execute<Tprop>(Expression<Func<ExecutionContext, Tprop>> lambda)
         {

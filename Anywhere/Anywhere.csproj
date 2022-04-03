@@ -7,17 +7,14 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="MethodModel.cs" />
-    <Compile Remove="MethodModelDeserializer.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
     <None Remove="MethodModelBuilder.cs.DELETE" />
+    <None Remove="TypeModel.cs.DELETE" />
+    <None Remove="ValueModel.cs.DELETE" />
   </ItemGroup>
 
   <ItemGroup>
-    <None Include="MethodModel.cs" />
-    <None Include="MethodModelDeserializer.cs" />
+    <Compile Include="TypeModel.cs.DELETE" />
+    <Compile Include="ValueModel.cs.DELETE" />
   </ItemGroup>
 
   <ItemGroup>

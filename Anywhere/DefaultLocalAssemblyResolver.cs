@@ -4,18 +4,25 @@ namespace AnywhereNET
 {
     public class DefaultLocalAssemblyResolver
     {
+        private List<string> AssemblyFiles = new List<string>();
+
         /// <summary>
         /// Resolve and return the provided assembly from the default application domain.
         /// </summary>
         /// <param name="assemblyName"></param>
         /// <returns></returns>
-        public static Task<Stream?> ResolveAssembly(string assemblyName)
+        public Task<Stream?> ResolveAssembly(string assemblyName)
         {
-            // TODO: memoize this
             // TODO: recursive?
             // enumerate all the assembly files in the application directory
-            var files = Directory.EnumerateFiles(AppContext.BaseDirectory, $"*.{OS.AssemblyExtension}");
-            foreach (var file in files)
+            if (AssemblyFiles.Count == 0)
+            {
+                AssemblyFiles = Directory
+                    .EnumerateFiles(AppContext.BaseDirectory, $"*.{OS.AssemblyExtension}")
+                    .ToList();
+            }
+
+            foreach (var file in AssemblyFiles)
             {
                 try
                 {
@@ -23,7 +30,8 @@ namespace AnywhereNET
                     AssemblyName name = AssemblyName.GetAssemblyName(file);
                     if (name.FullName == assemblyName)
                     {
-                        return Task.FromResult<Stream?>(File.Open(file, FileMode.Open, FileAccess.Read));
+                        // TODO: cache this?
+                        return Task.FromResult<Stream?>(File.Open(file, FileMode.Open, FileAccess.Read, FileShare.Read));
                     }
                 }
                 catch (Exception)

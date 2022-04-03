@@ -255,9 +255,18 @@ namespace AnywhereNET
             public string AssemblyName { get; set; }
             public string RuntimeVersion { get; set; }
 
-            public Type ToType()
+            public Type ToType(Environment env)
             {
-                return Type.GetType(Name, true);
+                if (env.LoadedAssemblies.TryGetValue(AssemblyName, out Assembly asm))
+                {
+                    var types = asm.GetTypes();
+                    var type = asm.GetType(Name);
+                    var name = Name.Split(new char[] { ',' }).FirstOrDefault();
+                    var foo = asm.GetType(name);
+                    return foo;
+                }
+                throw new FileNotFoundException($"Could not resolve assembly '{AssemblyName}' from current Environment.", AssemblyName);
+                //return Type.GetType(Name, true);
             }
 
             public override bool Equals(object? obj)
@@ -309,9 +318,9 @@ namespace AnywhereNET
                 ReturnType = new TypeModel(info.ReturnType);
             }
 
-            public new MethodInfo ToInfo()
+            public new MethodInfo ToInfo(Environment env)
             {
-                var declaringType = DeclaringType.ToType();
+                var declaringType = DeclaringType.ToType(env);
                 return declaringType.GetMethod(Name, AllMembers);
             }
         }
@@ -328,9 +337,9 @@ namespace AnywhereNET
                 DeclaringType = new TypeModel(info.DeclaringType);
             }
 
-            public MemberInfo ToInfo()
+            public MemberInfo ToInfo(Environment env)
             {
-                var declaringType = DeclaringType.ToType();
+                var declaringType = DeclaringType.ToType(env);
                 return declaringType.GetMember(Name, AllMembers).FirstOrDefault();
             }
         }
@@ -403,7 +412,7 @@ namespace AnywhereNET
                             (_valueObject.GetType() == typeof(double) && Type != typeof(double))
                             )
                         {
-                            _valueObject = Convert.ChangeType(_valueObject, Type.ToType());
+                            _valueObject = Convert.ChangeType(_valueObject, Type.ToType(environment));
                         }
                     }
                     return _valueObject;
@@ -682,10 +691,10 @@ namespace AnywhereNET
                             // IMPORTANT: materialize the intended type before the value.
                             // otherwise the deserialization and type binding used in Constant.Value
                             // will not always resolve the correct assembly
-                            var intendedType = n.Type.ToType();
-                            //var actualType = n.GetValue().GetType();
-                            //var sameType = actualType.Equals(intendedType);
+                            var intendedType = n.Type.ToType(env);
                             var val = n.Value;// GetValue();
+                            var actualType = val.GetType();
+                            var sameType = actualType.Equals(intendedType);
                             return Expression.Constant(val, intendedType);// n.Type.ToType());
                         case LambdaNode n:
                             var body = await DecodeToExpressionAsync(n.Body, env, state);
@@ -695,18 +704,18 @@ namespace AnywhereNET
                                 .ToArray();
                             return Expression.Lambda(body, n.Name, parameters);
                         case MemberNode n:
-                            return Expression.MakeMemberAccess(await DecodeToExpressionAsync(n.Expression, env, state), n.Member.ToInfo());
+                            return Expression.MakeMemberAccess(await DecodeToExpressionAsync(n.Expression, env, state), n.Member.ToInfo(env));
                         case MethodCallNode n:
                             return Expression.Call(
                                 n.Object == null ? null : await DecodeToExpressionAsync(n.Object, env, state),
-                                n.Method.ToInfo(),
+                                n.Method.ToInfo(env),
                                 n.Arguments
                                     .Select(async a => await DecodeToExpressionAsync(a, env, state))
                                     .Select(t => t.Result)
                                     .ToArray()
                                     );
                         case ParameterNode n:
-                            var exp = Expression.Parameter(n.Type.ToType(), n.Name);
+                            var exp = Expression.Parameter(n.Type.ToType(env), n.Name);
                             // by design, the only supported expressions are lambdas with a single ExecutionContext parameter.
                             // as soon as a parameter with this type is encountered, remember its ParameterExpression
                             // so it can be reused/substituted throuhgout the rest of the lambda body expressions.
@@ -723,18 +732,32 @@ namespace AnywhereNET
                                 return exp;
                             }
                         case UnaryNode n:
-                            return Expression.MakeUnary(n.ExpressionType, await DecodeToExpressionAsync(n.Operand, env, state), n.Type.ToType());
+                            return Expression.MakeUnary(n.ExpressionType, await DecodeToExpressionAsync(n.Operand, env, state), n.Type.ToType(env));
                         default:
                             throw new NotSupportedException($"Node type {node.GetType()} not yet supported.");
                     }
                 }
                 catch (Exception e) when (e is FileLoadException || e is FileNotFoundException)
                 {
-                    HandleMissingAssemblyException(e, env);
+                    //try
+                    //{
+                    await HandleMissingAssemblyException(e, env);
+                    //}
+                    //catch (Exception ex)
+                    //{
+                    //    throw;
+                    //}
                 }
                 catch (JsonSerializationException e)
                 {
-                    HandleMissingAssemblyException(e.InnerException, env);
+                    //try
+                    //{
+                    await HandleMissingAssemblyException(e.InnerException, env);
+                    //}
+                    //catch (Exception ex)
+                    //{
+                    //    throw;
+                    //}
                 }
                 catch (Exception e)
                 {
@@ -745,7 +768,7 @@ namespace AnywhereNET
             }
         }
 
-        internal static async void HandleMissingAssemblyException(Exception e, Environment env)
+        internal static async Task HandleMissingAssemblyException(Exception e, Environment env)
         {
             string assemblyName = "";
             if (e is FileNotFoundException)
@@ -773,9 +796,17 @@ namespace AnywhereNET
                 throw new InvalidOperationException($"Could not resolve assembly '{assemblyName}'", e);
             }
 
-            // assembly not found. try to resolve it
-            var stream = await env.ResolveRemoteAssemblyAsync(env, assemblyName);
+            // check if the assembly is already loaded into the default context
+            // (this will be common eg for standard .NET assemblies, eg System)
+            var asm = AssemblyLoadContext.Default.Assemblies.FirstOrDefault(asm => asm.FullName == assemblyName);
+            if (asm != null)
+            {
+                env.LoadedAssemblies.Add(assemblyName, asm);
+                return;
+            }
 
+            // assembly not found. try to resolve it from the remote host
+            var stream = await env.ResolveRemoteAssemblyAsync(env, assemblyName);
             if (stream == null)
             {
                 throw new InvalidOperationException($"Could not resolve assembly '{assemblyName}'", e);
@@ -784,14 +815,14 @@ namespace AnywhereNET
             // TODO: this is worth pursuing for proper code isolation,
             // TODO: but JsonConvert.DeserializeObject will not be able to locate the assemblies to instantiate
             // TODO: type instances unless the assemblies are in AssemblyLoadContext.Default
-            //var contextName = env.AssemblyLoadContextName ?? nameof(AssemblyLoadContext.Default);
-            //var context = AssemblyLoadContext.All.FirstOrDefault(x => x.Name == contextName);
-            //if( context == null)
-            //{
-            //    throw new InvalidOperationException($"Could not find {nameof(AssemblyLoadContext)} name '{contextName}' in which to load assembly {assemblyName}");
-            //}
-            //context.LoadFromStream(stream);
-            var asm = AssemblyLoadContext.Default.LoadFromStream(stream);
+            var contextName = env.AssemblyLoadContextName ?? nameof(AssemblyLoadContext.Default);
+            var context = AssemblyLoadContext.All.FirstOrDefault(x => x.Name == contextName);
+            if (context == null)
+            {
+                throw new InvalidOperationException($"Could not find {nameof(AssemblyLoadContext)} '{contextName}' in which to load assembly {assemblyName}");
+            }
+            asm = context.LoadFromStream(stream);
+            //var asm = AssemblyLoadContext.Default.LoadFromStream(stream);
 
             stream.Dispose();
 

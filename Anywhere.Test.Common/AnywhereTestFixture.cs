@@ -47,14 +47,23 @@ namespace AnywhereNET.Test.Common
 
         public Environment Environment;
 
+        private Dictionary<string, byte[]> AssemblyCache = new Dictionary<string, byte[]>();
+
+        private List<string> AssemblyFiles = new List<string>();
+
+        private AssemblyLoadContext TestAssemblyLoadContext;
+
         /// <summary>
         /// Global test setup (only called once)
         /// </summary>
         public AnywhereTestFixture()
         {
+            // create a directory to hold test data that should be shared between
+            // the "Anywhere.Test" and "Anywhere.TestEnv" projects
             SharedTestDataPath = Path.Combine(Path.GetTempPath(), SharedTestDataFolder);
             Directory.CreateDirectory(SharedTestDataPath);
 
+            // set up the singleton anywhere instance
             Anywhere = new Anywhere
             {
                 ExecutionMode = ExecutionModes.Local,
@@ -63,6 +72,7 @@ namespace AnywhereNET.Test.Common
 
             //Anywhere.ResolveAssembly = UnitTestAssemblyResolver;
 
+            // set up the singleton environment instance
             Environment = new Environment
             {
                 //ApplicationChannel
@@ -70,8 +80,12 @@ namespace AnywhereNET.Test.Common
                 Context = new ExecutionContext
                 {
                     ExecutionMode = ExecutionModes.Local,
-                }
+                },
+                AssemblyLoadContextName = "test"
             };
+
+            // create a test context to load assemblies
+            TestAssemblyLoadContext = new AssemblyLoadContext(Environment.AssemblyLoadContextName, true);
         }
 
         /// <summary>
@@ -134,17 +148,39 @@ namespace AnywhereNET.Test.Common
         {
             lock (Anywhere)
             {
-                // TODO: memoize this
-                var files = Directory.EnumerateFiles(TestLibAssembliesFolder, $"*.{AnywhereNET.OS.AssemblyExtension}");
-                //files = files.Concat(Directory.EnumerateFiles(CurrentTestAssembliesFolder, $"*.{AnywhereNET.OS.AssemblyExtension}"));
-                foreach (var file in files)
+                // see if the assembly is already in the cache
+                if (AssemblyCache.ContainsKey(assemblyName))
+                {
+                    return Task.FromResult<Stream?>(new MemoryStream(AssemblyCache[assemblyName]));
+                }
+
+                // get the set of available assembly files in the TestLib project
+                if (AssemblyFiles.Count == 0)
+                {
+                    AssemblyFiles = Directory
+                        .EnumerateFiles(TestLibAssembliesFolder, $"*.{OS.AssemblyExtension}")
+                        .ToList();
+                }
+
+                // try to find the requested assembly by name
+                foreach (var file in AssemblyFiles)
                 {
                     try
                     {
                         AssemblyName name = AssemblyName.GetAssemblyName(file);
                         if (name.FullName == assemblyName)
                         {
-                            return Task.FromResult<Stream?>(File.Open(file, FileMode.Open, FileAccess.Read));
+                            using (var fileStream = File.Open(file, FileMode.Open, FileAccess.Read, FileShare.Read))
+                            {
+                                // cache it
+                                var memStream = new MemoryStream();
+                                fileStream.CopyTo(memStream);
+                                AssemblyCache.Add(assemblyName, memStream.ToArray());
+
+                                // then return it
+                                memStream.Position = 0;
+                                return Task.FromResult<Stream?>(memStream);
+                            }
                         }
                     }
                     catch (Exception)
@@ -158,7 +194,17 @@ namespace AnywhereNET.Test.Common
                 var asm = AssemblyLoadContext.Default.Assemblies.FirstOrDefault(a => a.FullName == assemblyName);
                 if (asm != null && !string.IsNullOrEmpty(asm.Location))
                 {
-                    return Task.FromResult<Stream?>(File.Open(asm.Location, FileMode.Open, FileAccess.Read, FileShare.Read));
+                    using (var fileStream = File.Open(asm.Location, FileMode.Open, FileAccess.Read, FileShare.Read))
+                    {
+                        // cache it
+                        var memStream = new MemoryStream();
+                        fileStream.CopyTo(memStream);
+                        AssemblyCache.Add(assemblyName, memStream.ToArray());
+
+                        // then return it
+                        memStream.Position = 0;
+                        return Task.FromResult<Stream?>(memStream);
+                    }
                 }
 
                 // return null if no matching assembly could be found
