@@ -2,12 +2,17 @@
 
 namespace AnywhereNET
 {
+    /// <summary>
+    /// A default implementation to resolve assemblies using the application's 
+    /// local base directory.
+    /// </summary>
     public class DefaultLocalAssemblyResolver
     {
         private List<string> AssemblyFiles = new List<string>();
 
         /// <summary>
         /// Resolve and return the provided assembly from the default application domain.
+        /// In practice this resolves the assembly from the application's base directory.
         /// </summary>
         /// <param name="assemblyName"></param>
         /// <returns></returns>

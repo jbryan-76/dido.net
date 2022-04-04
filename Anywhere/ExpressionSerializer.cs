@@ -412,7 +412,7 @@ namespace AnywhereNET
                         return new MemberNode
                         {
                             ExpressionType = exp.NodeType,
-                            Expression = EncodeFromExpression(exp.Expression, exp),
+                            Expression = exp.Expression != null ? EncodeFromExpression(exp.Expression, exp) : null,
                             Member = new MemberInfoModel(exp.Member)
                         };
                     }
@@ -493,7 +493,9 @@ namespace AnywhereNET
                                 .ToArray();
                             return Expression.Lambda(body, n.Name, parameters);
                         case MemberNode n:
-                            return Expression.MakeMemberAccess(await DecodeToExpressionAsync(n.Expression, env, state), n.Member.ToInfo(env));
+                            return Expression.MakeMemberAccess(
+                                n.Expression != null ? await DecodeToExpressionAsync(n.Expression, env, state) : null,
+                                n.Member.ToInfo(env));
                         case MethodCallNode n:
                             return Expression.Call(
                                 n.Object == null ? null : await DecodeToExpressionAsync(n.Object, env, state),

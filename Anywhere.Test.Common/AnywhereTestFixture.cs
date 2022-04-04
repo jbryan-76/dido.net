@@ -46,6 +46,8 @@ namespace AnywhereNET.Test.Common
 
         private List<string> AssemblyFiles = new List<string>();
 
+        private DebugRemoteAssemblyResolver AssemblyResolver;
+
         /// <summary>
         /// Global test setup (only called once)
         /// </summary>
@@ -56,25 +58,28 @@ namespace AnywhereNET.Test.Common
             SharedTestDataPath = Path.Combine(Path.GetTempPath(), SharedTestDataFolder);
             Directory.CreateDirectory(SharedTestDataPath);
 
-            // set up the singleton anywhere instance
-            Anywhere = new Anywhere
-            {
-                ExecutionMode = ExecutionModes.Local,
-                ResolveLocalAssemblyAsync = UnitTestLocalAssemblyResolver
-            };
+            AssemblyResolver = new DebugRemoteAssemblyResolver(TestLibAssembliesFolder);
 
             //Anywhere.ResolveAssembly = UnitTestAssemblyResolver;
 
-            // set up the singleton environment instance
+            // set up a singleton environment instance
             Environment = new Environment
             {
                 //ApplicationChannel
-                ResolveRemoteAssemblyAsync = UnitTestRemoteAssemblyResolver,
+                //ResolveRemoteAssemblyAsync = UnitTestRemoteAssemblyResolver,
+                ResolveRemoteAssemblyAsync = AssemblyResolver.ResolveAssembly,// new DebugRemoteAssemblyResolver(TestLibAssembliesFolder).ResolveAssembly,
                 Context = new ExecutionContext
                 {
                     ExecutionMode = ExecutionModes.Local,
                 },
                 AssemblyContext = new AssemblyLoadContext("test", true)
+            };
+
+            // set up a singleton anywhere instance
+            Anywhere = new Anywhere
+            {
+                ExecutionMode = ExecutionModes.Local,
+                ResolveLocalAssemblyAsync = (assemblyName) => AssemblyResolver.ResolveAssembly(Environment, assemblyName) //UnitTestLocalAssemblyResolver
             };
         }
 
@@ -128,92 +133,92 @@ namespace AnywhereNET.Test.Common
             return testLibFolder;
         }
 
-        /// <summary>
-        /// Resolve and return the provided assembly.
-        /// This implementation is specifically to support unit test projects.
-        /// </summary>
-        /// <param name="assemblyName"></param>
-        /// <returns></returns>
-        Task<Stream?> UnitTestLocalAssemblyResolver(string assemblyName)
-        {
-            lock (Anywhere)
-            {
-                // see if the assembly is already in the cache
-                if (AssemblyCache.ContainsKey(assemblyName))
-                {
-                    return Task.FromResult<Stream?>(new MemoryStream(AssemblyCache[assemblyName]));
-                }
+        ///// <summary>
+        ///// Resolve and return the provided assembly.
+        ///// This implementation is specifically to support unit test projects.
+        ///// </summary>
+        ///// <param name="assemblyName"></param>
+        ///// <returns></returns>
+        //Task<Stream?> UnitTestLocalAssemblyResolver(string assemblyName)
+        //{
+        //    lock (Anywhere)
+        //    {
+        //        // see if the assembly is already in the cache
+        //        if (AssemblyCache.ContainsKey(assemblyName))
+        //        {
+        //            return Task.FromResult<Stream?>(new MemoryStream(AssemblyCache[assemblyName]));
+        //        }
 
-                // get the set of available assembly files in the TestLib project
-                if (AssemblyFiles.Count == 0)
-                {
-                    AssemblyFiles = Directory
-                        .EnumerateFiles(TestLibAssembliesFolder, $"*.{OS.AssemblyExtension}")
-                        .ToList();
-                }
+        //        // get the set of available assembly files in the TestLib project
+        //        if (AssemblyFiles.Count == 0)
+        //        {
+        //            AssemblyFiles = Directory
+        //                .EnumerateFiles(TestLibAssembliesFolder, $"*.{OS.AssemblyExtension}")
+        //                .ToList();
+        //        }
 
-                // try to find the requested assembly by name
-                foreach (var file in AssemblyFiles)
-                {
-                    try
-                    {
-                        AssemblyName name = AssemblyName.GetAssemblyName(file);
-                        if (name.FullName == assemblyName)
-                        {
-                            using (var fileStream = File.Open(file, FileMode.Open, FileAccess.Read, FileShare.Read))
-                            {
-                                // cache it
-                                var memStream = new MemoryStream();
-                                fileStream.CopyTo(memStream);
-                                AssemblyCache.Add(assemblyName, memStream.ToArray());
+        //        // try to find the requested assembly by name
+        //        foreach (var file in AssemblyFiles)
+        //        {
+        //            try
+        //            {
+        //                AssemblyName name = AssemblyName.GetAssemblyName(file);
+        //                if (name.FullName == assemblyName)
+        //                {
+        //                    using (var fileStream = File.Open(file, FileMode.Open, FileAccess.Read, FileShare.Read))
+        //                    {
+        //                        // cache it
+        //                        var memStream = new MemoryStream();
+        //                        fileStream.CopyTo(memStream);
+        //                        AssemblyCache.Add(assemblyName, memStream.ToArray());
 
-                                // then return it
-                                memStream.Position = 0;
-                                return Task.FromResult<Stream?>(memStream);
-                            }
-                        }
-                    }
-                    catch (Exception)
-                    {
-                        // exception will be thrown if the file is not a .NET assembly, in which case simply ignore
-                        continue;
-                    }
-                }
+        //                        // then return it
+        //                        memStream.Position = 0;
+        //                        return Task.FromResult<Stream?>(memStream);
+        //                    }
+        //                }
+        //            }
+        //            catch (Exception)
+        //            {
+        //                // exception will be thrown if the file is not a .NET assembly, in which case simply ignore
+        //                continue;
+        //            }
+        //        }
 
-                // as a backstop, see if the desired assembly is actually already loaded
-                var asm = AssemblyLoadContext.Default.Assemblies.FirstOrDefault(a => a.FullName == assemblyName);
-                if (asm != null && !string.IsNullOrEmpty(asm.Location))
-                {
-                    using (var fileStream = File.Open(asm.Location, FileMode.Open, FileAccess.Read, FileShare.Read))
-                    {
-                        // cache it
-                        var memStream = new MemoryStream();
-                        fileStream.CopyTo(memStream);
-                        AssemblyCache.Add(assemblyName, memStream.ToArray());
+        //        // as a backstop, see if the desired assembly is actually already loaded
+        //        var asm = AssemblyLoadContext.Default.Assemblies.FirstOrDefault(a => a.FullName == assemblyName);
+        //        if (asm != null && !string.IsNullOrEmpty(asm.Location))
+        //        {
+        //            using (var fileStream = File.Open(asm.Location, FileMode.Open, FileAccess.Read, FileShare.Read))
+        //            {
+        //                // cache it
+        //                var memStream = new MemoryStream();
+        //                fileStream.CopyTo(memStream);
+        //                AssemblyCache.Add(assemblyName, memStream.ToArray());
 
-                        // then return it
-                        memStream.Position = 0;
-                        return Task.FromResult<Stream?>(memStream);
-                    }
-                }
+        //                // then return it
+        //                memStream.Position = 0;
+        //                return Task.FromResult<Stream?>(memStream);
+        //            }
+        //        }
 
-                // return null if no matching assembly could be found
-                return Task.FromResult<Stream?>(null);
-            }
-        }
+        //        // return null if no matching assembly could be found
+        //        return Task.FromResult<Stream?>(null);
+        //    }
+        //}
 
-        /// <summary>
-        /// Resolve and return the provided assembly.
-        /// This implementation is specifically to support unit test projects.
-        /// </summary>
-        /// <param name="env"></param>
-        /// <param name="assemblyName"></param>
-        /// <returns></returns>
-        Task<Stream?> UnitTestRemoteAssemblyResolver(Environment env, string assemblyName)
-        {
-            // TODO: use a custom stream to simulate the message passing to negotiate file loading?
-            return UnitTestLocalAssemblyResolver(assemblyName);
-        }
+        ///// <summary>
+        ///// Resolve and return the provided assembly.
+        ///// This implementation is specifically to support unit test projects.
+        ///// </summary>
+        ///// <param name="env"></param>
+        ///// <param name="assemblyName"></param>
+        ///// <returns></returns>
+        //Task<Stream?> UnitTestRemoteAssemblyResolver(Environment env, string assemblyName)
+        //{
+        //    // TODO: use a custom stream to simulate the message passing to negotiate file loading?
+        //    return UnitTestLocalAssemblyResolver(assemblyName);
+        //}
 
     }
 }

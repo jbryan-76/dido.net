@@ -18,8 +18,6 @@ namespace AnywhereNET.Test
             TestFixture = fixture;
         }
 
-        // TODO: these fields can't be static. figure out why
-
         SampleDependencyClass DependencyModel = new SampleDependencyClass
         {
             MyString = "my string",
@@ -50,26 +48,22 @@ namespace AnywhereNET.Test
         public async void GenerateSerializedMethodInvocationData()
         {
             // serialize a lambda expression invoking a member method
-            //var data = TestFixture.Anywhere.Serialize((context) => FakeObject.SimpleMemberMethod(FakeArgument));
             FakeArgument = 111;
-            var bytes = await TestFixture.Anywhere.Serialize((context) => FakeObject.SimpleMemberMethod(FakeArgument));
+            var bytes = await TestFixture.Anywhere.SerializeAsync((context) => FakeObject.SimpleMemberMethod(FakeArgument));
             // save the serialized model
             var path = Path.Combine(TestFixture.SharedTestDataPath, AnywhereTestFixture.MemberMethodFile);
             File.WriteAllBytes(path, bytes);
-            //File.WriteAllText(path, data);
             // save the expected result
             var result = FakeObject.SimpleMemberMethod(FakeArgument);
             path = Path.Combine(TestFixture.SharedTestDataPath, AnywhereTestFixture.MemberResultFile);
             File.WriteAllText(path, Newtonsoft.Json.JsonConvert.SerializeObject(result));
 
             // serialize a lambda expression invoking a static method
-            //var data = TestFixture.Anywhere.Serialize((context) => SampleWorkerClass.SimpleStaticMethod(FakeArgument));
             FakeArgument = 222;
-            bytes = await TestFixture.Anywhere.Serialize((context) => SampleWorkerClass.SimpleStaticMethod(FakeArgument));
+            bytes = await TestFixture.Anywhere.SerializeAsync((context) => SampleWorkerClass.SimpleStaticMethod(FakeArgument));
             // save the serialized model
             path = Path.Combine(TestFixture.SharedTestDataPath, AnywhereTestFixture.StaticMethodFile);
             File.WriteAllBytes(path, bytes);
-            //File.WriteAllText(path, data);
             // save the expected result
             result = SampleWorkerClass.SimpleStaticMethod(FakeArgument);
             path = Path.Combine(TestFixture.SharedTestDataPath, AnywhereTestFixture.StaticResultFile);
@@ -84,12 +78,10 @@ namespace AnywhereNET.Test
                 MyDateTimeOffset = new DateTimeOffset(new DateTime(2000, 2, 2, 2, 2, 2)),
                 MyInt = 42
             };
-            bytes = await TestFixture.Anywhere.Serialize((context) => FakeObject.MemberMethodWithDependency(DependencyModel));
-            //data = TestFixture.Anywhere.Serialize((context) => FakeObject.MemberMethodWithDependency(DependencyModel));
+            bytes = await TestFixture.Anywhere.SerializeAsync((context) => FakeObject.MemberMethodWithDependency(DependencyModel));
             // save the serialized model
             path = Path.Combine(TestFixture.SharedTestDataPath, AnywhereTestFixture.DependencyMethodFile);
             File.WriteAllBytes(path, bytes);
-            //File.WriteAllText(path, data);
             // save the expected result
             var dependencyResult = FakeObject.MemberMethodWithDependency(DependencyModel);
             path = Path.Combine(TestFixture.SharedTestDataPath, AnywhereTestFixture.DependencyResultFile);
@@ -97,43 +89,43 @@ namespace AnywhereNET.Test
         }
 
         /// <summary>
-        /// This test verifies a lambda invoking a member method on a class is properly 
+        /// This test verifies a lambda invoking a member method on unit test members is properly 
         /// (de)serialized and invoked.
         /// </summary>
         [Fact]
         public async void TestMemberMethod()
         {
+            // set up the test objects
             FakeArgument = 456;
-            var data = await TestFixture.Anywhere.Serialize((context) => FakeObject.SimpleMemberMethod(FakeArgument));
-            var lambda = await TestFixture.Anywhere.Deserialize<int>(data, TestFixture.Environment);
+
+            // serialize, deserialize, execute, and verify
+            var data = await TestFixture.Anywhere.SerializeAsync((context) => FakeObject.SimpleMemberMethod(FakeArgument));
+            var lambda = await TestFixture.Anywhere.DeserializeAsync<int>(data, TestFixture.Environment);
             var result = lambda.Invoke(TestFixture.Environment.Context);
-
-            //var data = TestFixture.Anywhere.Serialize((context) => FakeObject.SimpleMemberMethod(FakeArgument));
-            //var data = TestFixture.Anywhere.Serialize((context) => FakeObject.SimpleMemberMethod(FakeArgument));
-            ////var method = MethodModelBuilder.Deserialize(data);
-            //var method = await MethodModelDeserializer.DeserializeAsync(TestFixture.Environment, data);
-            //var result = method.Invoke();
-
             Assert.Equal(FakeArgument, result);
         }
 
+        /// <summary>
+        /// This test verifies a lambda invoking a member method on a local closure object is properly 
+        /// (de)serialized and invoked.
+        /// </summary>
         [Fact]
         public async void TestLocalObjects()
         {
+            // set up the test objects
             var obj = new SampleWorkerClass();
             int arg = 123;
 
-            var data = await TestFixture.Anywhere.Serialize((context) => obj.SimpleMemberMethod(arg));
-            var lambda = await TestFixture.Anywhere.Deserialize<int>(data, TestFixture.Environment);
+            // serialize, deserialize, execute, and verify
+            var data = await TestFixture.Anywhere.SerializeAsync((context) => obj.SimpleMemberMethod(arg));
+            var lambda = await TestFixture.Anywhere.DeserializeAsync<int>(data, TestFixture.Environment);
             var result = lambda.Invoke(TestFixture.Environment.Context);
-
-            //var data = TestFixture.Anywhere.Serialize((context) => obj.SimpleMemberMethod(arg));
-            //var method = await MethodModelDeserializer.DeserializeAsync(TestFixture.Environment, data);
-            //var result = method.Invoke();
-
             Assert.Equal(arg, result);
         }
 
+        /// <summary>
+        /// This test verifies (de)serialization and execution using json as the data format.
+        /// </summary>
         [Fact]
         public async void TestLambdaSerializeToJson()
         {
@@ -170,6 +162,9 @@ namespace AnywhereNET.Test
             Assert.Equal(expectedResult, result);
         }
 
+        /// <summary>
+        /// This test verifies (de)serialization and execution using bson as the data format.
+        /// </summary>
         [Fact]
         public async void TestLambdaSerializeToBson()
         {
@@ -209,8 +204,8 @@ namespace AnywhereNET.Test
         public async void TestStaticMethod()
         {
             FakeArgument = 456;
-            var data = await TestFixture.Anywhere.Serialize((context) => SampleWorkerClass.SimpleStaticMethod(FakeArgument));
-            var lambda = await TestFixture.Anywhere.Deserialize<int>(data, TestFixture.Environment);
+            var data = await TestFixture.Anywhere.SerializeAsync((context) => SampleWorkerClass.SimpleStaticMethod(FakeArgument));
+            var lambda = await TestFixture.Anywhere.DeserializeAsync<int>(data, TestFixture.Environment);
             var result = lambda.Invoke(TestFixture.Environment.Context);
 
             //var data = TestFixture.Anywhere.Serialize((context) => SampleWorkerClass.SimpleStaticMethod(FakeArgument));
@@ -237,17 +232,10 @@ namespace AnywhereNET.Test
                     MyDateTimeOffset = DateTimeOffset.Now,
                 }
             };
-            var data = await TestFixture.Anywhere.Serialize((context) => FakeObject.MemberMethodWithDependency(depModel));
-            //var data = await TestFixture.Anywhere.SerializeNew((context) => FakeObject.MemberMethodWithDependency(DependencyModel));
-            var lambda = await TestFixture.Anywhere.Deserialize<string>(data, TestFixture.Environment);
+            var data = await TestFixture.Anywhere.SerializeAsync((context) => FakeObject.MemberMethodWithDependency(depModel));
+            var lambda = await TestFixture.Anywhere.DeserializeAsync<string>(data, TestFixture.Environment);
             var actualResult = lambda.Invoke(TestFixture.Environment.Context);
-
-            //var data = TestFixture.Anywhere.Serialize((context) => FakeObject.MemberMethodWithDependency(DependencyModel));
-            //var method = await MethodModelDeserializer.DeserializeAsync(TestFixture.Environment, data);
-            //var actualResult = method.Invoke();
             var expectedResult = FakeObject.MemberMethodWithDependency(depModel);
-            //var expectedResult = FakeObject.MemberMethodWithDependency(DependencyModel);
-
             Assert.Equal(expectedResult, actualResult);
         }
 
@@ -258,8 +246,8 @@ namespace AnywhereNET.Test
         [Fact]
         public async void TestMemberMethodWithDependency()
         {
-            var data = await TestFixture.Anywhere.Serialize((context) => FakeObject.MemberMethodWithDependency(DependencyModel));
-            var lambda = await TestFixture.Anywhere.Deserialize<string>(data, TestFixture.Environment);
+            var data = await TestFixture.Anywhere.SerializeAsync((context) => FakeObject.MemberMethodWithDependency(DependencyModel));
+            var lambda = await TestFixture.Anywhere.DeserializeAsync<string>(data, TestFixture.Environment);
             var actualResult = lambda.Invoke(TestFixture.Environment.Context);
             var expectedResult = FakeObject.MemberMethodWithDependency(DependencyModel);
             Assert.Equal(expectedResult, actualResult);
@@ -274,15 +262,10 @@ namespace AnywhereNET.Test
         {
             string closureVal = "hello world";
 
-            var data = await TestFixture.Anywhere.Serialize((context) => Foo(context, 23, closureVal));
-            var lambda = await TestFixture.Anywhere.Deserialize<string>(data, TestFixture.Environment);
+            var data = await TestFixture.Anywhere.SerializeAsync((context) => Foo(context, 23, closureVal));
+            var lambda = await TestFixture.Anywhere.DeserializeAsync<string>(data, TestFixture.Environment);
             var actualResult = lambda.Invoke(TestFixture.Environment.Context);
-
-            //var data = TestFixture.Anywhere.Serialize((context) => Foo(context, 23, closureVal));
-            //var method = await MethodModelDeserializer.DeserializeAsync(TestFixture.Environment, data);
-            //var actualResult = method.Invoke();
             var expectedResult = Foo(TestFixture.Environment.Context, 23, closureVal);
-
             Assert.Equal(expectedResult, actualResult);
         }
 
@@ -326,83 +309,16 @@ namespace AnywhereNET.Test
             var lambda = Expression.Lambda<Func<ExecutionContext, int>>(bodyEx, contextParamEx);
 
             // serialize both lambdas and confirm they match
-            var expectedData2 = await TestFixture.Anywhere.Serialize(expectedLambda);
-            var actualData2 = await TestFixture.Anywhere.Serialize(lambda);
+            var expectedData2 = await TestFixture.Anywhere.SerializeAsync(expectedLambda);
+            var actualData2 = await TestFixture.Anywhere.SerializeAsync(lambda);
             Assert.True(System.Linq.Enumerable.SequenceEqual(expectedData2, actualData2));
 
-            //var expectedData = TestFixture.Anywhere.Serialize(expectedLambda);
-            //var actualData = TestFixture.Anywhere.Serialize(lambda);
-            //Assert.Equal(expectedData, actualData);
-
             // deserialize and execute both lambdas and confirm the results match
-            var expectedMethod2 = await TestFixture.Anywhere.Deserialize<int>(expectedData2, TestFixture.Environment);
+            var expectedMethod2 = await TestFixture.Anywhere.DeserializeAsync<int>(expectedData2, TestFixture.Environment);
             var expectedResult2 = expectedMethod2.Invoke(TestFixture.Environment.Context);
-            var actualMethod2 = await TestFixture.Anywhere.Deserialize<int>(actualData2, TestFixture.Environment);
+            var actualMethod2 = await TestFixture.Anywhere.DeserializeAsync<int>(actualData2, TestFixture.Environment);
             var actualResult2 = actualMethod2.Invoke(TestFixture.Environment.Context);
             Assert.Equal(expectedResult2, actualResult2);
-
-            //var expectedMethod = await MethodModelDeserializer.DeserializeAsync(TestFixture.Environment, expectedData);
-            //var expectedResult = expectedMethod.Invoke();
-            //var actualMethod = await MethodModelDeserializer.DeserializeAsync(TestFixture.Environment, actualData);
-            //var actualResult = actualMethod.Invoke();
-
-            //Assert.Equal(expectedResult, actualResult);
         }
-
-        //[Fact]
-        //public async void TestExplicityCreatedLambda2()
-        //{
-        //    var obj = new SampleWorkerClass();
-        //    int arg = 123;
-
-        //    // this is the target expected lambda expression, which is created using the assemblies and models
-        //    // already loaded as dependencies to this unit test project. like the other unit tests
-        //    // in this class, it is simply a lambda that invokes a single-argument method on an object.
-        //    Expression<Func<ExecutionContext, int>> expectedLambda =
-        //        (context) => obj.SimpleMemberMethod(arg);
-
-        //    // the below statements are explicitly creating a lambda expression that is
-        //    // equivalent to the target expression above, except technically without needing the actual
-        //    // assemblies containing the referenced classes to be loaded
-
-        //    //// an expression referring to 'this' object (ie the test class instance)
-        //    //var thisObjEx = Expression.Constant(this);
-
-        //    //// an expression referring to the "FakeObject" member of this class
-        //    //var objEx = Expression.MakeMemberAccess(thisObjEx, typeof(SerializationAndInvocationTests).GetField(nameof(FakeObject), BindingFlags.Instance | BindingFlags.NonPublic));
-
-        //    //// an expression referring to the "FakeArgument" member of this class
-        //    //var argEx = Expression.MakeMemberAccess(thisObjEx, typeof(SerializationAndInvocationTests).GetField(nameof(FakeArgument), BindingFlags.Instance | BindingFlags.NonPublic));
-
-        //    //var objEx = Expression.MakeMemberAccess(thisObjEx, typeof(SerializationAndInvocationTests).GetField(nameof(FakeObject), BindingFlags.Instance | BindingFlags.NonPublic));
-        //    var objEx = Expression.Variable(typeof(SampleWorkerClass));
-        //    var argEx = Expression.Variable(typeof(int));
-        //    //var argEx = Expression.Constant(arg);
-
-        //    // the method info for the member method "SimpleMemberMethod" of the SampleWorkerClass
-        //    var methodInfo = typeof(SampleWorkerClass).GetMethod(nameof(SampleWorkerClass.SimpleMemberMethod));
-
-        //    // an expression to call the member method on the FakeObject instance using the FakeArgument argument
-        //    var bodyEx = Expression.Call(objEx, methodInfo, argEx);
-
-        //    // an expression referring to the ExecutionContext lambda parameter
-        //    var contextParamEx = Expression.Parameter(typeof(ExecutionContext), "context");
-
-        //    // finally, the lambda expression that uses the single lambda parameter and executes the lambda body
-        //    var lambda = Expression.Lambda<Func<ExecutionContext, int>>(bodyEx, contextParamEx);
-
-        //    // serialize both lambdas and confirm they match
-        //    var expectedData = TestFixture.Anywhere.Serialize(expectedLambda);
-        //    var actualData = TestFixture.Anywhere.Serialize(lambda);
-        //    Assert.Equal(expectedData, actualData);
-
-        //    // deserialize and execute both lambdas and confirm the results match
-        //    var expectedMethod = await MethodModelDeserializer.DeserializeAsync(TestFixture.Environment, expectedData);
-        //    var expectedResult = expectedMethod.Invoke();
-        //    var actualMethod = await MethodModelDeserializer.DeserializeAsync(TestFixture.Environment, actualData);
-        //    var actualResult = actualMethod.Invoke();
-
-        //    Assert.Equal(expectedResult, actualResult);
-        //}
     }
 }

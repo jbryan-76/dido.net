@@ -14,6 +14,5 @@
 
             return Task.FromResult(env.ApplicationChannel)!;
         }
-
     }
 }
