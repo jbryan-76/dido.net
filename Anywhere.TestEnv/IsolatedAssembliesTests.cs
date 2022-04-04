@@ -189,8 +189,7 @@ namespace AnywhereNET.TestEnv
                 // TODO: create a loopback client connection and channel(s)
             }
             // TODO: 
-            // TODO: load the serialized lambdas
-            // TODO: create a lambda from scratch?
+            // TODO: load the serialized lambdas vs create a lambda from scratch?
             // TODO: remoteExecute the lambda
             // TODO: "send" to the env
             // TODO: "receive" it, deserialize, invoke, etc

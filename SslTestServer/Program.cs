@@ -14,33 +14,6 @@ namespace foo
 
     // tips: https://paulstovell.com/x509certificate2/
 
-    // TODO: task timeout
-    //internal static class TaskExtensions
-    //{
-    //    public static async Task TimeoutAfter(this Task task, TimeSpan timeout)
-    //    {
-    //        if (task == await Task.WhenAny(task, Task.Delay(timeout)).ConfigureAwait(false))
-    //        {
-    //            await task.ConfigureAwait(false);
-    //        }
-    //        else
-    //        {
-    //            Task supressErrorTask = task.ContinueWith((t, s) => t.Exception.Handle(e => true), null, CancellationToken.None, TaskContinuationOptions.OnlyOnFaulted | TaskContinuationOptions.ExecuteSynchronously, TaskScheduler.Default);
-    //            throw new TimeoutException();
-    //        }
-    //    }
-    //}
-
-    //public class MyChannelTest
-    //{
-    //    Channel Channel;
-
-    //    public MyChannelTest(Channel channel)
-    //    {
-    //        Channel = channel;
-    //    }
-    //}
-
     public sealed class SslTcpServer
     {
         static X509Certificate2? serverCertificate = null;
@@ -65,9 +38,6 @@ namespace foo
                 // create a secure connection to the client
                 Connection connection = new Connection(client, serverCertificate);
                 connections.Add(connection);
-
-                // create a dummy channel
-                //var channel = connection.GetChannel(0);
 
 #if DEBUG
                 // send a debug message to confirm the client can receive

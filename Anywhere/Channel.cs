@@ -59,7 +59,8 @@ namespace AnywhereNET
         /// else false if the underlying connection closes. If 'throwIfClosed' is true,
         /// an IOException will be thrown instead of returning true.
         /// <para/>Note: since this call utilizes a thread in the thread pool, only use in
-        /// situations where the caller does not expect to wait very long for data to arrive.
+        /// situations where the caller does not expect to wait very long for data to arrive,
+        /// otherwise the call will use an entire thread while waiting, which may block other work.
         /// </summary>
         /// <param name="connection"></param>
         /// <returns></returns>

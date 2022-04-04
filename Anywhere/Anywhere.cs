@@ -170,13 +170,16 @@ namespace AnywhereNET
         {
             try
             {
-                //var data = Serialize(expression);
+                //var source = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
                 // TODO: open a connection to the orchestrator
                 // TODO: request an available runtime destination from the orchestrator
                 // TODO: receive the runtime
                 // TODO: close the connection
+
                 // TODO: open a connection to the remote runtime
-                // TODO: transmit data to remote
+                // TODO: create channels for: expression/result, assemblies, files
+                // TODO: serialize and transmit data to remote
                 // TODO: handle assembly and/or file fetch requests
                 // TODO: receive/poll for result
                 // TODO: close the connection
