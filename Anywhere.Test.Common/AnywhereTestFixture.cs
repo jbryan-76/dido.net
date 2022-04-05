@@ -68,7 +68,7 @@ namespace AnywhereNET.Test.Common
                 //ApplicationChannel
                 //ResolveRemoteAssemblyAsync = UnitTestRemoteAssemblyResolver,
                 ResolveRemoteAssemblyAsync = AssemblyResolver.ResolveAssembly,// new DebugRemoteAssemblyResolver(TestLibAssembliesFolder).ResolveAssembly,
-                Context = new ExecutionContext
+                ExecutionContext = new ExecutionContext
                 {
                     ExecutionMode = ExecutionModes.Local,
                 },
