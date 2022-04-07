@@ -15,6 +15,9 @@ namespace AnywhereNET.Test
             TestFixture = fixture;
         }
 
+        /// <summary>
+        /// Implicitly tests Anywhere.LocalExecuteAsync when used in Debug mode.
+        /// </summary>
         [Fact]
         public async void DebugLocalExecute()
         {
@@ -38,6 +41,9 @@ namespace AnywhereNET.Test
             Assert.Equal(expectedResult, actualResult);
         }
 
+        /// <summary>
+        /// Implicitly tests Anywhere.LocalExecuteAsync when used in Release mode.
+        /// </summary>
         [Fact]
         public async void ReleaseLocalExecute()
         {
@@ -60,5 +66,7 @@ namespace AnywhereNET.Test
 
             Assert.Equal(expectedResult, actualResult);
         }
+
+        // NOTE: Anywhere.RemoteExecuteAsync is tested in the AnywhereNET.TestEnv project.
     }
 }

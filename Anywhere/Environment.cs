@@ -30,10 +30,10 @@ namespace AnywhereNET
         /// </summary>
         public AssemblyLoadContext? AssemblyContext { get; set; }
 
-        /// <summary>
-        /// A bi-directional communications channel to the application.
-        /// </summary>
-        public Stream? ApplicationChannel { get; set; }
+        ///// <summary>
+        ///// A bi-directional communications channel to the application.
+        ///// </summary>
+        //public Stream? ApplicationChannel { get; set; }
 
         /// <summary>
         /// The context available to the expression to access configuration and utilities.

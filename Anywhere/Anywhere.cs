@@ -101,16 +101,27 @@ namespace AnywhereNET
         public ExecutionModes ExecutionMode { get; set; }
             = ExecutionModes.Remote;
 
-        // TODO the connection string to the orchestrator. ip+port?
+        /// <summary>
+        /// 
+        /// </summary>
         public Uri? Uri { get; set; } = null;
 
         /// <summary>
         /// Signature for a method that resolves a provided assembly by name,
-        /// returning a stream containing the assembly bytecode.
+        /// returning a stream containing the assembly bytecode, or null if 
+        /// the assembly could not be resolved.
         /// </summary>
         /// <param name="assemblyName"></param>
         /// <returns></returns>
         public delegate Task<Stream?> LocalAssemblyResolver(string assemblyName);
+
+        /// <summary>
+        /// Signature for a method that handles the result of an asynchronous
+        /// execution of an expression.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="result"></param>
+        public delegate void ResultHandler<T>(T result);
 
         /// <summary>
         /// A delegate method for resolving local runtime assemblies used by the host application.
@@ -142,6 +153,27 @@ namespace AnywhereNET
         }
 
         /// <summary>
+        /// Execute the provided expression and invoke the provided handler with the result.
+        /// Use this form when the expression is expected to take a long time to complete.
+        /// <para/>NOTE the provided handler is run in a separate thread.
+        /// </summary>
+        /// <typeparam name="Tprop"></typeparam>
+        /// <param name="expression"></param>
+        /// <param name="resultHandler"></param>
+        /// <param name="executionMode"></param>
+        public void Execute<Tprop>(Expression<Func<ExecutionContext, Tprop>> expression, ResultHandler<Tprop> resultHandler, ExecutionModes? executionMode = null)
+        {
+            //var source = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var thread = new Thread(async () =>
+            {
+                // TODO: how to handle exceptions?
+                var result = await ExecuteAsync(expression, executionMode);
+                resultHandler(result);
+            });
+            thread.Start();
+        }
+
+        /// <summary>
         /// Execute the provided expression locally (ie using the current application domain
         /// and environment).
         /// </summary>
@@ -157,8 +189,6 @@ namespace AnywhereNET
 #endif
         }
 
-        // TODO: add remote execution: convenience wrapper to block until remote execution completes
-
         /// <summary>
         /// Execute the provided expression in a remote environment.
         /// </summary>
@@ -172,62 +202,81 @@ namespace AnywhereNET
             {
                 throw new InvalidOperationException($"Uri is null or invalid");
             }
+
             try
             {
                 //var source = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
+                // TODO: (move orchestrator logic to an encapsulation layer?)
                 // TODO: open a connection to the orchestrator
                 // TODO: request an available runner from the orchestrator
-                // TODO: receive the runner
+                // TODO: receive the runner connection details
                 // TODO: close the connection
 
-                // TODO: create a secure connection to the remote runner
+                // create a secure connection to the remote runner
                 var client = new TcpClient(Uri.Host, Uri.Port);
                 var connection = new Connection(client, Uri.Host);
 
-                // TODO: create channels for: expression/result, assemblies, files
+                // create channels for: expression/result, assemblies, files
                 var expressionChannel = connection.GetChannel(Constants.ExpressionChannel);
                 var assembliesChannel = connection.GetChannel(Constants.AssembliesChannel);
                 var filesChannel = connection.GetChannel(Constants.FilesChannel);
 
-                // TODO: handle file fetch requests
+                // TODO: handle file IO on files channel
 
-                // TODO: handle assembly fetch requests
+                // handle assembly fetch requests
                 assembliesChannel.BlockingReads = true;
                 assembliesChannel.OnDataAvailable += async (channel) =>
                 {
+                    // receive the assembly request
                     var request = new AssemblyRequestMessage();
                     request.Read(channel);
 
+                    if (string.IsNullOrEmpty(request.AssemblyName))
+                    {
+                        var response = new AssemblyResponseMessage(new ArgumentNullException(nameof(AssemblyRequestMessage.AssemblyName)));
+                        response.Write(channel);
+                        return;
+                    }
+
+                    // resolve the desired assembly and send it back
                     using (var stream = await ResolveLocalAssemblyAsync(request.AssemblyName))
                     using (var mem = new MemoryStream())
                     {
-                        stream.CopyTo(mem);
-                        channel.Write(mem.ToArray());
+                        AssemblyResponseMessage response;
+                        if (stream == null)
+                        {
+                            response = new AssemblyResponseMessage(new FileNotFoundException($"Assembly '{request.AssemblyName}' could not be resolved."));
+                        }
+                        else
+                        {
+                            stream.CopyTo(mem);
+                            response = new AssemblyResponseMessage(mem.ToArray());
+                        }
+                        response.Write(channel);
                     }
                 };
 
                 using (var stream = new MemoryStream())
                 {
-                    // TODO: serialize and transmit data to remote
+                    // serialize the expression and transmit to the remote runner
                     await ExpressionSerializer.SerializeAsync(expression, stream);
                     var expressionRequest = new ExpressionRequestMessage(stream.ToArray());
                     expressionRequest.Write(expressionChannel);
                 }
 
-                // TODO: receive/poll for result
+                // block until the result is received
+                // TODO: add support for a timeout
+                // TODO: add support for a cancellation token
                 expressionChannel.BlockingReads = true;
                 var result = new ExpressionResultMessage();
                 result.Read(expressionChannel);
 
-                // TODO: close the connection
-                //connection.Disconnect();
+                // cleanup the connection
                 connection.Dispose();
 
+                // yield the result
                 return (Tprop)Convert.ChangeType(result.Result, typeof(Tprop));
-                //var result = await MethodModelDeserializer.DeserializeAndExecuteAsync<Tprop>(data);
-                //return result;
-                //throw new NotImplementedException();
             }
             catch (Exception e)
             {

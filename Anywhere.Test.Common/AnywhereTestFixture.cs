@@ -46,7 +46,7 @@ namespace AnywhereNET.Test.Common
 
         private List<string> AssemblyFiles = new List<string>();
 
-        private DebugRemoteAssemblyResolver AssemblyResolver;
+        internal DebugRemoteAssemblyResolver AssemblyResolver { get; private set; }
 
         /// <summary>
         /// Global test setup (only called once)

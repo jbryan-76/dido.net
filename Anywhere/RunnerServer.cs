@@ -7,7 +7,6 @@ namespace AnywhereNET
 {
     public class RunnerServer : IDisposable
     {
-
         private long Connected = 0;
 
         private Thread? WorkLoopThread;
@@ -18,20 +17,26 @@ namespace AnywhereNET
             GC.SuppressFinalize(this);
         }
 
-        public async Task Start(X509Certificate2 cert, int port)
+        public async Task Start(X509Certificate2 cert, int port, IPAddress? ip = null)
         {
+            ip = ip ?? IPAddress.Any;
+
             // listen for incoming connections
-            var listener = new TcpListener(IPAddress.Loopback, port);
+            var listener = new TcpListener(ip, port);
             listener.Start();
 
             // start a work thread to accept and process new connections
             Connected = 1;
             WorkLoopThread = new Thread(() => WorkLoop(listener, cert));
+            WorkLoopThread.Start();
         }
 
         public void Stop()
         {
+            // signal the thread to stop
             Interlocked.Exchange(ref Connected, 0);
+
+            // wait for it to finish
             if (WorkLoopThread != null)
             {
                 WorkLoopThread.Join();
@@ -39,7 +44,7 @@ namespace AnywhereNET
             }
         }
 
-        private async void WorkLoop(TcpListener listener, X509Certificate2 cert)
+        private void WorkLoop(TcpListener listener, X509Certificate2 cert)
         {
             var connections = new List<Connection>();
             var threads = new List<Thread>();
@@ -53,7 +58,7 @@ namespace AnywhereNET
                 }
 
                 // block and wait for the next incoming connection
-                var client = await listener.AcceptTcpClientAsync();
+                var client = listener.AcceptTcpClient();
 
                 // create a secure connection to the client
                 var connection = new Connection(client, cert);
@@ -96,7 +101,7 @@ namespace AnywhereNET
             //assembliesChannel.BlockingReads = true;
             expressionChannel.BlockingReads = true;
 
-            // TODO: create the runtime environment
+            // create the runtime environment
             var environment = new Environment
             {
                 AssemblyContext = new AssemblyLoadContext(Guid.NewGuid().ToString(), true),
@@ -106,32 +111,33 @@ namespace AnywhereNET
 
             try
             {
-                // TODO: probably don't need a loop here
-                //while (connection.IsConnected)
+                // receive the expression request on the expression channel
+                var expressionRequest = new ExpressionRequestMessage();
+                expressionRequest.Read(expressionChannel);
+
+                // TODO: heartbeat to orchestrator
+
+                using (var stream = new MemoryStream(expressionRequest.Bytes))
                 {
-                    // TODO: receive expression request on expression channel
-                    var expressionRequest = new ExpressionRequestMessage();
-                    expressionRequest.Read(expressionChannel);
+                    // deserialize the expression
+                    var decodedLambda = await ExpressionSerializer.DeserializeAsync<object>(stream, environment);
+                    
+                    // execute it
+                    var result = decodedLambda.Invoke(environment.ExecutionContext);
 
-                    //byte[] bytes;
-                    using (var stream = new MemoryStream(expressionRequest.Bytes))
-                    {
-                        // TODO: deserialize it
-                        var decodedLambda = await ExpressionSerializer.DeserializeAsync<object>(stream, environment);
-                        // TODO: execute it
-                        var result = decodedLambda.Invoke(environment.ExecutionContext);
-                        // TODO: send the result on requestChannel
-                        var resultMessage = new ExpressionResultMessage(result);
-                        resultMessage.Write(expressionChannel);
-                    }
-
-                    Thread.Sleep(1);
+                    // send the result back to the application on the expression channel
+                    var resultMessage = new ExpressionResultMessage(result);
+                    resultMessage.Write(expressionChannel);
                 }
-
             }
             catch (Exception ex)
             {
                 // TODO: catch exceptions and transmit back to host
+                // send the exception back to the application on the expression channel
+                var resultMessage = new ExpressionResultMessage(ex);
+                resultMessage.Write(expressionChannel);
+                // TODO: log it?
+                // TODO: signal orchestrator?
             }
         }
     }

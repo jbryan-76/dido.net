@@ -25,6 +25,7 @@ namespace AnywhereNET
             return Task.CompletedTask;
         }
 
+        // TODO: use byte[] instead of stream? by design these expressions are not supposed to get super huge
         public static Task<Func<ExecutionContext, TResult>> DeserializeAsync<TResult>(Stream stream, Environment env, ExpressionSerializeSettings? settings = null)
         {
             var node = Deserialize(stream, settings);

@@ -4,8 +4,15 @@ namespace AnywhereNET
 {
     public class Channel : Stream
     {
+        /// <summary>
+        /// Signature for a method that handles when new data is available on a channel.
+        /// </summary>
+        /// <param name="channel"></param>
         public delegate void DataAvailableHandler(Channel channel);
 
+        /// <summary>
+        /// An event handler that is triggered when any amount of new data is available.
+        /// </summary>
         public event DataAvailableHandler? OnDataAvailable = null;
 
         private long IsDisposed = 0;
