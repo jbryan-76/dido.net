@@ -8,7 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
 
-namespace AnywhereNET.TestEnv
+namespace AnywhereNET.Test.Runner
 {
     public class ApiTests : IClassFixture<AnywhereTestFixture>
     {
@@ -54,7 +54,7 @@ namespace AnywhereNET.TestEnv
             // create an Anywhere instance configured to use the loopback server
             var anywhere = new Anywhere
             {
-                Uri = new Uri($"https://localhost:{port}"),
+                OrchestratorUri = new Uri($"https://localhost:{port}"),
                 ExecutionMode = ExecutionModes.Remote,
                 // use the unit test assembly resolver instead of the default implementation
                 ResolveLocalAssemblyAsync = (assemblyName) => TestFixture.AssemblyResolver.ResolveAssembly(TestFixture.Environment, assemblyName)
@@ -94,7 +94,7 @@ namespace AnywhereNET.TestEnv
             // create an Anywhere instance configured to use the loopback server
             var anywhere = new Anywhere
             {
-                Uri = new Uri($"https://localhost:{port}"),
+                OrchestratorUri = new Uri($"https://localhost:{port}"),
                 ExecutionMode = ExecutionModes.Remote,
                 // use the unit test assembly resolver instead of the default implementation
                 ResolveLocalAssemblyAsync = (assemblyName) => TestFixture.AssemblyResolver.ResolveAssembly(TestFixture.Environment, assemblyName)

@@ -40,9 +40,9 @@ namespace AnywhereNET.Test
 
         /// <summary>
         /// Generate a variety of sample lambda method calls, then serialize and save them to a common shared folder
-        /// to be deserialized and executed by the Anywhere.TestEnv project.
+        /// to be deserialized and executed by the Anywhere.Test.Runner project.
         /// <para/>
-        /// NOTE this unit test must be run before any test from Anywhere.TestEnv.DeserializationAndInvocationTests.
+        /// NOTE this unit test must be run before any test from Anywhere.Test.Runner.DeserializationAndInvocationTests.
         /// </summary>
         [Fact]
         public async void GenerateSerializedMethodInvocationData()
@@ -270,7 +270,7 @@ namespace AnywhereNET.Test
 
         /// <summary>
         /// This test verifies an explicitly created lambda expression matches an equivalent
-        /// lambda expression in code. This is critical to confirm some tests in Anywhere.TestEnv
+        /// lambda expression in code. This is critical to confirm some tests in Anywhere.Test.Runner
         /// that will not have the necessary assemblies loaded.
         /// </summary>
         [Fact]

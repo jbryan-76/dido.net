@@ -67,6 +67,6 @@ namespace AnywhereNET.Test
             Assert.Equal(expectedResult, actualResult);
         }
 
-        // NOTE: Anywhere.RemoteExecuteAsync is tested in the AnywhereNET.TestEnv project.
+        // NOTE: Anywhere.RemoteExecuteAsync is tested in the AnywhereNET.Test.Runner project.
     }
 }

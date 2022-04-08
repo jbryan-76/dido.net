@@ -7,7 +7,7 @@ using System.Runtime.Loader;
 using System.Threading;
 using Xunit;
 
-namespace AnywhereNET.TestEnv
+namespace AnywhereNET.Test.Runner
 {
     public class IsolatedAssembliesTests : IClassFixture<AnywhereTestFixture>
     {

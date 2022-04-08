@@ -3,7 +3,7 @@ using System;
 using System.IO;
 using Xunit;
 
-namespace AnywhereNET.TestEnv
+namespace AnywhereNET.Test.Runner
 {
     public class DeserializationAndInvocationTests : IClassFixture<AnywhereTestFixture>
     {

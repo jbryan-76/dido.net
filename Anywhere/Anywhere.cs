@@ -1,8 +1,8 @@
-﻿using Newtonsoft.Json;
-using System.Linq.Expressions;
+﻿using System.Linq.Expressions;
 using System.Net.Sockets;
-using System.Reflection;
 using System.Runtime.Loader;
+
+// TODO: need a better name than "Anywhere"
 
 // generate self-signed certs automatically
 // https://stackoverflow.com/questions/695802/using-ssl-and-sslstream-for-peer-to-peer-authentication
@@ -31,17 +31,6 @@ using System.Runtime.Loader;
 // eventual execution:
 // - option 1: app submits a lambda and awaits the result which is an id to poll for the status/result
 // - option 2: app submits a lambda and a callback which is invoked when the result is ready
-
-// execution sequence: 
-// - use reflection to serialize the lambda expression into a data blob containing all info to execute the lambda
-// - open a connection to the orchestrator
-// - transmit the blob
-// - deserialize the blob to an invokable method
-// - try to instantiate and execute the method
-// - catch exceptions for missing assemblies and request from source app as needed via connection
-// - return the result to the app via connection
-// in debug mode, do above regardless of local vs remote
-// in release mode with local execution, invoke lambda directly and bypass all serialization
 
 // GOTCHAS
 // - loading local files: maybe use anywhere overloads for IO namespace?
@@ -95,6 +84,8 @@ namespace AnywhereNET
         // TODO configuration should be transmitted to a runner and applied globally so it can properly implement remote file access
         // TODO create an Anywhere.IO to mirror System.IO at least for File and Path. readonly? or write too?
 
+        // TODO: configure retries?
+
         /// <summary>
         /// The default mode that will be used for executing all expressions.
         /// </summary>
@@ -102,9 +93,16 @@ namespace AnywhereNET
             = ExecutionModes.Remote;
 
         /// <summary>
-        /// 
+        /// The uri for the orchestrator service used to negotiate the specific runner service
+        /// that remotely executes expressions.
         /// </summary>
-        public Uri? Uri { get; set; } = null;
+        public Uri? OrchestratorUri { get; set; } = null;
+
+        /// <summary>
+        /// The uri for a dedicated runner service used to remotely execute expressions.
+        /// If set, this overrides any configured orchestrator.
+        /// </summary>
+        public Uri? RunnerUri { get; set; } = null;
 
         /// <summary>
         /// Signature for a method that resolves a provided assembly by name,
@@ -189,6 +187,9 @@ namespace AnywhereNET
 #endif
         }
 
+        // TODO: if the orchestrator is in job mode, poll for the result?
+        // TODO: if the orchestrator is in job mode, start a background thread to call a handler when the result is available?
+
         /// <summary>
         /// Execute the provided expression in a remote environment.
         /// </summary>
@@ -198,24 +199,28 @@ namespace AnywhereNET
         /// <exception cref="NotImplementedException"></exception>
         public async Task<Tprop> RemoteExecuteAsync<Tprop>(Expression<Func<ExecutionContext, Tprop>> expression)
         {
-            if (Uri == null)
+            if (OrchestratorUri == null && RunnerUri == null)
             {
-                throw new InvalidOperationException($"Uri is null or invalid");
+                throw new InvalidOperationException($"At least one of {nameof(OrchestratorUri)} or {nameof(RunnerUri)} must be set to a valid value.");
             }
 
             try
             {
                 //var source = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-                // TODO: (move orchestrator logic to an encapsulation layer?)
-                // TODO: open a connection to the orchestrator
-                // TODO: request an available runner from the orchestrator
-                // TODO: receive the runner connection details
-                // TODO: close the connection
+                if (OrchestratorUri != null && RunnerUri == null)
+                {
+                    // TODO: (move orchestrator logic to an encapsulation layer?)
+                    // TODO: open a connection to the orchestrator
+                    // TODO: request an available runner from the orchestrator
+                    // TODO: receive the runner connection details
+                    // TODO: close the connection
+                    RunnerUri = OrchestratorUri;
+                }
 
                 // create a secure connection to the remote runner
-                var client = new TcpClient(Uri.Host, Uri.Port);
-                var connection = new Connection(client, Uri.Host);
+                var client = new TcpClient(RunnerUri!.Host, RunnerUri.Port);
+                var connection = new Connection(client, RunnerUri.Host);
 
                 // create channels for: expression/result, assemblies, files
                 var expressionChannel = connection.GetChannel(Constants.ExpressionChannel);

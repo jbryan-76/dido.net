@@ -54,7 +54,7 @@ namespace AnywhereNET.Test.Common
         public AnywhereTestFixture()
         {
             // create a directory to hold test data that should be shared between
-            // the "Anywhere.Test" and "Anywhere.TestEnv" projects
+            // the "Anywhere.Test" and "Anywhere.Test.Runner" projects
             SharedTestDataPath = Path.Combine(Path.GetTempPath(), SharedTestDataFolder);
             Directory.CreateDirectory(SharedTestDataPath);
 

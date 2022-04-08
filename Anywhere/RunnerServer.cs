@@ -5,11 +5,25 @@ using System.Security.Cryptography.X509Certificates;
 
 namespace AnywhereNET
 {
+    // TODO: configure to indicate OS environment
+    // TODO: configure to indicate support for queued vs concurrent vs single requests
+    // TODO: configure to indicate (optional) connection to the orchestrator
+    public class RunnerConfiguration
+    {
+
+    }
+
+
     public class RunnerServer : IDisposable
     {
         private long Connected = 0;
 
         private Thread? WorkLoopThread;
+
+        public RunnerServer(RunnerConfiguration? configuration = null)
+        {
+
+        }
 
         public void Dispose()
         {
@@ -98,7 +112,6 @@ namespace AnywhereNET
 
             // TODO: DefaultRemoteAssemblyResolver should have assembliesChannel
 
-            //assembliesChannel.BlockingReads = true;
             expressionChannel.BlockingReads = true;
 
             // create the runtime environment
