@@ -15,6 +15,7 @@
                 case FrameTypes.Debug: return new DebugFrame(frame);
                 case FrameTypes.Disconnect: return new DisconnectFrame(frame);
                 case FrameTypes.ChannelData: return new ChannelDataFrame(frame);
+                case FrameTypes.Heartbeat: return new HeartbeatFrame(frame);
                 default:
                     throw new InvalidOperationException($"Unknown frame type: {frame.Type}");
             }

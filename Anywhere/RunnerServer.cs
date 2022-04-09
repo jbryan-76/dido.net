@@ -139,7 +139,7 @@ namespace AnywhereNET
                     var result = decodedLambda.Invoke(environment.ExecutionContext);
 
                     // send the result back to the application on the expression channel
-                    var resultMessage = new ExpressionResultMessage(result);
+                    var resultMessage = new ExpressionResponseMessage(result);
                     resultMessage.Write(expressionChannel);
                 }
             }
@@ -147,7 +147,7 @@ namespace AnywhereNET
             {
                 // TODO: catch exceptions and transmit back to host
                 // send the exception back to the application on the expression channel
-                var resultMessage = new ExpressionResultMessage(ex);
+                var resultMessage = new ExpressionResponseMessage(ex);
                 resultMessage.Write(expressionChannel);
                 // TODO: log it?
                 // TODO: signal orchestrator?

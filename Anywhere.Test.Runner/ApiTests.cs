@@ -108,7 +108,7 @@ namespace AnywhereNET.Test.Runner
                 // confirm the results match
                 Assert.Equal(expectedResult, result);
 
-                // indicate to the main thread that it can proceed
+                // signal the main thread that it can proceed
                 reset.Set();
             });
 

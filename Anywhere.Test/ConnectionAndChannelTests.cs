@@ -1,5 +1,6 @@
 ﻿using AnywhereNET.Test.Common;
 using System;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -161,6 +162,69 @@ namespace AnywhereNET.Test
                 Assert.Equal(3, clientServerConnection.ClientTransmittedFrames.Count);
                 Assert.Equal(3, clientServerConnection.ServerRecievedFrames.Count);
                 Assert.True(Enumerable.SequenceEqual(data, resultData));
+            }
+        }
+
+        [Fact]
+        public async void MessageChannel()
+        {
+            // create a local client/server system
+            using (var clientServerConnection = await ClientServerConnection.CreateAsync(GetNextAvailablePort()))
+            {
+                // create both sides of a logical channel for the client and server to communicate
+                var channel1ClientSide = clientServerConnection.ClientConnection.GetChannel(1);
+                var channel1ServerSide = clientServerConnection.ServerConnection.GetChannel(1);
+
+                // wrap in a message channel
+                var messageChannel1ClientSide = new MessageChannel(channel1ClientSide);
+                var messageChannel1ServerSide = new MessageChannel(channel1ServerSide);
+
+                // create a test message to send to the server from the client
+                var testMessage = new TestMessage { MyIntValue = 123, MyStringValue = "hello world" };
+
+                // create a reset event to wait until the server receives the message
+                var reset = new AutoResetEvent(false);
+
+                // set a handler to receive messages on the server
+                TestMessage? receivedMessage = null;
+                messageChannel1ServerSide.OnMessageReceived += (message, channel) =>
+                {
+                    // the underlying type of the received message should be the same,
+                    // so simply cast it
+                    receivedMessage = message as TestMessage;
+                    // signal the main thread to continue
+                    reset.Set();
+                };
+
+                // send a test message to the server
+                messageChannel1ClientSide.Send(testMessage);
+
+                // block here until the message is received
+                reset.WaitOne();
+
+                // confirm the messages match
+                Assert.NotNull(receivedMessage);
+                Assert.Equal(testMessage.MyIntValue, receivedMessage?.MyIntValue);
+                Assert.Equal(testMessage.MyStringValue, receivedMessage?.MyStringValue);
+            }
+        }
+
+        class TestMessage : IMessage
+        {
+            public int MyIntValue { get; set; }
+
+            public string MyStringValue { get; set; }
+
+            public void Read(Stream stream)
+            {
+                MyIntValue = stream.ReadInt32BE();
+                MyStringValue = stream.ReadString();
+            }
+
+            public void Write(Stream stream)
+            {
+                stream.WriteInt32BE(MyIntValue);
+                stream.WriteString(MyStringValue);
             }
         }
     }

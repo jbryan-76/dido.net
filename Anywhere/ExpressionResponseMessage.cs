@@ -3,7 +3,7 @@ using System.Text;
 
 namespace AnywhereNET
 {
-    internal class ExpressionResultMessage : IMessage
+    internal class ExpressionResponseMessage : IMessage
     {
         public enum ContentTypes
         {
@@ -17,15 +17,15 @@ namespace AnywhereNET
 
         private object? _result = null;
 
-        public ExpressionResultMessage() { }
+        public ExpressionResponseMessage() { }
 
-        public ExpressionResultMessage(Exception ex)
+        public ExpressionResponseMessage(Exception ex)
         {
             ContentType = ContentTypes.Error;
             Bytes = Encoding.UTF8.GetBytes(ex.ToString());
         }
 
-        public ExpressionResultMessage(object result)
+        public ExpressionResponseMessage(object result)
         {
             ContentType = ContentTypes.Result;
 

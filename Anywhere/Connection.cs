@@ -9,6 +9,9 @@ namespace AnywhereNET
 {
     public class Connection : IDisposable
     {
+        // TODO: should this be configurable?
+        internal static readonly int HeartbeatPeriodInMs = 60000; // one minute
+
         internal delegate void FrameMonitor(Frame frame);
 
         internal FrameMonitor? UnitTestReceiveFrameMonitor;
@@ -25,13 +28,19 @@ namespace AnywhereNET
 
         private Thread? WriteThread;
 
+        private Timer? HeartbeatTimer;
+
         private Exception? ReadThreadException;
 
         private Exception? WriteThreadException;
 
         private MemoryStream ReadBuffer = new MemoryStream();
 
+        private DateTimeOffset? LastRemoteTraffic;
+
         private long Connected = 0;
+
+        private long HeartbeatPending = 0;
 
         private bool IsDisposed = false;
 
@@ -130,14 +139,11 @@ namespace AnywhereNET
                 Disconnect();
             }
 
+            var exceptions = new List<Exception>();
             if (!IsDisposed)
             {
                 IsDisposed = true;
 
-                ReadThread!.Join(1000);
-                WriteThread!.Join(1000);
-
-                var exceptions = new List<Exception>();
                 if (ReadThreadException != null)
                 {
                     exceptions.Add(ReadThreadException);
@@ -146,13 +152,20 @@ namespace AnywhereNET
                 {
                     exceptions.Add(WriteThreadException);
                 }
-                if (exceptions.Count > 0)
-                {
-                    throw new AggregateException(exceptions);
-                }
 
                 Stream.Dispose();
                 ReadBuffer.Dispose();
+                HeartbeatTimer?.Dispose();
+
+                foreach (var channel in Channels.Values)
+                {
+                    channel.Dispose();
+                }
+            }
+
+            if (exceptions.Count > 0)
+            {
+                throw new AggregateException(exceptions);
             }
 
             GC.SuppressFinalize(this);
@@ -165,13 +178,14 @@ namespace AnywhereNET
                 // signal all threads to stop
                 Interlocked.Exchange(ref Connected, 0);
 
+                // wait for the threads to finish
+                ReadThread!.Join(1000);
+                WriteThread!.Join(1000);
+
                 // gracefully attempt to shut down the other side of the connection
                 // by sending a disconnect frame
                 var frame = new DisconnectFrame();
-                if (UnitTestTransmitFrameMonitor != null)
-                {
-                    UnitTestTransmitFrameMonitor(frame);
-                }
+                UnitTestTransmitFrameMonitor?.Invoke(frame);
                 WriteFrame(frame);
             }
         }
@@ -181,6 +195,13 @@ namespace AnywhereNET
             FrameQueue.Enqueue(new DebugFrame(message));
         }
 
+        /// <summary>
+        /// Gets a reference to the indicated channel.
+        /// <para/>Note: DO NOT Dispose() the channel. Since the channel is owned by the Connection,
+        /// Connection.Dispose() will dispose it implicitly.
+        /// </summary>
+        /// <param name="channelNumber"></param>
+        /// <returns></returns>
         public Channel GetChannel(ushort channelNumber)
         {
             if (!Channels.ContainsKey(channelNumber))
@@ -200,8 +221,14 @@ namespace AnywhereNET
         {
             foreach (var frame in frames)
             {
-                FrameQueue.Enqueue(frame);
+                EnqueueFrame(frame);
             }
+        }
+
+        internal void SendHeartbeat()
+        {
+            // signal to send a heartbeat frame as soon as possible
+            Interlocked.Exchange(ref HeartbeatPending, 1);
         }
 
         private void FinishConnecting()
@@ -216,6 +243,9 @@ namespace AnywhereNET
             ReadThread.Start();
             WriteThread = new Thread(() => WriteLoop());
             WriteThread.Start();
+
+            // send a heartbeat frame once a minute to keep the connection active
+            HeartbeatTimer = new Timer((arg) => SendHeartbeat(), null, HeartbeatPeriodInMs, HeartbeatPeriodInMs);
         }
 
         /// <summary>
@@ -229,12 +259,18 @@ namespace AnywhereNET
                 while (Interlocked.Read(ref Connected) == 1)
                 {
                     Thread.Sleep(1);
+
+                    // if a heartbeat is pending, send it immediately
+                    if (Interlocked.Read(ref HeartbeatPending) == 1)
+                        {
+                        Interlocked.Exchange(ref HeartbeatPending, 0);
+                        WriteFrame(new HeartbeatFrame());
+                        }
+
+                    // send the next frame in the queue, if it exists
                     if (FrameQueue.TryDequeue(out Frame? frame) && frame != null)
                     {
-                        if (UnitTestTransmitFrameMonitor != null)
-                        {
-                            UnitTestTransmitFrameMonitor(frame);
-                        }
+                        UnitTestTransmitFrameMonitor?.Invoke(frame);
                         WriteFrame(frame);
                     }
                 }
@@ -275,6 +311,7 @@ namespace AnywhereNET
                         if (read > 0)
                         {
                             ReadBuffer.Write(data, 0, read);
+                            LastRemoteTraffic = DateTimeOffset.UtcNow;
                         }
                     }
                     catch (IOException e)
@@ -286,7 +323,7 @@ namespace AnywhereNET
                         if (socketException != null && socketException.SocketErrorCode == SocketError.TimedOut)
                         {
                             // NOTE it is bad practice to use exception handling to control 
-                            // "normal" program flow, but in this case there is no way to
+                            // "normal" expected program flow, but in this case there is no way to
                             // cleanly terminate a thread that is blocking indefinitely on
                             // a Stream.Read.
                             continue;
@@ -304,14 +341,17 @@ namespace AnywhereNET
                         continue;
                     }
 
-                    if (UnitTestReceiveFrameMonitor != null)
-                    {
-                        UnitTestReceiveFrameMonitor(frame);
-                    }
+                    UnitTestReceiveFrameMonitor?.Invoke(frame);
 
                     Log($"Received: {frame.ToString()}");
 
-                    if (frame is DisconnectFrame)
+                    if (frame is HeartbeatFrame)
+                    {
+                        // simply discard the frame:
+                        // the heartbeat is used to just to prevent connection timeouts
+                        continue;
+                    }
+                    else if (frame is DisconnectFrame)
                     {
                         Log("disconnecting");
                         Interlocked.Exchange(ref Connected, 0);
@@ -353,10 +393,11 @@ namespace AnywhereNET
             ReadBuffer.Position = 0;
 
             // try to read a frame from the buffer
+            var payload = new byte[0];
             if (ReadBuffer.TryReadByte(out var type)
                 && ReadBuffer.TryReadUShortBE(out var channel)
                 && ReadBuffer.TryReadIntBE(out var length)
-                && ReadBuffer.TryReadBytes(length, out var payload)
+                && (length == 0 || ReadBuffer.TryReadBytes(length, out payload))
                 )
             {
                 // a frame was read successfully. clear the buffer...

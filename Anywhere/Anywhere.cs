@@ -274,7 +274,7 @@ namespace AnywhereNET
                 // TODO: add support for a timeout
                 // TODO: add support for a cancellation token
                 expressionChannel.BlockingReads = true;
-                var result = new ExpressionResultMessage();
+                var result = new ExpressionResponseMessage();
                 result.Read(expressionChannel);
 
                 // cleanup the connection

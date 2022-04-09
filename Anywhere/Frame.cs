@@ -4,10 +4,10 @@ namespace AnywhereNET
 {
     public enum FrameTypes
     {
-        // TODO: heartbeat
         ChannelData,
         Disconnect,
-        Debug
+        Debug,
+        Heartbeat
     }
 
     // TODO: for sending, create larger message constructs that are broken up into frames and multiplexed into an async producer/consumer queue for sending

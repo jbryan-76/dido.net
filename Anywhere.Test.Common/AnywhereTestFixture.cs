@@ -60,14 +60,10 @@ namespace AnywhereNET.Test.Common
 
             AssemblyResolver = new DebugRemoteAssemblyResolver(TestLibAssembliesFolder);
 
-            //Anywhere.ResolveAssembly = UnitTestAssemblyResolver;
-
             // set up a singleton environment instance
             Environment = new Environment
             {
-                //ApplicationChannel
-                //ResolveRemoteAssemblyAsync = UnitTestRemoteAssemblyResolver,
-                ResolveRemoteAssemblyAsync = AssemblyResolver.ResolveAssembly,// new DebugRemoteAssemblyResolver(TestLibAssembliesFolder).ResolveAssembly,
+                ResolveRemoteAssemblyAsync = AssemblyResolver.ResolveAssembly,
                 ExecutionContext = new ExecutionContext
                 {
                     ExecutionMode = ExecutionModes.Local,
