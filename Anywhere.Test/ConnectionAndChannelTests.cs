@@ -80,22 +80,20 @@ namespace AnywhereNET.Test
             // create a local client/server system
             using (var clientServerConnection = await ClientServerConnection.CreateAsync(GetNextAvailablePort()))
             {
-                // create a logical channel for the client and server to communicate
-                using (var channel1ClientSide = clientServerConnection.ClientConnection.GetChannel(1))
-                using (var channel1ServerSide = clientServerConnection.ServerConnection.GetChannel(1))
-                {
-                    // indicate the channel should block reads until data is available
-                    channel1ServerSide.BlockingReads = true;
+                // create both sides of a logical channel for the client and server to communicate
+                var channel1ClientSide = clientServerConnection.ClientConnection.GetChannel(1);
+                var channel1ServerSide = clientServerConnection.ServerConnection.GetChannel(1);
 
-                    // send a test message to the server
-                    var testMessage = "hello world";
-                    channel1ClientSide.WriteString(testMessage);
+                // indicate the channel should block reads until data is available
+                channel1ServerSide.BlockingReads = true;
 
-                    // wait until the server receives the message, then read it back
-                    //await channel1ServerSide.WaitForDataAsync();
-                    var receivedMessage = channel1ServerSide.ReadString();
-                    Assert.Equal(testMessage, receivedMessage);
-                }
+                // send a test message to the server
+                var testMessage = "hello world";
+                channel1ClientSide.WriteString(testMessage);
+
+                // wait until the server receives the message, then read it back
+                var receivedMessage = channel1ServerSide.ReadString();
+                Assert.Equal(testMessage, receivedMessage);
             }
         }
 
@@ -105,34 +103,33 @@ namespace AnywhereNET.Test
             // create a local client/server system
             using (var clientServerConnection = await ClientServerConnection.CreateAsync(GetNextAvailablePort()))
             {
-                // create two logical channels for the client and server to communicate
-                using (var channel1ClientSide = clientServerConnection.ClientConnection.GetChannel(1))
-                using (var channel1ServerSide = clientServerConnection.ServerConnection.GetChannel(1))
-                using (var channel2ClientSide = clientServerConnection.ClientConnection.GetChannel(2))
-                using (var channel2ServerSide = clientServerConnection.ServerConnection.GetChannel(2))
-                {
-                    // send test messages on each channel
-                    var test1_c2s = "test 1 - c2s";
-                    var test1_s2c = "test 1 - s2c";
-                    channel1ClientSide.WriteString(test1_c2s);
-                    channel1ServerSide.WriteString(test1_s2c);
-                    var test2_c2s = "test 2 - c2s";
-                    var test2_s2c = "test 2 - s2c";
-                    channel2ClientSide.WriteString(test2_c2s);
-                    channel2ServerSide.WriteString(test2_s2c);
+                // create both sides of two logical channels for the client and server to communicate
+                var channel1ClientSide = clientServerConnection.ClientConnection.GetChannel(1);
+                var channel1ServerSide = clientServerConnection.ServerConnection.GetChannel(1);
+                var channel2ClientSide = clientServerConnection.ClientConnection.GetChannel(2);
+                var channel2ServerSide = clientServerConnection.ServerConnection.GetChannel(2);
 
-                    // await data received on all channels
-                    Task.WaitAll(channel1ClientSide.WaitForDataAsync(),
-                        channel1ServerSide.WaitForDataAsync(),
-                        channel2ClientSide.WaitForDataAsync(),
-                        channel2ServerSide.WaitForDataAsync());
+                // send test messages on each channel
+                var test1_c2s = "test 1 - c2s";
+                var test1_s2c = "test 1 - s2c";
+                channel1ClientSide.WriteString(test1_c2s);
+                channel1ServerSide.WriteString(test1_s2c);
+                var test2_c2s = "test 2 - c2s";
+                var test2_s2c = "test 2 - s2c";
+                channel2ClientSide.WriteString(test2_c2s);
+                channel2ServerSide.WriteString(test2_s2c);
 
-                    // confirm all messages
-                    Assert.Equal(test1_c2s, channel1ServerSide.ReadString());
-                    Assert.Equal(test1_s2c, channel1ClientSide.ReadString());
-                    Assert.Equal(test2_c2s, channel2ServerSide.ReadString());
-                    Assert.Equal(test2_s2c, channel2ClientSide.ReadString());
-                }
+                // await data received on all channels
+                Task.WaitAll(channel1ClientSide.WaitForDataAsync(),
+                    channel1ServerSide.WaitForDataAsync(),
+                    channel2ClientSide.WaitForDataAsync(),
+                    channel2ServerSide.WaitForDataAsync());
+
+                // confirm all messages
+                Assert.Equal(test1_c2s, channel1ServerSide.ReadString());
+                Assert.Equal(test1_s2c, channel1ClientSide.ReadString());
+                Assert.Equal(test2_c2s, channel2ServerSide.ReadString());
+                Assert.Equal(test2_s2c, channel2ClientSide.ReadString());
             }
         }
 
@@ -141,19 +138,19 @@ namespace AnywhereNET.Test
         {
             // create a local client/server system
             using (var clientServerConnection = await ClientServerConnection.CreateAsync(GetNextAvailablePort()))
-            using (var channelClientSide = clientServerConnection.ClientConnection.GetChannel(1))
-            using (var channelServerSide = clientServerConnection.ServerConnection.GetChannel(1))
             {
-                int maxFrameSize = Frame.MaxFrameSize;
+                // create both sides of a logical channel for the client and server to communicate
+                var channelClientSide = clientServerConnection.ClientConnection.GetChannel(1);
+                var channelServerSide = clientServerConnection.ServerConnection.GetChannel(1);
 
                 // write enough data to generate 3 frames
-                var data = new byte[2 * maxFrameSize + 1];
+                var data = new byte[2 * Frame.MaxFrameSize + 1];
                 for (int i = 0; i < data.Length; i++)
                 {
                     data[i] = (byte)i;
                 }
                 channelClientSide.Write(data, 0, data.Length);
-        
+
                 // read the data
                 channelServerSide.BlockingReads = true;
                 var resultData = channelServerSide.ReadBytes(data.Length);
