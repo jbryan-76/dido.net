@@ -1,6 +1,7 @@
 ﻿using System;
 using System.IO;
 using System.Text;
+using System.Threading;
 using Xunit.Abstractions;
 
 namespace AnywhereNET.Test
@@ -9,9 +10,16 @@ namespace AnywhereNET.Test
     {
         ITestOutputHelper _output;
 
-        public OutputConverter(ITestOutputHelper output)
+        string? Filename;
+
+        public OutputConverter(ITestOutputHelper output, string? filename = null)
         {
             _output = output;
+            Filename = filename;
+            if (!string.IsNullOrEmpty(Filename))
+            {
+                File.Delete(Filename);
+            }
         }
 
         public override Encoding Encoding
@@ -22,11 +30,30 @@ namespace AnywhereNET.Test
         public override void WriteLine(string message)
         {
             _output.WriteLine(message);
+            if (!string.IsNullOrEmpty(Filename))
+            {
+                int tries = 10;
+                while (tries-- > 0)
+                {
+                    lock (Filename)
+                    {
+                        try
+                        {
+                            File.AppendAllLines(Filename, new string[] { message });
+                            return;
+                        }
+                        catch (Exception ex)
+                        {
+                            Thread.Sleep(1);
+                        }
+                    }
+                }
+            }
         }
 
         public override void WriteLine(string format, params object[] args)
         {
-            _output.WriteLine(format, args);
+            WriteLine(string.Format(format, args));
         }
 
         public override void Write(char value)

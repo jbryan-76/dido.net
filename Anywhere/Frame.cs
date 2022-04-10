@@ -46,7 +46,7 @@ namespace AnywhereNET
 
         public override string ToString()
         {
-            return $"Frame '{FrameType}' on channel {Channel}: {Length} bytes ({Encoding.UTF8.GetString(Payload.ToArray())})";
+            return $"Frame '{FrameType}' on channel {Channel}: {Length} bytes";
         }
     }
 }

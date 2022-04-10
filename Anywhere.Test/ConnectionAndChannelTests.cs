@@ -25,7 +25,7 @@ namespace AnywhereNET.Test
 
         public ConnectionAndChannelTests(ITestOutputHelper output)
         {
-            var converter = new OutputConverter(output);
+            var converter = new OutputConverter(output);//, "OUTPUT.txt");
             Console.SetOut(converter);
         }
 

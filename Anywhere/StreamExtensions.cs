@@ -179,7 +179,6 @@ namespace AnywhereNET
         {
             var bytes = new byte[length];
             var remaining = length;
-            //Console.WriteLine($"ReadBytes({length})");
             while (remaining > 0)
             {
                 int read = stream.Read(bytes, length - remaining, remaining);
@@ -189,7 +188,6 @@ namespace AnywhereNET
                     throw new IOException("Unexpected end of stream reached; The stream may be closed.");
                 }
             }
-            //Console.WriteLine("  read bytes =" + string.Join(' ', bytes.Select(b => b.ToString())));
             return bytes;
         }
 

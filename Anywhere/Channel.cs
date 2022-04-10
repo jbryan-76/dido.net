@@ -86,18 +86,18 @@ namespace AnywhereNET
                         {
                             throw new IOException("Connection closed.");
                         }
-                        source.SetResult(true);
-                        break;
+                        source.SetResult(false);
+                        return;
                     }
                 }
-                source.SetResult(false);
+                source.SetResult(true);
             });
             return source.Task;
         }
 
         public override bool CanRead => true;
 
-        public override bool CanSeek => throw new NotImplementedException();
+        public override bool CanSeek => false;
 
         public override bool CanWrite => true;
 
@@ -107,7 +107,12 @@ namespace AnywhereNET
 
         public override void Flush()
         {
-            throw new NotImplementedException();
+            // block until the write buffer clears
+            while (WriteBuffer.Length > 0 && IsConnected)
+            {
+                Log($"flushing buffer: {WriteBuffer.Length}");
+                Thread.Sleep(1);
+            }
         }
 
         public override long Seek(long offset, SeekOrigin origin)
@@ -124,7 +129,7 @@ namespace AnywhereNET
         {
             int read = 0;
             int remaining = count;
-            while (remaining > 0)
+            while (remaining > 0 && IsConnected)
             {
                 // peek at the next available segment
                 if (DataQueue.TryPeek(out byte[] segment))
@@ -136,6 +141,7 @@ namespace AnywhereNET
                     // copy the bytes from the segment to the buffer
                     Buffer.BlockCopy(segment, CurrentSegmentOffset, buffer, offset, size);
                     // update counters
+                    Log($"read {size} @ {CurrentSegmentOffset}, {remaining-size} remaining ({remainingInSegment-size} in segment)");
                     offset += size;
                     read += size;
                     remaining -= size;
@@ -144,8 +150,9 @@ namespace AnywhereNET
                     // if the entire segment has been read, remove it
                     if (remainingInSegment == 0)
                     {
-                        DataQueue.TryDequeue(out segment);
+                        DataQueue.TryDequeue(out _);
                         CurrentSegmentOffset = 0;
+                        Log($"discarding segment ({DataQueue.Count} remaining)");
                     }
                 }
                 else if (BlockingReads)
@@ -157,8 +164,8 @@ namespace AnywhereNET
                     }
                     else
                     {
-                        // otherwise block until data is available
-                        Thread.Sleep(0);
+                        // otherwise continue blocking until data is available
+                        Thread.Sleep(1);
                     }
                 }
                 else
@@ -180,30 +187,25 @@ namespace AnywhereNET
 
         internal void Receive(byte[] bytes)
         {
+            Log($"enqueuing {bytes.Length} bytes");
             // when the connection receives data for this channel, enqueue it to be later read by a consumer
             DataQueue.Enqueue(bytes);
             // notify all event handlers new data is available
             OnDataAvailable?.Invoke(this);
         }
 
-        /// <summary>
-        /// Override of Stream implementation to dispose resources.
-        /// </summary>
-        /// <param name="disposing"></param>
         protected override void Dispose(bool disposing)
         {
+            Log("Starting dispose...");
             base.Dispose(disposing);
             if (Interlocked.Read(ref IsDisposed) == 0)
             {
-                // signal the write thread to terminate
+                // make sure all pending data is sent before stopping the write thread
+                Flush();
+                // signal the write thread to stop
                 Interlocked.Exchange(ref IsDisposed, 1);
                 // wait for the write thread to finish
                 WriteThread!.Join();
-                // propagate any exceptions
-                if (WriteThreadException != null)
-                {
-                    throw WriteThreadException;
-                }
             }
             if (disposing)
             {
@@ -211,14 +213,20 @@ namespace AnywhereNET
                 WriteBuffer.Dispose();
             }
             GC.SuppressFinalize(this);
+            Log("...Disposed");
+            // propagate any exceptions
+            if (WriteThreadException != null)
+            {
+                throw WriteThreadException;
+            }
         }
 
         private void WriteLoop()
         {
             try
             {
-                // loop forever until the object is disposed
-                while (Interlocked.Read(ref IsDisposed) == 0)
+                // loop forever until the object is disposed or the connection is closed
+                while (Interlocked.Read(ref IsDisposed) == 0 && IsConnected)
                 {
                     Thread.Sleep(1);
                     lock (WriteBuffer)
@@ -227,7 +235,7 @@ namespace AnywhereNET
                         // as one or more channel data frames
                         int offset = 0;
                         int remaining = (int)WriteBuffer.Length;
-                        while (remaining > 0)
+                        while (remaining > 0 && IsConnected)
                         {
                             int size = Math.Min(remaining, Frame.MaxFrameSize);
                             var bytes = new byte[size];
@@ -247,6 +255,11 @@ namespace AnywhereNET
                 Console.WriteLine($"Channel Unhandled Exception: {e.GetType()} {e.Message}");
                 WriteThreadException = e;
             }
+        }
+
+        private void Log(string message)
+        {
+            Console.WriteLine($"[{DateTimeOffset.UtcNow.ToString("o")}] (Channel {ChannelNumber}) {message}");
         }
     }
 
