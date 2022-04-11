@@ -138,7 +138,7 @@ namespace AnywhereNET.Test
             var transmittedModel = ExpressionSerializer.Encode((context) => ((SampleWorkerClass)obj).SimpleMemberMethod(arg));
 
             // serialize and deserialize the model to simulate transmitting and receiving it
-            ExpressionSerializer.Node receivedModel;
+            Node receivedModel;
             using (var stream = new MemoryStream())
             {
                 var settings = new ExpressionSerializeSettings

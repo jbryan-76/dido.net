@@ -1,4 +1,6 @@
-﻿namespace AnywhereNET
+﻿using System.Reflection;
+
+namespace AnywhereNET
 {
     internal class Constants
     {
@@ -6,12 +8,12 @@
         /// <summary>
         /// A channel for transporting data between an Application and an Orchestrator.
         /// </summary>
-        public static readonly ushort ApplicationChannel = 10;
+        internal static readonly ushort ApplicationChannel = 10;
 
         /// <summary>
         /// A channel for transporting data between a Runner and an Orchestrator.
         /// </summary>
-        public static readonly ushort RunnerChannel = 11;
+        internal static readonly ushort RunnerChannel = 11;
         #endregion
 
         #region Application <-> Runner channels
@@ -19,19 +21,25 @@
         /// A channel for transporting expression execution requests and results between
         /// an Application and a Runner.
         /// </summary>
-        public static readonly ushort ExpressionChannel = 20;
+        internal static readonly ushort ExpressionChannel = 20;
 
         /// <summary>
         /// A channel for transporting assemblies between
         /// an Application and a Runner.
         /// </summary>
-        public static readonly ushort AssembliesChannel = 21;
+        internal static readonly ushort AssembliesChannel = 21;
 
         /// <summary>
         /// A channel for transporting files between
         /// an Application and a Runner.
         /// </summary>
-        public static readonly ushort FilesChannel = 22;
+        internal static readonly ushort FilesChannel = 22;
         #endregion
+
+        /// <summary>
+        /// Binding flags to filter all members of a class: instance, public, non-public, and static.
+        /// </summary>
+        internal static BindingFlags AllMembers = BindingFlags.Instance | BindingFlags.Public
+            | BindingFlags.NonPublic | BindingFlags.Static;
     }
 }
