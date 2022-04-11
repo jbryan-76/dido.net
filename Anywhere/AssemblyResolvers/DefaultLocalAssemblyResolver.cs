@@ -23,7 +23,7 @@ namespace AnywhereNET
             if (AssemblyFiles.Count == 0)
             {
                 AssemblyFiles = Directory
-                    .EnumerateFiles(AppContext.BaseDirectory, $"*.{OS.AssemblyExtension}")
+                    .EnumerateFiles(AppContext.BaseDirectory, $"*.{OSConfiguration.AssemblyExtension}")
                     .ToList();
             }
 

@@ -6,20 +6,6 @@ using System.Security.Cryptography.X509Certificates;
 
 namespace AnywhereNET
 {
-    // TODO: configure to indicate OS environment
-    // TODO: configure to indicate support for queued vs concurrent vs single requests
-    // TODO: configure to indicate (optional) connection to the orchestrator
-    public class RunnerConfiguration
-    {
-        // TODO: configure to indicate OS environment
-        // TODO: configure to indicate support for queued vs concurrent vs single requests
-
-        /// <summary>
-        /// The uri for the orchestrator service used to monitor and manage runners.
-        /// </summary>
-        public Uri? OrchestratorUri { get; set; } = null;
-    }
-
     public class RunnerServer : IDisposable
     {
         private long IsRunning = 0;
@@ -37,7 +23,6 @@ namespace AnywhereNET
         public RunnerServer(RunnerConfiguration? configuration = null)
         {
             Configuration = configuration ?? new RunnerConfiguration();
-
         }
 
         public void Dispose()

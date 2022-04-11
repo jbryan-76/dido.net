@@ -17,7 +17,6 @@ namespace AnywhereNET
         internal static BindingFlags AllMembers = BindingFlags.Instance | BindingFlags.Public
             | BindingFlags.NonPublic | BindingFlags.Static;
 
-
         public static Task SerializeAsync<TResult>(Expression<Func<ExecutionContext, TResult>> expression, Stream stream, ExpressionSerializeSettings? settings = null)
         {
             var node = Encode(expression);

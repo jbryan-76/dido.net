@@ -109,7 +109,7 @@ namespace AnywhereNET.Test.Common
                 // if so, search it for the assemblies
                 if (testLibFolder != null)
                 {
-                    var file = Directory.GetFiles(testLibFolder, $"{AnywhereTestFixture.TestLibName}.{AnywhereNET.OS.AssemblyExtension}", SearchOption.AllDirectories)
+                    var file = Directory.GetFiles(testLibFolder, $"{AnywhereTestFixture.TestLibName}.{AnywhereNET.OSConfiguration.AssemblyExtension}", SearchOption.AllDirectories)
                         .FirstOrDefault();
                     if (file != null)
                     {

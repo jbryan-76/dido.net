@@ -1,6 +1,6 @@
 ﻿namespace AnywhereNET
 {
-    public static class OS
+    public static class OSConfiguration
     {
         // TODO: should this be resolvable at runtime? Can it change between win/linux/osx?
         /// <summary>
