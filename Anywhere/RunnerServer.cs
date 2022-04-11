@@ -113,7 +113,7 @@ namespace AnywhereNET
                 // sleep unless a new connection is pending
                 if (!listener.Pending())
                 {
-                    Thread.Sleep(1);
+                    ThreadHelpers.Yield();
                     continue;
                 }
 

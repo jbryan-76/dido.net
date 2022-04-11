@@ -1,5 +1,4 @@
-﻿using System.Reflection;
-using System.Runtime.Loader;
+﻿using System.Runtime.Loader;
 
 namespace AnywhereNET.Test.Common
 {
@@ -40,11 +39,9 @@ namespace AnywhereNET.Test.Common
 
         public Anywhere Anywhere;
 
+        public AnywhereConfiguration Configuration;
+
         public Environment Environment;
-
-        private Dictionary<string, byte[]> AssemblyCache = new Dictionary<string, byte[]>();
-
-        private List<string> AssemblyFiles = new List<string>();
 
         internal DebugRemoteAssemblyResolver AssemblyResolver { get; private set; }
 
@@ -72,11 +69,12 @@ namespace AnywhereNET.Test.Common
             };
 
             // set up a singleton anywhere instance
-            Anywhere = new Anywhere
+            Configuration = new AnywhereConfiguration
             {
                 ExecutionMode = ExecutionModes.Local,
-                ResolveLocalAssemblyAsync = (assemblyName) => AssemblyResolver.ResolveAssembly(Environment, assemblyName) //UnitTestLocalAssemblyResolver
+                ResolveLocalAssemblyAsync = (assemblyName) => AssemblyResolver.ResolveAssembly(Environment, assemblyName)
             };
+            Anywhere = new Anywhere(Configuration);
         }
 
         /// <summary>
@@ -128,93 +126,5 @@ namespace AnywhereNET.Test.Common
 
             return testLibFolder;
         }
-
-        ///// <summary>
-        ///// Resolve and return the provided assembly.
-        ///// This implementation is specifically to support unit test projects.
-        ///// </summary>
-        ///// <param name="assemblyName"></param>
-        ///// <returns></returns>
-        //Task<Stream?> UnitTestLocalAssemblyResolver(string assemblyName)
-        //{
-        //    lock (Anywhere)
-        //    {
-        //        // see if the assembly is already in the cache
-        //        if (AssemblyCache.ContainsKey(assemblyName))
-        //        {
-        //            return Task.FromResult<Stream?>(new MemoryStream(AssemblyCache[assemblyName]));
-        //        }
-
-        //        // get the set of available assembly files in the TestLib project
-        //        if (AssemblyFiles.Count == 0)
-        //        {
-        //            AssemblyFiles = Directory
-        //                .EnumerateFiles(TestLibAssembliesFolder, $"*.{OS.AssemblyExtension}")
-        //                .ToList();
-        //        }
-
-        //        // try to find the requested assembly by name
-        //        foreach (var file in AssemblyFiles)
-        //        {
-        //            try
-        //            {
-        //                AssemblyName name = AssemblyName.GetAssemblyName(file);
-        //                if (name.FullName == assemblyName)
-        //                {
-        //                    using (var fileStream = File.Open(file, FileMode.Open, FileAccess.Read, FileShare.Read))
-        //                    {
-        //                        // cache it
-        //                        var memStream = new MemoryStream();
-        //                        fileStream.CopyTo(memStream);
-        //                        AssemblyCache.Add(assemblyName, memStream.ToArray());
-
-        //                        // then return it
-        //                        memStream.Position = 0;
-        //                        return Task.FromResult<Stream?>(memStream);
-        //                    }
-        //                }
-        //            }
-        //            catch (Exception)
-        //            {
-        //                // exception will be thrown if the file is not a .NET assembly, in which case simply ignore
-        //                continue;
-        //            }
-        //        }
-
-        //        // as a backstop, see if the desired assembly is actually already loaded
-        //        var asm = AssemblyLoadContext.Default.Assemblies.FirstOrDefault(a => a.FullName == assemblyName);
-        //        if (asm != null && !string.IsNullOrEmpty(asm.Location))
-        //        {
-        //            using (var fileStream = File.Open(asm.Location, FileMode.Open, FileAccess.Read, FileShare.Read))
-        //            {
-        //                // cache it
-        //                var memStream = new MemoryStream();
-        //                fileStream.CopyTo(memStream);
-        //                AssemblyCache.Add(assemblyName, memStream.ToArray());
-
-        //                // then return it
-        //                memStream.Position = 0;
-        //                return Task.FromResult<Stream?>(memStream);
-        //            }
-        //        }
-
-        //        // return null if no matching assembly could be found
-        //        return Task.FromResult<Stream?>(null);
-        //    }
-        //}
-
-        ///// <summary>
-        ///// Resolve and return the provided assembly.
-        ///// This implementation is specifically to support unit test projects.
-        ///// </summary>
-        ///// <param name="env"></param>
-        ///// <param name="assemblyName"></param>
-        ///// <returns></returns>
-        //Task<Stream?> UnitTestRemoteAssemblyResolver(Environment env, string assemblyName)
-        //{
-        //    // TODO: use a custom stream to simulate the message passing to negotiate file loading?
-        //    return UnitTestLocalAssemblyResolver(assemblyName);
-        //}
-
     }
 }

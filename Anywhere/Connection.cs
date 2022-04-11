@@ -8,249 +8,138 @@ using System.Security.Cryptography.X509Certificates;
 namespace AnywhereNET
 {
     /// <summary>
-    /// <para/>Note this implementation is not thread-safe.
+    /// Represents a single bidirectional communications connection between a server and client.
     /// </summary>
-    internal class RingBuffer : Stream
-    {
-        private List<byte[]> Segments = new List<byte[]>();
-
-        private int CurrentSegmentOffset = 0;
-
-        private int CurrentSegmentIndex = 0;
-
-        private long CurrentReadPosition = 0;
-
-        //private long CanReadLength = 0;
-
-        private long TotalLength = 0;
-
-        public override long Length { get { return TotalLength; } }
-
-        public override bool CanRead => true;
-
-        public override bool CanSeek => true;
-
-        public override bool CanWrite => true;
-
-        /// <summary>
-        /// Indicates the position from which reading will commence.
-        /// Writes are always appended to the end of the stream.
-        /// <para/>Note this value can decrease after a Truncate().
-        /// </summary>
-        public override long Position
-        {
-            // TODO: this is breaking things: Stream.Position and Stream.Length for TryReadBytes assumes position is from the absolute beginning
-            get { return CurrentReadPosition; }
-            set { Seek(value, SeekOrigin.Begin); }
-        }
-
-        public void Clear()
-        {
-            Segments.Clear();
-            //CanReadLength = 0;
-            CurrentReadPosition = 0;
-            CurrentSegmentOffset = 0;
-            CurrentSegmentIndex = 0;
-            TotalLength = 0;
-        }
-
-        /// <summary>
-        /// Delete all segments before the current position.
-        /// </summary>
-        public void Truncate()
-        {
-            for (int i = 0; i < CurrentSegmentIndex; i++)
-            {
-                var segment = Segments[0];
-                CurrentReadPosition -= segment.Length;
-                TotalLength -= segment.Length;
-                Segments.RemoveAt(0);
-            }
-            CurrentSegmentIndex = 0;
-            Console.WriteLine($"truncated:  {Segments.Count} segments, @ {CurrentReadPosition} ({Length} length)");
-        }
-
-        public override void Flush() { }
-
-        // Reads from the current position, but DOES NOT AUTO-CONSUME the data. You must call Truncate() to discard.
-        // returns 0 and does not advance the position if there is not enough data in the buffer to complete the read
-        public override int Read(byte[] buffer, int offset, int count)
-        {
-            // if there is not enough data to read, return 0
-            if (Length - CurrentReadPosition < count || Segments.Count == 0)
-            {
-                Console.WriteLine($"==Asked to read {count} but not enough: @{CurrentReadPosition}, {Length} length, {Segments.Count} segments");
-                return 0;
-            }
-
-            // iteratively copy from the current position
-            int read = 0;
-            var remaining = count;
-            while (remaining > 0)
-            {
-                var segment = Segments[CurrentSegmentIndex];
-                // how many bytes are left to read in the current segment
-                int remainingInSegment = segment.Length - CurrentSegmentOffset;
-                // how many bytes can be copied in this loop iteration?
-                int size = Math.Min(remaining, remainingInSegment);
-                // copy the bytes from the segment to the buffer
-                Buffer.BlockCopy(segment, CurrentSegmentOffset, buffer, offset, size);
-                // update counters
-                offset += size;
-                read += size;
-                remaining -= size;
-                remainingInSegment -= size;
-                CurrentSegmentOffset += size;
-                CurrentReadPosition += size;
-                //CanReadLength -= size;
-                // if the entire segment has been read, advance to the next one
-                if (remainingInSegment == 0)
-                {
-                    // TODO: make it a configuration option whether to auto-discard (consume) segments, or make it manual
-                    if (remaining > 0 && CurrentSegmentIndex + 1 >= Segments.Count)
-                    {
-                        // this should be impossible, but keep it to be robust
-                        throw new EndOfStreamException();
-                    }
-                    CurrentSegmentIndex++;
-                    CurrentSegmentOffset = 0;
-                    Console.WriteLine($"read complete segment: current segment = {CurrentSegmentIndex}, {Length - CurrentReadPosition} bytes left in stream");
-                }
-            }
-            return read;
-        }
-
-        public override long Seek(long offset, SeekOrigin origin)
-        {
-            var newPosition = CurrentReadPosition;
-            switch (origin)
-            {
-                case SeekOrigin.Begin:
-                    newPosition = offset;
-                    break;
-                case SeekOrigin.End:
-                    newPosition = Length - offset;
-                    break;
-                case SeekOrigin.Current:
-                    newPosition += offset;
-                    break;
-            }
-            if (newPosition == CurrentReadPosition)
-            {
-                return CurrentReadPosition;
-            }
-            else if (newPosition < 0 || newPosition > Length)
-            {
-                throw new IndexOutOfRangeException($"Position {Position} is outside the bounds of the buffer.");
-            }
-
-            // update the tracking fields
-            //CanReadLength -= (newPosition - Position);
-            CurrentReadPosition = newPosition;
-
-            // determine the new segment offset and index
-            long bytesFromFront = 0;
-            CurrentSegmentOffset = 0;
-            for (CurrentSegmentIndex = 0; CurrentSegmentIndex < Segments.Count; CurrentSegmentIndex++)
-            {
-                var segment = Segments[CurrentSegmentIndex];
-                if (CurrentReadPosition < bytesFromFront + segment.Length)
-                {
-                    CurrentSegmentOffset = (int)(CurrentReadPosition - bytesFromFront);
-                    break;
-                }
-                bytesFromFront += segment.Length;
-            }
-            Console.WriteLine($"Seeked to {CurrentReadPosition} ({Length} length)");
-            return CurrentReadPosition;
-        }
-
-        public override void SetLength(long value)
-        {
-            throw new NotImplementedException();
-        }
-
-        public override void Write(byte[] buffer, int offset, int count)
-        {
-            // copy the indicated byterange and append to the segments list
-            var bytes = new byte[count];
-            Array.Copy(buffer, offset, bytes, 0, count);
-            Segments.Add(bytes);
-            //CanReadLength += count;
-            TotalLength += count;
-            Console.WriteLine($"added segment ({count} bytes): {Segments.Count} segments, @ {CurrentReadPosition} ({Length} length)");
-        }
-    }
-
     public class Connection : IDisposable
     {
-        // TODO: should this be configurable?
-        internal static readonly int HeartbeatPeriodInMs = 60000; // one minute
-
+        /// <summary>
+        /// Signature for a method that is invoked when a frame is transmitted or received. 
+        /// </summary>
+        /// <param name="frame"></param>
         internal delegate void FrameMonitor(Frame frame);
 
-        internal FrameMonitor? UnitTestReceiveFrameMonitor;
-
-        internal FrameMonitor? UnitTestTransmitFrameMonitor;
-
-        private readonly TcpClient Client;
-
-        private readonly SslStream Stream;
-
-        private readonly ConcurrentQueue<Frame> FrameQueue = new ConcurrentQueue<Frame>();
-
-        private Thread? ReadThread;
-
-        private Thread? WriteThread;
-
-        private Timer? HeartbeatTimer;
-
-        private Exception? ReadThreadException;
-
-        private Exception? WriteThreadException;
-
-        private MemoryStream /*ReadBu*/ffer = new MemoryStream();
-
-        private RingBuffer ReadBuffer2 = new RingBuffer();
-
-        private DateTimeOffset? LastRemoteTraffic;
-
-        private long Connected = 0;
-
-        private long IsDisconnecting = 0;
-
-        private long HeartbeatPending = 0;
-
-        private bool IsDisposed = false;
-
-        private ConcurrentDictionary<ushort, Channel> Channels = new ConcurrentDictionary<ushort, Channel>();
-
+        /// <summary>
+        /// The optional name for the connection.
+        /// </summary>
         public string Name { get; private set; } = "";
 
         /// <summary>
-        /// Indicates whether the connection is active and healthy.
+        /// Indicates whether the connection is connected to the remote endpoint.
         /// </summary>
         public bool IsConnected
         {
-            get
-            {
-                return Interlocked.Read(ref Connected) == 1;
-            }
+            get { return Interlocked.Read(ref Connected) == 1; }
         }
 
         /// <summary>
-        /// Create a new secure connection as a server using the provided client and certificate.
+        /// Internal handler for unit tests to monitor received frames.
         /// </summary>
-        /// <param name="client"></param>
-        /// <param name="serverCertificate"></param>
-        public Connection(TcpClient client, X509Certificate2 serverCertificate, string? name = null)
+        internal FrameMonitor? UnitTestReceiveFrameMonitor;
+
+        /// <summary>
+        /// Internal handler for unit tests to monitor transmitted frames.
+        /// </summary>
+        internal FrameMonitor? UnitTestTransmitFrameMonitor;
+
+        // TODO: should this be configurable?
+        /// <summary>
+        /// How long to wait between sending hearbeat frames.
+        /// </summary>
+        internal static readonly int HeartbeatPeriodInMs = 60000; // one minute
+
+        /// <summary>
+        /// The underlying connection endpoint.
+        /// </summary>
+        private readonly TcpClient EndPoint;
+
+        /// <summary>
+        /// The underlying secure socket stream.
+        /// </summary>
+        private readonly SslStream Stream;
+
+        /// <summary>
+        /// A queue of frames to write to the underlying connection endpoint.
+        /// </summary>
+        private readonly ConcurrentQueue<Frame> WriteFrameQueue = new ConcurrentQueue<Frame>();
+
+        /// <summary>
+        /// A thread responsible for reading data from the underlying connection endpoint.
+        /// </summary>
+        private Thread? ReadThread;
+
+        /// <summary>
+        /// A thread responsible for writing queued data to the underlying connection endpoint.
+        /// </summary>
+        private Thread? WriteThread;
+
+        /// <summary>
+        /// A timer to periodically write a HeartbeatFrame to maintain an active connection.
+        /// </summary>
+        private Timer? HeartbeatTimer;
+
+        /// <summary>
+        /// Any exception thrown by the ReadThread, to be held and re-thrown when the thread joins.
+        /// </summary>
+        private Exception? ReadThreadException;
+
+        /// <summary>
+        /// Any exception thrown by the WriteThread, to be held and re-thrown when the thread joins.
+        /// </summary>
+        private Exception? WriteThreadException;
+
+        /// <summary>
+        /// A queue of data received by the connection that is held until it can be
+        /// read and processed as a complete Frame.
+        /// </summary>
+        private QueueBufferStream ReadBuffer = new QueueBufferStream(false);
+
+        /// <summary>
+        /// Contains the timestamp of the last data received from the remote connection.
+        /// </summary>
+        private DateTimeOffset? LastRemoteTraffic;
+
+        /// <summary>
+        /// Used with Interlocked to indicate whether the object instance is connected
+        /// and the read and write threads should run.
+        /// </summary>
+        private long Connected = 0;
+
+        /// <summary>
+        /// Used with Interlocked to indicate whether the object instance is disconnecting,
+        /// to prevent any new channels from being created.
+        /// </summary>
+        private long IsDisconnecting = 0;
+
+        /// <summary>
+        /// Used with Interlocked to indicate whether a heartbeat frame should be sent ASAP.
+        /// </summary>
+        private long HeartbeatPending = 0;
+
+        /// <summary>
+        /// Fulfills IDispose to indicate whether the object is disposed.
+        /// </summary>
+        private bool IsDisposed = false;
+
+        /// <summary>
+        /// A thread-safe collection of all Channels.
+        /// </summary>
+        private ConcurrentDictionary<ushort, Channel> Channels = new ConcurrentDictionary<ushort, Channel>();
+
+        /// <summary>
+        /// Create a new secure connection in a server role using the provided endpoint 
+        /// and certificate for encryption.
+        /// </summary>
+        /// <param name="endpoint">The TcpClient connected to the remote client endpoint.</param>
+        /// <param name="serverCertificate">The certificate to encrypt the connection.</param>
+        /// <param name="name">The optional name for the connection.</param>
+        public Connection(TcpClient endpoint, X509Certificate2 serverCertificate, string? name = null)
         {
             Name = name ?? "";
-            Client = client;
+            EndPoint = endpoint;
 
             Log("creating sslstream as server");
             // if a certificate is supplied, the connection is implied to be a server
-            Stream = new SslStream(client.GetStream(), false);
+            Stream = new SslStream(endpoint.GetStream(), false);
 
             try
             {
@@ -274,19 +163,21 @@ namespace AnywhereNET
         }
 
         /// <summary>
-        /// Create a new secure connection using the provided client and connected to the provided host server.
+        /// Create a new secure connection in a client role using the provided endpoint
+        /// and connected to the provided host server.
         /// </summary>
-        /// <param name="client"></param>
-        /// <param name="targetHost"></param>
-        public Connection(TcpClient client, string targetHost, string? name = null)
+        /// <param name="endpoint">The TcpClient connected to the remote server endpoint.</param>
+        /// <param name="targetHost">The hostname of the remote server which is used to authenticate the connection.</param>
+        /// <param name="name">The optional name for the connection.</param>
+        public Connection(TcpClient endpoint, string targetHost, string? name = null)
         {
             Name = name ?? "";
-            Client = client;
+            EndPoint = endpoint;
 
             Log("creating sslstream as client");
             // otherwise the connection is implied to be a client
             Stream = new SslStream(
-                Client.GetStream(),
+                EndPoint.GetStream(),
                 false,
                 new RemoteCertificateValidationCallback(ValidateServerCertificate),
                 null
@@ -311,6 +202,10 @@ namespace AnywhereNET
             }
         }
 
+        /// <summary>
+        /// Cleans up and disposes all managed and unmanaged resources.
+        /// </summary>
+        /// <exception cref="AggregateException"></exception>
         public void Dispose()
         {
             if (Interlocked.Read(ref Connected) == 1)
@@ -318,7 +213,6 @@ namespace AnywhereNET
                 Disconnect();
             }
 
-            Log("Starting dispose...");
             var exceptions = new List<Exception>();
             if (!IsDisposed)
             {
@@ -334,25 +228,25 @@ namespace AnywhereNET
                 }
 
                 Stream.Dispose();
-                ReadBuffer2.Dispose();
+                ReadBuffer.Dispose();
                 HeartbeatTimer?.Dispose();
             }
 
             GC.SuppressFinalize(this);
 
-            Log("...Disposed");
             if (exceptions.Count > 0)
             {
                 throw new AggregateException(exceptions);
             }
         }
 
+        /// <summary>
+        /// Disconnect the remote endpoint and terminate the connection.
+        /// </summary>
         public void Disconnect()
         {
             if (Interlocked.Read(ref Connected) == 1)
             {
-                Log("Starting disconnect...");
-
                 // prevent any new channels from being created while disconnecting
                 Interlocked.Exchange(ref IsDisconnecting, 1);
 
@@ -377,8 +271,6 @@ namespace AnywhereNET
                 // wait for the threads to finish
                 ReadThread!.Join(1000);
                 WriteThread!.Join(1000);
-
-                Log("...Disconnected");
             }
             // gracefully attempt to shut down the other side of the connection by sending a disconnect frame
             try
@@ -394,13 +286,17 @@ namespace AnywhereNET
             }
         }
 
+        /// <summary>
+        /// Transmit a debug message to the remote endpoint.
+        /// </summary>
+        /// <param name="message"></param>
         public void Debug(string message)
         {
-            FrameQueue.Enqueue(new DebugFrame(message));
+            WriteFrameQueue.Enqueue(new DebugFrame(message));
         }
 
         /// <summary>
-        /// Gets a reference to the indicated channel.
+        /// Gets or creates a reference to the indicated channel.
         /// <para/>Note: DO NOT Dispose() the channel. Since the channel is owned by the Connection,
         /// Connection.Dispose() will dispose it implicitly.
         /// </summary>
@@ -417,12 +313,19 @@ namespace AnywhereNET
             return Channels[channelNumber];
         }
 
+        /// <summary>
+        /// Enqueue the given frame for transmission to the remote endpoint.
+        /// </summary>
+        /// <param name="frame"></param>
         internal void EnqueueFrame(Frame frame)
         {
-            Log($"enqueuing frame: {frame}");
-            FrameQueue.Enqueue(frame);
+            WriteFrameQueue.Enqueue(frame);
         }
 
+        /// <summary>
+        /// Enqueue the given frames for transmission to the remote endpoint.
+        /// </summary>
+        /// <param name="frames"></param>
         internal void EnqueueFrames(IEnumerable<Frame> frames)
         {
             foreach (var frame in frames)
@@ -431,27 +334,38 @@ namespace AnywhereNET
             }
         }
 
+        /// <summary>
+        /// Blocks until all queued frames are transmitted.
+        /// <para/>Note if another thread is continually enqueuing frames this method
+        /// may not return, so use with care.
+        /// </summary>
         internal void Flush()
         {
             // block until all frames are sent
-            while (FrameQueue.Count > 0 && IsConnected)
+            while (WriteFrameQueue.Count > 0 && IsConnected)
             {
-                Thread.Sleep(1);
+                ThreadHelpers.Yield();
             }
         }
 
+        /// <summary>
+        /// Send a heartbeat frame to the remote endpoint.
+        /// </summary>
         internal void SendHeartbeat()
         {
             // signal to send a heartbeat frame as soon as possible
             Interlocked.Exchange(ref HeartbeatPending, 1);
         }
 
+        /// <summary>
+        /// Finish internal bookkeeping once the remote connection is authenticated.
+        /// </summary>
         private void FinishConnecting()
         {
             Interlocked.Exchange(ref Connected, 1);
 
-            var remote = (IPEndPoint)Client.Client.RemoteEndPoint;
-            var local = (IPEndPoint)Client.Client.LocalEndPoint;
+            var remote = (IPEndPoint)EndPoint.Client.RemoteEndPoint;
+            var local = (IPEndPoint)EndPoint.Client.LocalEndPoint;
             Log($"connected. Local = {local.Address}:{local.Port}. Remote = {remote.Address}:{remote.Port}");
 
             // start separate threads to read and write data
@@ -473,11 +387,8 @@ namespace AnywhereNET
         {
             try
             {
-                Log("starting write loop");
                 while (Interlocked.Read(ref Connected) == 1)
                 {
-                    Thread.Sleep(1);
-
                     // if a heartbeat is pending, send it immediately
                     if (Interlocked.Read(ref HeartbeatPending) == 1)
                     {
@@ -486,17 +397,17 @@ namespace AnywhereNET
                     }
 
                     // send all pending frames
-                    while (FrameQueue.TryDequeue(out Frame? frame))
+                    while (WriteFrameQueue.TryDequeue(out Frame? frame))
                     {
                         UnitTestTransmitFrameMonitor?.Invoke(frame);
                         WriteFrame(frame);
                     }
+
+                    ThreadHelpers.Yield();
                 }
-                Log("exiting write loop");
             }
             catch (Exception e)
             {
-                Log($"WriteLoop terminated: Unhandled Exception: {e.GetType()} {e.Message}");
                 WriteThreadException = e;
                 // force all thread termination on any error
                 Interlocked.Exchange(ref Connected, 0);
@@ -513,23 +424,26 @@ namespace AnywhereNET
 
             // set a timeout so read methods do not block too long.
             // this allows for periodically checking the Connected status to 
-            // exit the loop when this object disconnects
+            // exit the loop when either this object or the remote side disconnects.
             Stream.ReadTimeout = 100;
-            Log("starting read loop");
             try
             {
                 // TODO: how big should this buffer be?
-                byte[] data = new byte[1024 * 1024];
+                // empirically it appears that 32k is standard for the underlying network classes
+                byte[] data = new byte[32 * 1024];
                 while (Interlocked.Read(ref Connected) == 1)
                 {
+                    // TODO: if no traffic is seen from the remote side in more than
+                    // 2*HeartbeatPeriodInMs, force a disconnect
+                    // LastRemoteTraffic
+
                     try
                     {
                         // read as much data as available and append to the read buffer
                         int read = Stream.Read(data, 0, data.Length);
                         if (read > 0)
                         {
-                            ReadBuffer2.Write(data, 0, read);
-                            Log($"Filled read buffer with {read} bytes (@{ReadBuffer2.Position} [{ReadBuffer2.Length} bytes])");
+                            ReadBuffer.Write(data, 0, read);
                             LastRemoteTraffic = DateTimeOffset.UtcNow;
                         }
                     }
@@ -561,19 +475,15 @@ namespace AnywhereNET
 
                     UnitTestReceiveFrameMonitor?.Invoke(frame);
 
-                    Log($"Received: {frame.ToString()}");
-
                     if (frame is HeartbeatFrame)
                     {
                         // simply discard the frame:
                         // the heartbeat is used just to prevent connection timeouts
                         // and maintain an active status on the connection
-                        Log("discarding heartbeat");
                         continue;
                     }
                     else if (frame is DisconnectFrame)
                     {
-                        Log("disconnecting");
                         // signal a disconnect to all threads
                         Interlocked.Exchange(ref Connected, 0);
                     }
@@ -581,6 +491,7 @@ namespace AnywhereNET
                     else if (frame is DebugFrame)
                     {
                         Log($"DEBUG: {(frame as DebugFrame).Message}");
+                        // TODO: add a configurable handler to process the received debug message
                     }
 
                     else if (frame is ChannelDataFrame)
@@ -594,7 +505,6 @@ namespace AnywhereNET
                         throw new InvalidOperationException($"Unknown or unhandled frame received: '{frame.GetType()}'");
                     }
                 }
-                Log("exiting read loop");
             }
             catch (IOException e)
             {
@@ -612,26 +522,27 @@ namespace AnywhereNET
             }
         }
 
+        /// <summary>
+        /// Try to read a frame from the read buffer, returning null if a full frame is not yet
+        /// present in the buffer, else the strongly typed frame instance.
+        /// </summary>
+        /// <returns></returns>
         private Frame? TryReadFrame()
         {
-            // remember the current buffer position and reset it back to the start
-            long position = ReadBuffer2.Position;
-            //ReadBuffer.Position = 0;
+            // remember the current buffer position
+            long position = ReadBuffer.Position;
 
             // try to read a frame from the buffer
             int length = -1;
             var payload = new byte[0];
-            if (ReadBuffer2.TryReadByte(out var type)
-                && ReadBuffer2.TryReadUShortBE(out var channel)
-                && ReadBuffer2.TryReadIntBE(out length)
-                && (length == 0 || ReadBuffer2.TryReadBytes(length, out payload))
+            if (ReadBuffer.TryReadByte(out var type)
+                && ReadBuffer.TryReadUShortBE(out var channel)
+                && ReadBuffer.TryReadIntBE(out length)
+                && (length == 0 || ReadBuffer.TryReadBytes(length, out payload))
                 )
             {
-                Log($"Read frame from {position} to {ReadBuffer2.Position} ({ReadBuffer2.Position - position} bytes)");
-                // a frame was read successfully. clear the buffer up to the current position
-                ReadBuffer2.Truncate();
-                //ReadBuffer.Position = 0;
-                //ReadBuffer.SetLength(0); // <== this is the problem: we're deleting the whole buffer
+                // a frame was read successfully. clear/consume the buffer up to the current position...
+                ReadBuffer.Truncate();
                 // ..and return the frame
                 var frame = FrameFactory.Decode(new Frame
                 {
@@ -644,14 +555,17 @@ namespace AnywhereNET
             }
             else
             {
-                Log($"Could not read frame of payload {length} - returning ring buffer to {position}");
-                // a new frame is not yet available. restore the buffer position
-                // to its previous value and return null
-                ReadBuffer2.Position = position;
+                // a new frame is not yet available.
+                // restore the buffer position to its previous value and return null
+                ReadBuffer.Position = position;
                 return null;
             }
         }
 
+        /// <summary>
+        /// Write the provided frame to the underlying SslStream.
+        /// </summary>
+        /// <param name="frame"></param>
         private void WriteFrame(Frame frame)
         {
             Stream.WriteByte(frame.Type);
@@ -662,9 +576,9 @@ namespace AnywhereNET
                 Stream.Write(frame.Payload, 0, frame.Payload.Length);
             }
             Stream.Flush();
-            Log($"Wrote frame {frame}");
         }
 
+        // TODO: add a configurable ILogger
         private void Log(string message)
         {
             if (!string.IsNullOrWhiteSpace(Name))
@@ -677,7 +591,14 @@ namespace AnywhereNET
             }
         }
 
-        // The following method is invoked by the RemoteCertificateValidationDelegate.
+        /// <summary>
+        /// Invoked by the RemoteCertificateValidationDelegate to authenticate the server endpoint.
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="certificate"></param>
+        /// <param name="chain"></param>
+        /// <param name="sslPolicyErrors"></param>
+        /// <returns></returns>
         private static bool ValidateServerCertificate(
               object sender,
               X509Certificate? certificate,
@@ -704,5 +625,4 @@ namespace AnywhereNET
 #endif
         }
     }
-
 }

@@ -74,7 +74,7 @@ namespace AnywhereNET
 
                 if (!listener.Pending())
                 {
-                    Thread.Sleep(1);
+                    ThreadHelpers.Yield();
                     continue;
                 }
 
@@ -114,7 +114,7 @@ namespace AnywhereNET
 
                 while (Interlocked.Read(ref Connected) == 1 && connection.IsConnected)
                 {
-                    Thread.Sleep(1);
+                    ThreadHelpers.Yield();
                 }
 
                 // TODO: if the connection was for a runner, remove it from the pool

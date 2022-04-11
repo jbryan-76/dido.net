@@ -36,10 +36,10 @@ namespace AnywhereNET.Test.Runner
             var context = new AssemblyLoadContext(Guid.NewGuid().ToString(), true);
 
             // dynamically load the 2 test assemblies into the context
-            var testLibStream = await TestFixture.Anywhere.ResolveLocalAssemblyAsync("Anywhere.TestLib, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null");
+            var testLibStream = await TestFixture.Configuration.ResolveLocalAssemblyAsync("Anywhere.TestLib, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null");
             var testLibAssembly = context.LoadFromStream(testLibStream);
             testLibStream.Dispose();
-            var testLibDependencyStream = await TestFixture.Anywhere.ResolveLocalAssemblyAsync("Anywhere.TestLibDependency, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null");
+            var testLibDependencyStream = await TestFixture.Configuration.ResolveLocalAssemblyAsync("Anywhere.TestLibDependency, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null");
             var testLibDependencyAssembly = context.LoadFromStream(testLibDependencyStream);
             testLibDependencyStream.Dispose();
 
@@ -109,10 +109,10 @@ namespace AnywhereNET.Test.Runner
             var context = new AssemblyLoadContext(Guid.NewGuid().ToString(), true);
 
             // dynamically load the 2 test assemblies into the context
-            var testLibStream = await TestFixture.Anywhere.ResolveLocalAssemblyAsync("Anywhere.TestLib, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null");
+            var testLibStream = await TestFixture.Configuration.ResolveLocalAssemblyAsync("Anywhere.TestLib, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null");
             var testLibAssembly = context.LoadFromStream(testLibStream);
             testLibStream.Dispose();
-            var testLibDependencyStream = await TestFixture.Anywhere.ResolveLocalAssemblyAsync("Anywhere.TestLibDependency, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null");
+            var testLibDependencyStream = await TestFixture.Configuration.ResolveLocalAssemblyAsync("Anywhere.TestLibDependency, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null");
             var testLibDependencyAssembly = context.LoadFromStream(testLibDependencyStream);
             testLibDependencyStream.Dispose();
 

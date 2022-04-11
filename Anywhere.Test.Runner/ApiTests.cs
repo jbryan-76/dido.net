@@ -52,13 +52,14 @@ namespace AnywhereNET.Test.Runner
             await runnerServer.Start(cert, port, IPAddress.Loopback);
 
             // create an Anywhere instance configured to use the loopback server
-            var anywhere = new Anywhere
+            var configuration = new AnywhereConfiguration
             {
                 OrchestratorUri = new Uri($"https://localhost:{port}"),
                 ExecutionMode = ExecutionModes.Remote,
                 // use the unit test assembly resolver instead of the default implementation
                 ResolveLocalAssemblyAsync = (assemblyName) => TestFixture.AssemblyResolver.ResolveAssembly(TestFixture.Environment, assemblyName)
             };
+            var anywhere = new Anywhere(configuration);
 
             // execute the lambda expression using the remote runner server
             var result = await anywhere.ExecuteAsync<int>(lambda);
@@ -92,13 +93,14 @@ namespace AnywhereNET.Test.Runner
             await runnerServer.Start(cert, port, IPAddress.Loopback);
 
             // create an Anywhere instance configured to use the loopback server
-            var anywhere = new Anywhere
+            var configuration = new AnywhereConfiguration
             {
                 OrchestratorUri = new Uri($"https://localhost:{port}"),
                 ExecutionMode = ExecutionModes.Remote,
                 // use the unit test assembly resolver instead of the default implementation
                 ResolveLocalAssemblyAsync = (assemblyName) => TestFixture.AssemblyResolver.ResolveAssembly(TestFixture.Environment, assemblyName)
             };
+            var anywhere = new Anywhere(configuration);
 
             // execute the lambda expression using the remote runner server using the deferred handler
             // (NOTE the handler is run in a different thread)
@@ -134,10 +136,10 @@ namespace AnywhereNET.Test.Runner
             // it uses are not automatically included as packages within the unit test project,
             // and are instead resolved dynamically on demand as needed by the remote runner)
             var context = new AssemblyLoadContext(Guid.NewGuid().ToString(), true);
-            var testLibStream = await TestFixture.Anywhere.ResolveLocalAssemblyAsync("Anywhere.TestLib, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null");
+            var testLibStream = await TestFixture.Configuration.ResolveLocalAssemblyAsync("Anywhere.TestLib, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null");
             var testLibAssembly = context.LoadFromStream(testLibStream);
             testLibStream.Dispose();
-            var testLibDependencyStream = await TestFixture.Anywhere.ResolveLocalAssemblyAsync("Anywhere.TestLibDependency, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null");
+            var testLibDependencyStream = await TestFixture.Configuration.ResolveLocalAssemblyAsync("Anywhere.TestLibDependency, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null");
             var testLibDependencyAssembly = context.LoadFromStream(testLibDependencyStream);
             testLibDependencyStream.Dispose();
             var sampleWorkerType = testLibAssembly.GetType("AnywhereNET.TestLib.SampleWorkerClass");

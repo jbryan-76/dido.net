@@ -37,7 +37,7 @@ namespace AnywhereNET.Test
             var expectedResult = testObject.MemberMethodWithDependency(testModel);
 
             var actualResult = await TestFixture.Anywhere.DebugLocalExecuteAsync((context) => testObject.MemberMethodWithDependency(testModel));
-            
+
             Assert.Equal(expectedResult, actualResult);
         }
 

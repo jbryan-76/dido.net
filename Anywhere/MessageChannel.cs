@@ -13,8 +13,15 @@
         /// </summary>
         public event MessageReceivedHandler? OnMessageReceived = null;
 
+        /// <summary>
+        /// The underlying channel this instance is using.
+        /// </summary>
         public Channel Channel { get; private set; }
 
+        /// <summary>
+        /// Create a new message channel that uses the provided channel.
+        /// </summary>
+        /// <param name="channel"></param>
         public MessageChannel(Channel channel)
         {
             Channel = channel;
@@ -22,6 +29,10 @@
             Channel.OnDataAvailable += (channel) => DataReceived();
         }
 
+        /// <summary>
+        /// Write the given message to the underlying channel.
+        /// </summary>
+        /// <param name="message"></param>
         public void Send(IMessage message)
         {
             var messageType = message.GetType();
@@ -29,9 +40,13 @@
             message.Write(Channel);
         }
 
+        /// <summary>
+        /// When more data is available, read the message and invoke the handler.
+        /// </summary>
+        /// <exception cref="InvalidOperationException"></exception>
         private void DataReceived()
         {
-            // TODO: send message length too so can skip on error?
+            // TODO: send message length too so can read+discard on error?
             var typeName = Channel.ReadString();
             var messageType = Type.GetType(typeName);
             if (messageType == null)
