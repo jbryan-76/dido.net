@@ -134,6 +134,9 @@ namespace AnywhereNET
         /// </summary>
         public override long Position { get => throw new NotImplementedException(); set => throw new NotImplementedException(); }
 
+        /// <summary>
+        /// Blocks until all pending data is written to the underlying stream.
+        /// </summary>
         public override void Flush()
         {
             // block until the write buffer clears

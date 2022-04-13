@@ -2,7 +2,6 @@
 using System.Linq;
 using System.Threading;
 using Xunit;
-using Xunit.Abstractions;
 
 namespace AnywhereNET.Test
 {

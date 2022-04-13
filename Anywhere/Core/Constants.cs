@@ -39,7 +39,8 @@ namespace AnywhereNET
         /// <summary>
         /// Binding flags to filter all members of a class: instance, public, non-public, and static.
         /// </summary>
-        internal static BindingFlags AllMembers = BindingFlags.Instance | BindingFlags.Public
+        internal static BindingFlags AllMembers =
+            BindingFlags.Instance | BindingFlags.Public
             | BindingFlags.NonPublic | BindingFlags.Static;
     }
 }

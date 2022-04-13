@@ -6,6 +6,8 @@ using System.Security.Cryptography.X509Certificates;
 
 namespace AnywhereNET
 {
+    // NOTE: it's outside the scope of this library to decide how and when to spin up new Runners.
+
     public class RunnerServer : IDisposable
     {
         private long IsRunning = 0;
@@ -19,6 +21,10 @@ namespace AnywhereNET
         private RunnerConfiguration Configuration;
 
         private bool IsDisposed = false;
+
+        private ConcurrentDictionary<Guid, Worker> ActiveWorkers = new ConcurrentDictionary<Guid, Worker>();
+
+        private ConcurrentQueue<Worker> CompletedWorkers = new ConcurrentQueue<Worker>();
 
         public RunnerServer(RunnerConfiguration? configuration = null)
         {
@@ -49,6 +55,8 @@ namespace AnywhereNET
                 OrchestratorChannel = new MessageChannel(OrchestratorConnection.GetChannel(Constants.RunnerChannel));
 
                 // TODO: inform the orchestrator that we exist
+
+                // TODO: start an infrequent (eg 60s) heartbeat to orchestrator to update status and environment stats
             }
 
             // listen for incoming connections
@@ -73,20 +81,6 @@ namespace AnywhereNET
             WorkLoopThread = null;
         }
 
-        class Worker
-        {
-            public Thread Thread;
-            public Connection Connection;
-            public Worker(Thread thread, Connection connection)
-            {
-                Thread = thread;
-                Connection = connection;
-            }
-        }
-
-        ConcurrentDictionary<Guid, Worker> ActiveWorkers = new ConcurrentDictionary<Guid, Worker>();
-        ConcurrentQueue<Worker> CompletedWorkers = new ConcurrentQueue<Worker>();
-
         private void WorkLoop(TcpListener listener, X509Certificate2 cert)
         {
             while (Interlocked.Read(ref IsRunning) == 1)
@@ -105,7 +99,7 @@ namespace AnywhereNET
                 // block and wait for the next incoming connection
                 var client = listener.AcceptTcpClient();
 
-                // create a secure connection to the client
+                // create a secure connection to the endpoint
                 // and start processing it in a dedicated thread
                 var connection = new Connection(client, cert);
                 var id = Guid.NewGuid();
@@ -135,10 +129,13 @@ namespace AnywhereNET
             var assembliesChannel = connection.GetChannel(Constants.AssembliesChannel);
             var filesChannel = connection.GetChannel(Constants.FilesChannel);
 
-            // TODO: add support for the application to send a "cancel" message
-
             try
             {
+
+                // TODO: if this runner is "too busy" send a "too busy" message
+
+                // TODO: add support for the application to send a "cancel" message
+
                 // create the execution context that is available to the expression while it's running
                 var executionContext = new ExecutionContext
                 {
@@ -161,7 +158,7 @@ namespace AnywhereNET
                 var expressionRequest = new ExpressionRequestMessage();
                 expressionRequest.Read(expressionChannel);
 
-                // TODO: schedule a heartbeat to orchestrator to update status and environment stats
+                // TODO: schedule a frequent (eg 10s) heartbeat to orchestrator to update status and environment stats
 
                 using (var stream = new MemoryStream(expressionRequest.Bytes))
                 {
@@ -194,6 +191,17 @@ namespace AnywhereNET
                 {
                     CompletedWorkers.Enqueue(worker);
                 }
+            }
+        }
+
+        private class Worker
+        {
+            public Thread Thread;
+            public Connection Connection;
+            public Worker(Thread thread, Connection connection)
+            {
+                Thread = thread;
+                Connection = connection;
             }
         }
     }

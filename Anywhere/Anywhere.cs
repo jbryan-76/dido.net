@@ -265,7 +265,8 @@ namespace AnywhereNET
             }
             catch (Exception e)
             {
-                // TODO: remove this once things seem stable
+                // TODO: retry comm attempts to orchestrator or runner before failing
+
                 throw;
             }
         }

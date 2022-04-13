@@ -19,6 +19,11 @@ namespace AnywhereNET
         internal delegate void FrameMonitor(Frame frame);
 
         /// <summary>
+        /// How long to wait between sending hearbeat frames.
+        /// </summary>
+        public static int DefaultHeartbeatPeriodInMs = 60000; // one minute
+
+        /// <summary>
         /// The optional name for the connection.
         /// </summary>
         public string Name { get; private set; } = "";
@@ -40,12 +45,6 @@ namespace AnywhereNET
         /// Internal handler for unit tests to monitor transmitted frames.
         /// </summary>
         internal FrameMonitor? UnitTestTransmitFrameMonitor;
-
-        // TODO: should this be configurable?
-        /// <summary>
-        /// How long to wait between sending hearbeat frames.
-        /// </summary>
-        internal static readonly int HeartbeatPeriodInMs = 60000; // one minute
 
         /// <summary>
         /// The underlying connection endpoint.
@@ -119,6 +118,12 @@ namespace AnywhereNET
         /// Fulfills IDispose to indicate whether the object is disposed.
         /// </summary>
         private bool IsDisposed = false;
+
+        /// <summary>
+        /// The heartbeat period the remote end of this connection is using.
+        /// (Each side of the connection may have different heartbeat periods).
+        /// </summary>
+        private int RemoteHeartbeatPeriodInMs = DefaultHeartbeatPeriodInMs;
 
         /// <summary>
         /// A thread-safe collection of all Channels.
@@ -275,9 +280,7 @@ namespace AnywhereNET
             // gracefully attempt to shut down the other side of the connection by sending a disconnect frame
             try
             {
-                var frame = new DisconnectFrame();
-                UnitTestTransmitFrameMonitor?.Invoke(frame);
-                WriteFrame(frame);
+                WriteFrame(new DisconnectFrame());
             }
             catch (Exception ex)
             {
@@ -311,6 +314,18 @@ namespace AnywhereNET
             }
             Channels.TryAdd(channelNumber, new Channel(this, channelNumber));
             return Channels[channelNumber];
+        }
+
+        /// <summary>
+        /// Disposes the given channel, freeing its resources.
+        /// </summary>
+        /// <param name="channel"></param>
+        internal void CloseChannel(Channel channel)
+        {
+            if (Channels.TryRemove(channel.ChannelNumber, out var c))
+            {
+                c.Dispose();
+            }
         }
 
         /// <summary>
@@ -374,8 +389,8 @@ namespace AnywhereNET
             WriteThread = new Thread(() => WriteLoop());
             WriteThread.Start();
 
-            // send a heartbeat frame once a minute to keep the connection active
-            HeartbeatTimer = new Timer((arg) => SendHeartbeat(), null, HeartbeatPeriodInMs, HeartbeatPeriodInMs);
+            // send a heartbeat frame periodically to keep the connection active
+            HeartbeatTimer = new Timer((arg) => SendHeartbeat(), null, 0, DefaultHeartbeatPeriodInMs);
 
             Interlocked.Exchange(ref IsDisconnecting, 0);
         }
@@ -392,8 +407,9 @@ namespace AnywhereNET
                     // if a heartbeat is pending, send it immediately
                     if (Interlocked.Read(ref HeartbeatPending) == 1)
                     {
+                        var frame = new HeartbeatFrame(DefaultHeartbeatPeriodInMs);
                         Interlocked.Exchange(ref HeartbeatPending, 0);
-                        WriteFrame(new HeartbeatFrame());
+                        WriteFrame(frame);
                     }
 
                     // send all pending frames
@@ -433,10 +449,6 @@ namespace AnywhereNET
                 byte[] data = new byte[32 * 1024];
                 while (Interlocked.Read(ref Connected) == 1)
                 {
-                    // TODO: if no traffic is seen from the remote side in more than
-                    // 2*HeartbeatPeriodInMs, force a disconnect
-                    // LastRemoteTraffic
-
                     try
                     {
                         // read as much data as available and append to the read buffer
@@ -455,7 +467,7 @@ namespace AnywhereNET
                         var socketException = e.InnerException as SocketException;
                         if (socketException != null && socketException.SocketErrorCode == SocketError.TimedOut)
                         {
-                            // NOTE it is bad practice to use exception handling to control 
+                            // NOTE it is an antipattern to use exception handling to control 
                             // "normal" expected program flow, but in this case there is no way to
                             // cleanly terminate a thread that is blocking indefinitely on
                             // a Stream.Read.
@@ -466,6 +478,19 @@ namespace AnywhereNET
                         }
                     }
 
+                    // if no traffic is seen from the remote side for more than
+                    // twice the remote's heartbeat period (ie RemoteHeartbeatPeriodInMs),
+                    // force a disconnect
+                    TimeSpan remoteIdlePeriod = LastRemoteTraffic.HasValue
+                        ? DateTimeOffset.UtcNow - LastRemoteTraffic.Value
+                        : TimeSpan.FromMilliseconds(0);
+                    if (remoteIdlePeriod.TotalMilliseconds > 2 * RemoteHeartbeatPeriodInMs)
+                    {
+                        Interlocked.Exchange(ref Connected, 0);
+                        Log($"Forcing disconnect: remote connection was idle for more than {RemoteHeartbeatPeriodInMs}ms");
+                        break;
+                    }
+
                     // try to read a frame from the buffer
                     var frame = TryReadFrame();
                     if (frame == null)
@@ -473,31 +498,28 @@ namespace AnywhereNET
                         continue;
                     }
 
-                    UnitTestReceiveFrameMonitor?.Invoke(frame);
-
                     if (frame is HeartbeatFrame)
                     {
-                        // simply discard the frame:
-                        // the heartbeat is used just to prevent connection timeouts
-                        // and maintain an active status on the connection
-                        continue;
+                        // remember the heartbeat period the other side is using
+                        // so it can be used to determine if the other end becomes unresponsive
+                        RemoteHeartbeatPeriodInMs = (frame as HeartbeatFrame)!.PeriodInMs;
                     }
                     else if (frame is DisconnectFrame)
                     {
                         // signal a disconnect to all threads
                         Interlocked.Exchange(ref Connected, 0);
                     }
-
                     else if (frame is DebugFrame)
                     {
-                        Log($"DEBUG: {(frame as DebugFrame).Message}");
+                        Log($"DEBUG: {(frame as DebugFrame)!.Message}");
                         // TODO: add a configurable handler to process the received debug message
+                        UnitTestReceiveFrameMonitor?.Invoke(frame);
                     }
-
                     else if (frame is ChannelDataFrame)
                     {
                         var channel = GetChannel(frame.Channel);
                         channel.Receive(frame.Payload);
+                        UnitTestReceiveFrameMonitor?.Invoke(frame);
                     }
                     else
                     {

@@ -86,15 +86,16 @@ namespace AnywhereNET
 
         public void Read(Stream stream)
         {
-            // TODO: more robust conversion back to enum?
-            ContentType = (ContentTypes)stream.ReadInt32BE();
+            ContentType = Enum.Parse<ContentTypes>(stream.ReadString());
+            //ContentType = (ContentTypes)stream.ReadInt32BE();
             int length = stream.ReadInt32BE();
             Bytes = stream.ReadBytes(length);
         }
 
         public void Write(Stream stream)
         {
-            stream.WriteInt32BE((int)ContentType);
+            stream.WriteString(ContentType.ToString());
+            //stream.WriteInt32BE((int)ContentType);
             stream.WriteInt32BE(Bytes.Length);
             stream.Write(Bytes);
         }

@@ -4,13 +4,17 @@ using System.Reflection;
 namespace AnywhereNET
 {
     /// <summary>
-    /// A serialization binder to locate the correct type from the set of loaded assemblies
+    /// A JSON serialization binder to locate the correct type from the set of loaded assemblies
     /// in a specific runtime Environment.
     /// </summary>
     internal class DeserializeTypeBinder : ISerializationBinder
     {
         private Environment Environment;
 
+        /// <summary>
+        /// Create a new binder instance for the specified Environment.
+        /// </summary>
+        /// <param name="environment"></param>
         public DeserializeTypeBinder(Environment environment)
         {
             Environment = environment;
