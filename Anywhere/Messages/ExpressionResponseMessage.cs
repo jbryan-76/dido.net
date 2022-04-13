@@ -3,6 +3,7 @@ using System.Text;
 
 namespace AnywhereNET
 {
+    // TODO: split this into a response message and an error message
     internal class ExpressionResponseMessage : IMessage
     {
         public enum ContentTypes

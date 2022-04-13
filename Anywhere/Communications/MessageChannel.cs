@@ -18,8 +18,13 @@
         /// </summary>
         public Channel Channel { get; private set; }
 
+        ///// <summary>
+        ///// The most recently recevied message.
+        ///// </summary>
+        //private IMessage? LastMessage = null;
+
         /// <summary>
-        /// Create a new message channel that uses the provided channel.
+        /// Create a new message channel that uses the provided Channel.
         /// </summary>
         /// <param name="channel"></param>
         public MessageChannel(Channel channel)
@@ -28,6 +33,14 @@
             Channel.BlockingReads = true;
             Channel.OnDataAvailable += (channel) => DataReceived();
         }
+
+        /// <summary>
+        /// Creates a new message channel that uses the given channel number on the given connection.
+        /// </summary>
+        /// <param name="connection"></param>
+        /// <param name="channelNumber"></param>
+        public MessageChannel(Connection connection, ushort channelNumber)
+            : this(connection.GetChannel(channelNumber)) { }
 
         /// <summary>
         /// Write the given message to the underlying channel.
@@ -39,6 +52,32 @@
             Channel.WriteString(messageType.AssemblyQualifiedName);
             message.Write(Channel);
         }
+
+        // TODO: explore in future. an interesting idea, but there are some timing concerns
+        // TODO: that probably don't make it very reliable
+        //public async Task<T> WaitForMessageAsync<T>() where T : IMessage
+        //{
+        //    var source = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+        //    Task.Run(() =>
+        //    {
+        //        while (!IsDataAvailable)
+        //        {
+        //            ThreadHelpers.Yield();
+
+        //            if (!IsConnected)
+        //            {
+        //                if (throwIfClosed)
+        //                {
+        //                    throw new IOException("Connection closed.");
+        //                }
+        //                source.SetResult(false);
+        //                return;
+        //            }
+        //        }
+        //        source.SetResult(true);
+        //    });
+        //    return source.Task;
+        //}
 
         /// <summary>
         /// When more data is available, read the message and invoke the handler.
@@ -60,6 +99,7 @@
             }
             message.Read(Channel);
             OnMessageReceived?.Invoke(message, Channel);
+            //LastMessage = message;
         }
     }
 

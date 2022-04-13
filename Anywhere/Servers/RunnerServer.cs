@@ -12,11 +12,11 @@ namespace AnywhereNET
     {
         private long IsRunning = 0;
 
-        private Thread? WorkLoopThread;
+        private Thread? WorkLoopThread = null;
 
-        private Connection? OrchestratorConnection;
+        private Connection? OrchestratorConnection = null;
 
-        private MessageChannel? OrchestratorChannel;
+        private MessageChannel? OrchestratorChannel = null;
 
         private RunnerConfiguration Configuration;
 
@@ -46,15 +46,26 @@ namespace AnywhereNET
         {
             ip = ip ?? IPAddress.Any;
 
+            // update the configured endpoint applications should use to connect,
+            // if one was not provided
+            if (Configuration.Endpoint == null)
+            {
+                Configuration.Endpoint = new UriBuilder("https", ip.ToString(), port).Uri;
+            }
+
             if (Configuration.OrchestratorUri != null)
             {
                 // create a secure connection to the optional orchestrator
                 var uri = Configuration.OrchestratorUri;
                 var client = new TcpClient(uri!.Host, uri.Port);
                 OrchestratorConnection = new Connection(client, uri.Host);
-                OrchestratorChannel = new MessageChannel(OrchestratorConnection.GetChannel(Constants.RunnerChannel));
+                OrchestratorChannel = new MessageChannel(OrchestratorConnection, Constants.RunnerChannel);
 
-                // TODO: inform the orchestrator that we exist
+                // announce this runner to the orchestrator
+                SendOrchestratorMessage(new RunnerStartMessage(
+                    Configuration.Endpoint.ToString(), Configuration.MaxTasks,
+                    Configuration.MaxQueue, Configuration.Label, Configuration.Tags));
+                SendOrchestratorMessage(new RunnerStatusMessage(RunnerStatusMessage.States.Starting, 0, 0));
 
                 // TODO: start an infrequent (eg 60s) heartbeat to orchestrator to update status and environment stats
             }
@@ -71,7 +82,8 @@ namespace AnywhereNET
 
         public void Stop()
         {
-            // TODO: inform the orchestrator that we're going away
+            // inform the orchestrator that this runner is stopping
+            SendOrchestratorMessage(new RunnerStatusMessage(RunnerStatusMessage.States.Stopping, 0, 0));
 
             // signal the work thread to stop
             Interlocked.Exchange(ref IsRunning, 0);
@@ -79,6 +91,14 @@ namespace AnywhereNET
             // wait for it to finish
             WorkLoopThread?.Join();
             WorkLoopThread = null;
+        }
+
+        private void SendOrchestratorMessage(IMessage message)
+        {
+            if (OrchestratorChannel != null)
+            {
+                OrchestratorChannel.Send(message);
+            }
         }
 
         private void WorkLoop(TcpListener listener, X509Certificate2 cert)
@@ -100,14 +120,33 @@ namespace AnywhereNET
                 var client = listener.AcceptTcpClient();
 
                 // create a secure connection to the endpoint
-                // and start processing it in a dedicated thread
                 var connection = new Connection(client, cert);
-                var id = Guid.NewGuid();
-                var thread = new Thread(() => ProcessClient(id, connection));
-                thread.Start();
 
-                // track the thread/connection pair as an active worker
-                ActiveWorkers.TryAdd(id, new Worker(thread, connection));
+                // the orchestrator uses an optimistic scheduling strategy, which means
+                // it will route traffic to runners based on the conditions known at the 
+                // time of the decision, which may differ from the runner conditions by
+                // the time the application connects. 
+                // if this runner is "too busy" because it already has the maximum
+                // number of tasks running, send a "too busy" message, and disconnect.
+                // this will (probably) cause the application to try again, up to
+                // its configured level of patience.
+                if (ActiveWorkers.Count >= Configuration.MaxTasks)
+                {
+                    //var expressionChannel = connection.GetChannel(Constants.TaskChannel);
+
+                }
+
+
+                // create and add a worker to track the connection...
+                var worker = new Worker()
+                {
+                    Connection = connection
+                };
+                ActiveWorkers.TryAdd(worker.Id, worker);
+
+                // ...and start processing it in a dedicated thread
+                worker.Thread = new Thread(() => ProcessClient(worker));
+                worker.Thread.Start();
             }
 
             CleanupCompletedWorkers();
@@ -122,17 +161,21 @@ namespace AnywhereNET
             }
         }
 
-        private async void ProcessClient(Guid id, Connection connection)
+        private async void ProcessClient(Worker worker)
         {
             // create communication channels
-            var expressionChannel = connection.GetChannel(Constants.ExpressionChannel);
-            var assembliesChannel = connection.GetChannel(Constants.AssembliesChannel);
-            var filesChannel = connection.GetChannel(Constants.FilesChannel);
+            //var taskChannel = new MessageChannel(worker.Connection, Constants.TaskChannel);
+            var expressionChannel = worker.Connection.GetChannel(Constants.TaskChannel);
+            var assembliesChannel = worker.Connection.GetChannel(Constants.AssembliesChannel);
+            var filesChannel = worker.Connection.GetChannel(Constants.FilesChannel);
 
             try
             {
-
                 // TODO: if this runner is "too busy" send a "too busy" message
+                if (ActiveWorkers.Count >= Configuration.MaxTasks)
+                {
+
+                }
 
                 // TODO: add support for the application to send a "cancel" message
 
@@ -153,12 +196,40 @@ namespace AnywhereNET
 
                 // TODO: signal any orchestrator that we're starting
 
+                var reset = new AutoResetEvent(false);
+
+                //taskChannel.OnMessageReceived += async (message, channel) =>
+                //{
+                //    switch (message)
+                //    {
+                //        case ExpressionRequestMessage expressionRequest:
+                //            using (var stream = new MemoryStream(expressionRequest.Bytes))
+                //            {
+                //                // deserialize the expression
+                //                var decodedLambda = await ExpressionSerializer.DeserializeAsync<object>(stream, environment);
+
+                //                // execute it
+                //                var result = decodedLambda.Invoke(environment.ExecutionContext);
+
+                //                // send the result back to the application on the expression channel
+                //                var resultMessage = new ExpressionResponseMessage(result);
+                //                //resultMessage.Write(expressionChannel);
+                //                taskChannel.Send(resultMessage);
+
+                //                reset.Set();
+                //            }
+                //            break;
+                //        default:
+                //            throw new InvalidOperationException($"Message {message.GetType()} is unknown");
+                //    }
+                //};
+
+                //reset.WaitOne();
+
                 // receive the expression request on the expression channel
                 expressionChannel.BlockingReads = true;
                 var expressionRequest = new ExpressionRequestMessage();
                 expressionRequest.Read(expressionChannel);
-
-                // TODO: schedule a frequent (eg 10s) heartbeat to orchestrator to update status and environment stats
 
                 using (var stream = new MemoryStream(expressionRequest.Bytes))
                 {
@@ -180,29 +251,24 @@ namespace AnywhereNET
                 // send the exception back to the application on the expression channel
                 var resultMessage = new ExpressionResponseMessage(ex);
                 resultMessage.Write(expressionChannel);
+                //taskChannel.Send(resultMessage);
                 // TODO: log it?
                 // TODO: signal any orchestrator that we failed
             }
             finally
             {
-                // find and move the worker to the completed queue so it can
+                // move the worker to the completed queue so it can
                 // be disposed by the main thread
-                if (ActiveWorkers.TryGetValue(id, out var worker))
-                {
-                    CompletedWorkers.Enqueue(worker);
-                }
+                ActiveWorkers.Remove(worker.Id, out _);
+                CompletedWorkers.Enqueue(worker);
             }
         }
 
         private class Worker
         {
+            public Guid Id { get; private set; } = Guid.NewGuid();
             public Thread Thread;
             public Connection Connection;
-            public Worker(Thread thread, Connection connection)
-            {
-                Thread = thread;
-                Connection = connection;
-            }
         }
     }
 }

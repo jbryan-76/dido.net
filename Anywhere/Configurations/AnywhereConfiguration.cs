@@ -14,7 +14,10 @@
         /// <returns></returns>
         public delegate Task<Stream?> LocalAssemblyResolver(string assemblyName);
 
-        // TODO: retries before failure exception
+        /// <summary>
+        /// 
+        /// </summary>
+        public int MaxRetries { get; set; } = 3;
 
         /// <summary>
         /// The default mode that will be used for executing all expressions.

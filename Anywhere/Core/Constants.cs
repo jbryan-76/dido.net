@@ -18,10 +18,10 @@ namespace AnywhereNET
 
         #region Application <-> Runner channels
         /// <summary>
-        /// A channel for transporting expression execution requests and results between
+        /// A channel for transporting task requests and results between
         /// an Application and a Runner.
         /// </summary>
-        internal static readonly ushort ExpressionChannel = 20;
+        internal static readonly ushort TaskChannel = 20;
 
         /// <summary>
         /// A channel for transporting assemblies between

@@ -185,89 +185,114 @@ namespace AnywhereNET
 
             try
             {
-                //var source = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-
-                var runnerUri = Configuration.RunnerUri;
-                if (Configuration.OrchestratorUri != null && Configuration.RunnerUri == null)
-                {
-                    // TODO: open a connection to the orchestrator
-                    // TODO: request an available runner from the orchestrator
-                    // TODO: receive the runner connection details
-                    // TODO: close the connection
-                    runnerUri = Configuration.OrchestratorUri;
-                }
-
-                // create a secure connection to the remote runner
-                var client = new TcpClient(runnerUri!.Host, runnerUri.Port);
-                using (var connection = new Connection(client, runnerUri.Host))
-                {
-                    // create channels for: expression/result, assemblies, files
-                    var expressionChannel = connection.GetChannel(Constants.ExpressionChannel);
-                    var assembliesChannel = connection.GetChannel(Constants.AssembliesChannel);
-                    var filesChannel = connection.GetChannel(Constants.FilesChannel);
-
-                    // TODO: handle file IO on files channel
-
-                    // handle assembly fetch requests
-                    assembliesChannel.BlockingReads = true;
-                    assembliesChannel.OnDataAvailable += async (channel) =>
-                    {
-                        // receive the assembly request
-                        var request = new AssemblyRequestMessage();
-                        request.Read(channel);
-
-                        if (string.IsNullOrEmpty(request.AssemblyName))
-                        {
-                            var response = new AssemblyResponseMessage(new ArgumentNullException(nameof(AssemblyRequestMessage.AssemblyName)));
-                            response.Write(channel);
-                            return;
-                        }
-
-                        // resolve the desired assembly and send it back
-                        using (var stream = await Configuration.ResolveLocalAssemblyAsync(request.AssemblyName))
-                        using (var mem = new MemoryStream())
-                        {
-                            AssemblyResponseMessage response;
-                            if (stream == null)
-                            {
-                                response = new AssemblyResponseMessage(new FileNotFoundException($"Assembly '{request.AssemblyName}' could not be resolved."));
-                            }
-                            else
-                            {
-                                stream.CopyTo(mem);
-                                response = new AssemblyResponseMessage(mem.ToArray());
-                            }
-                            response.Write(channel);
-                        }
-                    };
-
-                    using (var stream = new MemoryStream())
-                    {
-                        // serialize the expression and transmit to the remote runner
-                        await ExpressionSerializer.SerializeAsync(expression, stream);
-                        var expressionRequest = new ExpressionRequestMessage(stream.ToArray());
-                        expressionRequest.Write(expressionChannel);
-                    }
-
-                    // block until the result is received
-                    // TODO: add support for a timeout
-                    // TODO: add support for a cancellation token
-                    expressionChannel.BlockingReads = true;
-                    var result = new ExpressionResponseMessage();
-                    result.Read(expressionChannel);
-
-                    // cleanup the connection
-                    connection.Dispose();
-
-                    // yield the result
-                    return (Tprop)Convert.ChangeType(result.Result, typeof(Tprop));
-                }
+                var result = await DoRemoteExecute(expression);
+                return result;
             }
             catch (Exception e)
             {
                 // TODO: retry comm attempts to orchestrator or runner before failing
 
                 throw;
+            }
+        }
+
+        private async Task<Tprop> DoRemoteExecute<Tprop>(Expression<Func<ExecutionContext, Tprop>> expression)
+        {
+            //var source = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+            var runnerUri = Configuration.RunnerUri;
+            if (Configuration.OrchestratorUri != null && Configuration.RunnerUri == null)
+            {
+                // TODO: open a connection to the orchestrator
+                // TODO: request an available runner from the orchestrator
+                // TODO: receive the runner connection details
+                // TODO: close the connection
+                runnerUri = Configuration.OrchestratorUri;
+            }
+
+            // create a secure connection to the remote runner
+            var client = new TcpClient(runnerUri!.Host, runnerUri.Port);
+            using (var connection = new Connection(client, runnerUri.Host))
+            {
+                // create channels for: expression/result, assemblies, files
+                // TODO: switch these to MessageChannel?
+                //var taskChannel = new MessageChannel(connection, Constants.TaskChannel);
+                var expressionChannel = connection.GetChannel(Constants.TaskChannel);
+                var assembliesChannel = connection.GetChannel(Constants.AssembliesChannel);
+                var filesChannel = connection.GetChannel(Constants.FilesChannel);
+
+                // TODO: handle file IO on files channel
+
+                // handle assembly fetch requests
+                assembliesChannel.BlockingReads = true;
+                assembliesChannel.OnDataAvailable += async (channel) =>
+                {
+                    // receive the assembly request
+                    var request = new AssemblyRequestMessage();
+                    request.Read(channel);
+
+                    if (string.IsNullOrEmpty(request.AssemblyName))
+                    {
+                        var response = new AssemblyResponseMessage(new ArgumentNullException(nameof(AssemblyRequestMessage.AssemblyName)));
+                        response.Write(channel);
+                        return;
+                    }
+
+                    // resolve the desired assembly and send it back
+                    using (var stream = await Configuration.ResolveLocalAssemblyAsync(request.AssemblyName))
+                    using (var mem = new MemoryStream())
+                    {
+                        AssemblyResponseMessage response;
+                        if (stream == null)
+                        {
+                            response = new AssemblyResponseMessage(new FileNotFoundException($"Assembly '{request.AssemblyName}' could not be resolved."));
+                        }
+                        else
+                        {
+                            stream.CopyTo(mem);
+                            response = new AssemblyResponseMessage(mem.ToArray());
+                        }
+                        response.Write(channel);
+                    }
+                };
+
+                //var responseSource = new TaskCompletionSource<ExpressionResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+                //taskChannel.OnMessageReceived += (message, channel) =>
+                //{
+                //    switch (message)
+                //    {
+                //        case ExpressionResponseMessage response:
+                //            responseSource.SetResult(message as ExpressionResponseMessage);
+                //            break;
+                //        default:
+                //            throw new InvalidOperationException($"Message {message.GetType()} is unknown");
+                //    }
+                //};
+
+                using (var stream = new MemoryStream())
+                {
+                    // serialize the expression and transmit to the remote runner
+                    await ExpressionSerializer.SerializeAsync(expression, stream);
+                    var expressionRequest = new ExpressionRequestMessage(stream.ToArray());
+                    //taskChannel.Send(expressionRequest);
+                    expressionRequest.Write(expressionChannel);
+                }
+
+                //// block until the result is received
+                //Task.WaitAll(responseSource.Task);
+                //var result = responseSource.Task.Result;
+
+                // TODO: add support for a timeout
+                // TODO: add support for a cancellation token
+                expressionChannel.BlockingReads = true;
+                var result = new ExpressionResponseMessage();
+                result.Read(expressionChannel);
+
+                // cleanup the connection
+                connection.Dispose();
+
+                // yield the result
+                return (Tprop)Convert.ChangeType(result.Result, typeof(Tprop));
             }
         }
 

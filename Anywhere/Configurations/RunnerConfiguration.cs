@@ -13,22 +13,22 @@
         public string[] Tags { get; set; } = new string[0];
 
         /// <summary>
-        /// The maximum number of processing slots to allow for work request processing.
-        /// This should roughly correlate to the number of CPU cores available.
+        /// The maximum number of tasks to execute concurrently.
+        /// For best performance, this should roughly correlate to the number of CPU cores available.
         /// <para/>Allowed values are:
-        /// <para/>Less than or equal to zero (default) = Auto (will be set to the smaller of 1 and the available 
+        /// <para/>Less than or equal to zero (default) = Auto (will be set to the available 
         /// number of cpu cores present on the system).
-        /// <para/>Anything else indicates the maximum number of slots.
+        /// <para/>Anything else indicates the maximum number of tasks.
         /// </summary>
-        public int MaxSlots { get; set; } = 0;
+        public int MaxTasks { get; set; } = 0;
 
         /// <summary>
-        /// The maximum number of pending work requests to accept before rejecting.
+        /// The maximum number of pending tasks to accept before rejecting.
         /// <para/>Allowed values are:
         /// <para/>Less than zero = Unlimited (up to the number of simultaneous connections allowed by the OS).
-        /// <para/>Zero (default) = Work cannot be queued: each request is fully processed on a slot 
-        /// before accepting another.
-        /// <para/>Anything else indicates the maximum number of work requests.
+        /// <para/>Zero (default) = Tasks cannot be queued. New tasks are accepted only if fewer than
+        /// the maximum number of concurrent tasks are currently running.
+        /// <para/>Anything else indicates the maximum number of tasks to queue.
         /// </summary>
         public int MaxQueue { get; set; } = 0;
 
@@ -37,5 +37,14 @@
         /// If null, the runner will operate in an independent/isolated mode.
         /// </summary>
         public Uri? OrchestratorUri { get; set; } = null;
+
+        /// <summary>
+        /// The uri for applications to use to connect to a runner.
+        /// Setting this explicitly may be necessary for proper routing when
+        /// firewalls and load balancers and network translation services are in use.
+        /// If not provided, will default to the endpoint (ip address + port) the 
+        /// runner server starts on.
+        /// </summary>
+        public Uri? Endpoint { get; set;} = null;
     }
 }

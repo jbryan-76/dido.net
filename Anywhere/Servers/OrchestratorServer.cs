@@ -118,23 +118,25 @@ namespace AnywhereNET
             // NOTE: by design, exactly one of these channels will receive data
             // depending on whether an application or a runner connected.
             // however, until one of the channels receives data, it's impossible to know which.
-            Channel? applicationChannel = connection.GetChannel(Constants.ApplicationChannel);
-            MessageChannel? runnerChannel = new MessageChannel(connection.GetChannel(Constants.RunnerChannel));
+            MessageChannel? applicationChannel = new MessageChannel(connection, Constants.ApplicationChannel);
+            MessageChannel? runnerChannel = new MessageChannel(connection, Constants.RunnerChannel);
 
             Connection? runnerConnection = null;
             try
             {
                 // applications will contact the orchestrator using the application channel
                 // to make requests: eg get a runner, check job status, etc
-                applicationChannel.OnDataAvailable += (channel) =>
+                applicationChannel.OnMessageReceived += (message, channel) =>
                 {
                     // this connection is to the application.
                     // close the runner channel so as not to tie up a thread
                     if (runnerChannel != null)
                     {
                         connection.CloseChannel(runnerChannel.Channel);
+                        runnerChannel = null;
                     }
 
+                    // TODO: process the message
                     // TODO: find the next best available runner and tell the app to use it
                     // TODO: this requires heuristic load balancing strategies
                     // TODO: eg whether runner is in use, how many "slots" are open, its queue size,
@@ -149,7 +151,8 @@ namespace AnywhereNET
                     // close the application channel so as not to tie up a thread
                     if (applicationChannel != null)
                     {
-                        connection.CloseChannel(applicationChannel);
+                        connection.CloseChannel(applicationChannel.Channel);
+                        applicationChannel = null;
                     }
 
                     // add the runner to the pool, if necessary
@@ -161,6 +164,8 @@ namespace AnywhereNET
                             RunnerPool.Add(runnerConnection);
                         }
                     }
+
+                    // TODO: process the message
                 };
 
                 // the client will run forever until it disconnects or this server stops
