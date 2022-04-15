@@ -1,35 +1,17 @@
 ﻿using Newtonsoft.Json;
-using System.Text;
 
 namespace AnywhereNET
 {
-    // TODO: split this into a response message and an error message
-    internal class ExpressionResponseMessage : IMessage
+    internal class TaskResponseMessage : IMessage
     {
-        public enum ContentTypes
-        {
-            Result,
-            Error
-        }
-
         public byte[] Bytes { get; private set; } = new byte[0];
-
-        public ContentTypes ContentType { get; private set; }
 
         private object? _result = null;
 
-        public ExpressionResponseMessage() { }
+        public TaskResponseMessage() { }
 
-        public ExpressionResponseMessage(Exception ex)
+        public TaskResponseMessage(object result)
         {
-            ContentType = ContentTypes.Error;
-            Bytes = Encoding.UTF8.GetBytes(ex.ToString());
-        }
-
-        public ExpressionResponseMessage(object result)
-        {
-            ContentType = ContentTypes.Result;
-
             // TODO: the current JsonSerializer cannot serialize eg built-in
             // TODO: value types (int, string, etc) to BSON. fix this somehow
             using (var stream = new MemoryStream())
@@ -87,16 +69,12 @@ namespace AnywhereNET
 
         public void Read(Stream stream)
         {
-            ContentType = Enum.Parse<ContentTypes>(stream.ReadString());
-            //ContentType = (ContentTypes)stream.ReadInt32BE();
             int length = stream.ReadInt32BE();
             Bytes = stream.ReadBytes(length);
         }
 
         public void Write(Stream stream)
         {
-            stream.WriteString(ContentType.ToString());
-            //stream.WriteInt32BE((int)ContentType);
             stream.WriteInt32BE(Bytes.Length);
             stream.Write(Bytes);
         }

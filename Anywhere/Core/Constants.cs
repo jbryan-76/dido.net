@@ -8,12 +8,12 @@ namespace AnywhereNET
         /// <summary>
         /// A channel for transporting data between an Application and an Orchestrator.
         /// </summary>
-        internal static readonly ushort ApplicationChannel = 10;
+        internal static readonly ushort ApplicationChannelNumber = 10;
 
         /// <summary>
         /// A channel for transporting data between a Runner and an Orchestrator.
         /// </summary>
-        internal static readonly ushort RunnerChannel = 11;
+        internal static readonly ushort RunnerChannelNumber = 11;
         #endregion
 
         #region Application <-> Runner channels
@@ -21,19 +21,19 @@ namespace AnywhereNET
         /// A channel for transporting task requests and results between
         /// an Application and a Runner.
         /// </summary>
-        internal static readonly ushort TaskChannel = 20;
+        internal static readonly ushort TaskChannelNumber = 20;
 
         /// <summary>
         /// A channel for transporting assemblies between
         /// an Application and a Runner.
         /// </summary>
-        internal static readonly ushort AssembliesChannel = 21;
+        internal static readonly ushort AssemblyChannelNumber = 21;
 
         /// <summary>
         /// A channel for transporting files between
         /// an Application and a Runner.
         /// </summary>
-        internal static readonly ushort FilesChannel = 22;
+        internal static readonly ushort FileChannelNumber = 22;
         #endregion
 
         /// <summary>

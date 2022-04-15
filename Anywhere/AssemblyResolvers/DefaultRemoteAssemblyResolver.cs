@@ -20,8 +20,8 @@
             var response = new AssemblyResponseMessage();
             response.Read(Channel);
 
-            // the current caller will dispose the stream, so we need to wrap in another stream
-            // to keep the channel open
+            // the current caller will dispose the stream, so wrap the response
+            // in another stream to keep the channel open
             // TODO: use a different pattern. byte[] all the way?
             return response.ContentType == AssemblyResponseMessage.ContentTypes.Error
                 ? Task.FromResult<Stream?>(null)

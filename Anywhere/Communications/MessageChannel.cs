@@ -6,22 +6,22 @@
         /// Signature for a method that handles when a new message is received on a channel.
         /// </summary>
         /// <param name="message"></param>
-        public delegate void MessageReceivedHandler(IMessage message, Channel channel);
+        public delegate void MessageReceivedHandler(IMessage message, MessageChannel channel);
 
         /// <summary>
-        /// An event handler that is triggered when a new IMessage is received.
+        /// An event handler that is triggered when a new message is received.
         /// </summary>
         public event MessageReceivedHandler? OnMessageReceived = null;
 
         /// <summary>
-        /// The underlying channel this instance is using.
+        /// The underlying channel messages are exchanged on.
         /// </summary>
         public Channel Channel { get; private set; }
 
-        ///// <summary>
-        ///// The most recently recevied message.
-        ///// </summary>
-        //private IMessage? LastMessage = null;
+        /// <summary>
+        /// The unique id for the underlying channel messages are exchanged on.
+        /// </summary>
+        public ushort ChannelNumber {  get { return Channel.ChannelNumber; } }
 
         /// <summary>
         /// Create a new message channel that uses the provided Channel.
@@ -98,8 +98,7 @@
                 throw new InvalidOperationException($"Cannot create instance of message type '{typeName}'");
             }
             message.Read(Channel);
-            OnMessageReceived?.Invoke(message, Channel);
-            //LastMessage = message;
+            OnMessageReceived?.Invoke(message, this);
         }
     }
 

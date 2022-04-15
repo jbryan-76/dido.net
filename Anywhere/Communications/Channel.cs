@@ -264,8 +264,9 @@ namespace AnywhereNET
         {
             // when the connection receives data for this channel, enqueue it to be later read by a consumer
             ReadBuffer.Enqueue(bytes);
-            // notify all event handlers new data is available
-            OnDataAvailable?.Invoke(this);
+            // notify all event handlers new data is available.
+            // (this needs to be done in a separate thread so as not to block the Connection read loop)
+            Task.Run(() => OnDataAvailable?.Invoke(this));
         }
 
         /// <summary>

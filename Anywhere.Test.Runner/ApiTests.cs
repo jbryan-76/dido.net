@@ -7,6 +7,7 @@ using System.Security.Cryptography.X509Certificates;
 using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
+using Xunit.Abstractions;
 
 namespace AnywhereNET.Test.Runner
 {
@@ -25,9 +26,11 @@ namespace AnywhereNET.Test.Runner
 
         readonly AnywhereTestFixture TestFixture;
 
-        public ApiTests(AnywhereTestFixture fixture)
+        public ApiTests(AnywhereTestFixture fixture, ITestOutputHelper output)
         {
             TestFixture = fixture;
+            //var converter = new OutputConverter(output, "OUTPUT.txt");
+            //Console.SetOut(converter);
         }
 
         /// <summary>
@@ -50,6 +53,9 @@ namespace AnywhereNET.Test.Runner
             var runnerServer = new RunnerServer();
             int port = GetNextAvailablePort();
             await runnerServer.Start(cert, port, IPAddress.Loopback);
+
+            // debounce the server by giving it a beat or two to startup
+            Thread.Sleep(10);
 
             // create an Anywhere instance configured to use the loopback server
             var configuration = new AnywhereConfiguration

@@ -26,7 +26,7 @@ namespace AnywhereNET
 
         /// <summary>
         /// An optional runtime AssemblyLoadContext which serves as an isolated container
-        /// for all needed assemblies.
+        /// for all assemblies needed to execute an expression.
         /// </summary>
         public AssemblyLoadContext? AssemblyContext { get; set; }
 
@@ -36,7 +36,7 @@ namespace AnywhereNET
         //public Stream? ApplicationChannel { get; set; }
 
         /// <summary>
-        /// The context available to the expression to access configuration and utilities.
+        /// The context available to the executing expression to access configuration and utilities.
         /// </summary>
         public ExecutionContext? ExecutionContext { get; set; }
 

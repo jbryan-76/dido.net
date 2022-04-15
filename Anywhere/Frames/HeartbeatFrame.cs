@@ -2,7 +2,7 @@
 {
     public class HeartbeatFrame : Frame
     {
-        public int PeriodInMs
+        public int PeriodInSeconds
         {
             get
             {
@@ -15,9 +15,9 @@
             }
         }
 
-        public HeartbeatFrame(int periodInMs)
+        public HeartbeatFrame(int periodInSeconds)
         {
-            var bytes = BitConverter.GetBytes(periodInMs);
+            var bytes = BitConverter.GetBytes(periodInSeconds);
             if (BitConverter.IsLittleEndian)
             {
                 Array.Reverse(bytes);

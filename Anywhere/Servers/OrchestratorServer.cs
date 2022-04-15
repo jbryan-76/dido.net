@@ -118,8 +118,8 @@ namespace AnywhereNET
             // NOTE: by design, exactly one of these channels will receive data
             // depending on whether an application or a runner connected.
             // however, until one of the channels receives data, it's impossible to know which.
-            MessageChannel? applicationChannel = new MessageChannel(connection, Constants.ApplicationChannel);
-            MessageChannel? runnerChannel = new MessageChannel(connection, Constants.RunnerChannel);
+            MessageChannel? applicationChannel = new MessageChannel(connection, Constants.ApplicationChannelNumber);
+            MessageChannel? runnerChannel = new MessageChannel(connection, Constants.RunnerChannelNumber);
 
             Connection? runnerConnection = null;
             try

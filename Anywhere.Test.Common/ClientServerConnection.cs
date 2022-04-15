@@ -56,8 +56,6 @@ namespace AnywhereNET.Test.Common
             // wait for the transfer to complete
             do
             {
-                // NOTE do not use Sleep(0) here: it causes some kind of weird race condition with the
-                // server/client loops running in the thread pool
                 ThreadHelpers.Yield();
             } while (ServerRecievedFrames.Count != currentServerReceived + 1
                 && ClientTransmittedFrames.Count != currentClientSent + 1);
@@ -65,7 +63,7 @@ namespace AnywhereNET.Test.Common
             // NOTE a sleep here is also necessary due to some kind of concurrent state issue:
             // without it, there are situations where ConcurrentQueue.Count is != 0 but ConcurrentQueue.TryDequeue fails.
             // TODO: determine why there is misbehavior and explore rewriting the threading logic to support testing
-            ThreadHelpers.Yield();
+            ThreadHelpers.Yield(100);
         }
 
         /// <summary>
@@ -91,7 +89,7 @@ namespace AnywhereNET.Test.Common
             // NOTE a sleep here is also necessary due to some kind of concurrent state issue:
             // without it, there are situations where ConcurrentQueue.Count is != 0 but ConcurrentQueue.TryDequeue fails.
             // TODO: determine why there is misbehavior and explore rewriting the threading logic to support testing
-            ThreadHelpers.Yield();
+            ThreadHelpers.Yield(100);
         }
 
         /// <summary>

@@ -1,12 +1,12 @@
 ﻿namespace AnywhereNET
 {
-    internal class ExpressionRequestMessage : IMessage
+    internal class TaskRequestMessage : IMessage
     {
         public byte[] Bytes { get; private set; } = new byte[0];
 
-        public ExpressionRequestMessage() { }
+        public TaskRequestMessage() { }
 
-        public ExpressionRequestMessage(byte[] bytes)
+        public TaskRequestMessage(byte[] bytes)
         {
             Bytes = bytes;
         }

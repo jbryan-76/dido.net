@@ -214,16 +214,14 @@ namespace AnywhereNET
             var client = new TcpClient(runnerUri!.Host, runnerUri.Port);
             using (var connection = new Connection(client, runnerUri.Host))
             {
-                // create channels for: expression/result, assemblies, files
-                // TODO: switch these to MessageChannel?
-                //var taskChannel = new MessageChannel(connection, Constants.TaskChannel);
-                var expressionChannel = connection.GetChannel(Constants.TaskChannel);
-                var assembliesChannel = connection.GetChannel(Constants.AssembliesChannel);
-                var filesChannel = connection.GetChannel(Constants.FilesChannel);
+                // create communication channels to the runner for: tasks, assemblies, files
+                var tasksChannel = new MessageChannel(connection, Constants.TaskChannelNumber);
+                var assembliesChannel = connection.GetChannel(Constants.AssemblyChannelNumber);
+                var filesChannel = connection.GetChannel(Constants.FileChannelNumber);
 
-                // TODO: handle file IO on files channel
+                // TODO: handle file messages
 
-                // handle assembly fetch requests
+                // handle assembly messages
                 assembliesChannel.BlockingReads = true;
                 assembliesChannel.OnDataAvailable += async (channel) =>
                 {
@@ -256,43 +254,53 @@ namespace AnywhereNET
                     }
                 };
 
-                //var responseSource = new TaskCompletionSource<ExpressionResponseMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
-                //taskChannel.OnMessageReceived += (message, channel) =>
-                //{
-                //    switch (message)
-                //    {
-                //        case ExpressionResponseMessage response:
-                //            responseSource.SetResult(message as ExpressionResponseMessage);
-                //            break;
-                //        default:
-                //            throw new InvalidOperationException($"Message {message.GetType()} is unknown");
-                //    }
-                //};
+                // handle task messages
+                var responseSource = new TaskCompletionSource<IMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+                tasksChannel.OnMessageReceived += (message, channel) =>
+                {
+                    responseSource.SetResult(message);
+                };
 
+                // kickoff the task by serializing the expression and
+                // transmitting it to the remote runner
                 using (var stream = new MemoryStream())
                 {
-                    // serialize the expression and transmit to the remote runner
                     await ExpressionSerializer.SerializeAsync(expression, stream);
-                    var expressionRequest = new ExpressionRequestMessage(stream.ToArray());
-                    //taskChannel.Send(expressionRequest);
-                    expressionRequest.Write(expressionChannel);
+                    var expressionRequest = new TaskRequestMessage(stream.ToArray());
+                    tasksChannel.Send(expressionRequest);
                 }
 
-                //// block until the result is received
-                //Task.WaitAll(responseSource.Task);
-                //var result = responseSource.Task.Result;
-
+                // then until a response is received
+                Task.WaitAll(responseSource.Task);
+                var message = responseSource.Task.Result;
                 // TODO: add support for a timeout
                 // TODO: add support for a cancellation token
-                expressionChannel.BlockingReads = true;
-                var result = new ExpressionResponseMessage();
-                result.Read(expressionChannel);
 
                 // cleanup the connection
                 connection.Dispose();
 
                 // yield the result
-                return (Tprop)Convert.ChangeType(result.Result, typeof(Tprop));
+                switch (message)
+                {
+                    case TaskResponseMessage response:
+                        return (Tprop)Convert.ChangeType(response.Result, typeof(Tprop));
+                    case TaskErrorMessage error:
+                        switch (error.ErrorType)
+                        {
+                            case TaskErrorMessage.ErrorTypes.General:
+                                throw new TaskGeneralErrorException(error.Error);
+                            case TaskErrorMessage.ErrorTypes.Deserialization:
+                                throw new TaskDeserializationErrorException(error.Error);
+                            case TaskErrorMessage.ErrorTypes.Invokation:
+                                throw new TaskInvokationErrorException(error.Error);
+                            default:
+                                throw new InvalidOperationException($"Task error type {error.ErrorType} is unknown");
+                        }
+                    // TODO: if ExpressionTimeoutMessage, throw
+                    // TODO: if ExpressionCancelMessage, throw
+                    default:
+                        throw new InvalidOperationException($"Message {message.GetType()} is unknown");
+                }
             }
         }
 

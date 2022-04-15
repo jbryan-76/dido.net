@@ -1,10 +1,7 @@
-﻿using System;
-using System.IO;
-using System.Text;
-using System.Threading;
+﻿using System.Text;
 using Xunit.Abstractions;
 
-namespace AnywhereNET.Test
+namespace AnywhereNET.Test.Common
 {
     internal class OutputConverter : TextWriter
     {

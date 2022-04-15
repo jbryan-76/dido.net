@@ -59,7 +59,7 @@ namespace AnywhereNET
                 var uri = Configuration.OrchestratorUri;
                 var client = new TcpClient(uri!.Host, uri.Port);
                 OrchestratorConnection = new Connection(client, uri.Host);
-                OrchestratorChannel = new MessageChannel(OrchestratorConnection, Constants.RunnerChannel);
+                OrchestratorChannel = new MessageChannel(OrchestratorConnection, Constants.RunnerChannelNumber);
 
                 // announce this runner to the orchestrator
                 SendOrchestratorMessage(new RunnerStartMessage(
@@ -120,7 +120,7 @@ namespace AnywhereNET
                 var client = listener.AcceptTcpClient();
 
                 // create a secure connection to the endpoint
-                var connection = new Connection(client, cert);
+                var connection = new Connection(client, cert, "runner");
 
                 // the orchestrator uses an optimistic scheduling strategy, which means
                 // it will route traffic to runners based on the conditions known at the 
@@ -135,7 +135,6 @@ namespace AnywhereNET
                     //var expressionChannel = connection.GetChannel(Constants.TaskChannel);
 
                 }
-
 
                 // create and add a worker to track the connection...
                 var worker = new Worker()
@@ -163,19 +162,19 @@ namespace AnywhereNET
 
         private async void ProcessClient(Worker worker)
         {
-            // create communication channels
-            //var taskChannel = new MessageChannel(worker.Connection, Constants.TaskChannel);
-            var expressionChannel = worker.Connection.GetChannel(Constants.TaskChannel);
-            var assembliesChannel = worker.Connection.GetChannel(Constants.AssembliesChannel);
-            var filesChannel = worker.Connection.GetChannel(Constants.FilesChannel);
+            // create communication channels to the application for: tasks, assemblies, files
+            var tasksChannel = new MessageChannel(worker.Connection, Constants.TaskChannelNumber);
+            var assembliesChannel = worker.Connection.GetChannel(Constants.AssemblyChannelNumber);
+            var filesChannel = worker.Connection.GetChannel(Constants.FileChannelNumber);
 
             try
             {
-                // TODO: if this runner is "too busy" send a "too busy" message
                 if (ActiveWorkers.Count >= Configuration.MaxTasks)
                 {
-
+                    // TODO: if this runner is "too busy" send a "too busy" message
                 }
+
+                // TODO: signal any orchestrator that we're starting
 
                 // TODO: add support for the application to send a "cancel" message
 
@@ -194,66 +193,74 @@ namespace AnywhereNET
                     ResolveRemoteAssemblyAsync = new DefaultRemoteAssemblyResolver(assembliesChannel).ResolveAssembly,
                 };
 
-                // TODO: signal any orchestrator that we're starting
+                // TODO: create cancellation token
 
                 var reset = new AutoResetEvent(false);
-
-                //taskChannel.OnMessageReceived += async (message, channel) =>
-                //{
-                //    switch (message)
-                //    {
-                //        case ExpressionRequestMessage expressionRequest:
-                //            using (var stream = new MemoryStream(expressionRequest.Bytes))
-                //            {
-                //                // deserialize the expression
-                //                var decodedLambda = await ExpressionSerializer.DeserializeAsync<object>(stream, environment);
-
-                //                // execute it
-                //                var result = decodedLambda.Invoke(environment.ExecutionContext);
-
-                //                // send the result back to the application on the expression channel
-                //                var resultMessage = new ExpressionResponseMessage(result);
-                //                //resultMessage.Write(expressionChannel);
-                //                taskChannel.Send(resultMessage);
-
-                //                reset.Set();
-                //            }
-                //            break;
-                //        default:
-                //            throw new InvalidOperationException($"Message {message.GetType()} is unknown");
-                //    }
-                //};
-
-                //reset.WaitOne();
-
-                // receive the expression request on the expression channel
-                expressionChannel.BlockingReads = true;
-                var expressionRequest = new ExpressionRequestMessage();
-                expressionRequest.Read(expressionChannel);
-
-                using (var stream = new MemoryStream(expressionRequest.Bytes))
+                tasksChannel.OnMessageReceived += async (message, channel) =>
                 {
-                    // deserialize the expression
-                    var decodedLambda = await ExpressionSerializer.DeserializeAsync<object>(stream, environment);
+                    try
+                    {
+                        switch (message)
+                        {
+                            case TaskRequestMessage expressionRequest:
+                                using (var stream = new MemoryStream(expressionRequest.Bytes))
+                                {
+                                    // TODO: execute in a task.Run so it can be cancelled or timed out
 
-                    // execute it
-                    var result = decodedLambda.Invoke(environment.ExecutionContext);
+                                    Func<ExecutionContext, object> decodedExpression = null;
 
-                    // send the result back to the application on the expression channel
-                    var resultMessage = new ExpressionResponseMessage(result);
-                    resultMessage.Write(expressionChannel);
-                }
+                                    try
+                                    {
+                                        // deserialize the expression
+                                        decodedExpression = await ExpressionSerializer.DeserializeAsync<object>(stream, environment);
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        // catch and report deserialization errors
+                                        var errorMessage = new TaskErrorMessage(ex, TaskErrorMessage.ErrorTypes.Deserialization);
+                                        tasksChannel.Send(errorMessage);
+                                    }
 
-                // TODO: signal any orchestrator that we're finished
+                                    try
+                                    {
+                                        // execute it
+                                        var result = decodedExpression?.Invoke(environment.ExecutionContext);
+
+                                        // send the result back to the application on the expression channel
+                                        var resultMessage = new TaskResponseMessage(result);
+                                        tasksChannel.Send(resultMessage);
+                                    }
+                                    catch (Exception ex)
+                                    {
+                                        // catch and report invokation errors
+                                        var errorMessage = new TaskErrorMessage(ex, TaskErrorMessage.ErrorTypes.Invokation);
+                                        tasksChannel.Send(errorMessage);
+                                    }
+
+                                    reset.Set();
+                                }
+                                break;
+                            default:
+                                throw new InvalidOperationException($"Message {message.GetType()} is unknown");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        // all exceptions must be handled explicitly since this handler is running in another
+                        // thread that is never awaited
+                        var errorMessage = new TaskErrorMessage(ex, TaskErrorMessage.ErrorTypes.General);
+                        tasksChannel.Send(errorMessage);
+                        reset.Set();
+                    }
+                };
+                reset.WaitOne();
             }
             catch (Exception ex)
             {
                 // send the exception back to the application on the expression channel
-                var resultMessage = new ExpressionResponseMessage(ex);
-                resultMessage.Write(expressionChannel);
-                //taskChannel.Send(resultMessage);
+                var errorMessage = new TaskErrorMessage(ex, TaskErrorMessage.ErrorTypes.General);
+                tasksChannel.Send(errorMessage);
                 // TODO: log it?
-                // TODO: signal any orchestrator that we failed
             }
             finally
             {
@@ -261,6 +268,8 @@ namespace AnywhereNET
                 // be disposed by the main thread
                 ActiveWorkers.Remove(worker.Id, out _);
                 CompletedWorkers.Enqueue(worker);
+
+                // TODO: signal any orchestrator that we're finished
             }
         }
 

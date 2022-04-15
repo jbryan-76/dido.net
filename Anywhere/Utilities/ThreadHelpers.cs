@@ -12,10 +12,9 @@
         /// <param name="milliseconds"></param>
         public static void Yield(int milliseconds = 1)
         {
-            // never use Sleep(0)
+            // never use Sleep(0), always use at least Sleep(1)
             // http://joeduffyblog.com/2006/08/22/priorityinduced-starvation-why-sleep1-is-better-than-sleep0-and-the-windows-balance-set-manager/
-            milliseconds = Math.Max(milliseconds, 1);
-            Thread.Sleep(milliseconds);
+            Thread.Sleep(Math.Max(milliseconds, 1));
         }
     }
 }

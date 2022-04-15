@@ -1,5 +1,6 @@
 ﻿using AnywhereNET.Test.Common;
 using System;
+using System.Collections.Concurrent;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -203,6 +204,71 @@ namespace AnywhereNET.Test
                 Assert.NotNull(receivedMessage);
                 Assert.Equal(testMessage.MyIntValue, receivedMessage?.MyIntValue);
                 Assert.Equal(testMessage.MyStringValue, receivedMessage?.MyStringValue);
+            }
+        }
+
+        [Fact]
+        public async void MessageChannels()
+        {
+            // create a local client/server system
+            using (var clientServerConnection = await ClientServerConnection.CreateAsync(GetNextAvailablePort()))
+            {
+                // create both sides of 2 logical channels for the client and server to communicate
+                var channel1ClientSide = new MessageChannel(clientServerConnection.ClientConnection, 1);
+                var channel1ServerSide = new MessageChannel(clientServerConnection.ServerConnection, 1);
+                var channel2ClientSide = new MessageChannel(clientServerConnection.ClientConnection, 2);
+                var channel2ServerSide = new MessageChannel(clientServerConnection.ServerConnection, 2);
+
+                // create test messages
+                var testRequestMessage = new TestMessage { MyIntValue = 123, MyStringValue = "my request" };
+                var testResponseMessage = new TestMessage { MyIntValue = 456, MyStringValue = "my response" };
+
+                // storage for all received messages
+                var clientMessages = new ConcurrentBag<Tuple<TestMessage, int>>();
+                var serverMessages = new ConcurrentBag<Tuple<TestMessage, int>>();
+
+                long messageCount = 0;
+
+                // message handlers
+                MessageChannel.MessageReceivedHandler serverHandler = (message, channel) =>
+                {
+                    serverMessages.Add(new Tuple<TestMessage, int>(message as TestMessage, channel.ChannelNumber));
+                    channel.Send(testResponseMessage);
+                    Interlocked.Increment(ref messageCount);
+                };
+                MessageChannel.MessageReceivedHandler clientHandler = (message, channel) =>
+                {
+                    clientMessages.Add(new Tuple<TestMessage, int>(message as TestMessage, channel.ChannelNumber));
+                    Interlocked.Increment(ref messageCount);
+                };
+
+                // set handlers
+                channel1ClientSide.OnMessageReceived += clientHandler;
+                channel2ClientSide.OnMessageReceived += clientHandler;
+                channel1ServerSide.OnMessageReceived += serverHandler;
+                channel2ServerSide.OnMessageReceived += serverHandler;
+
+                // send messages
+                channel1ClientSide.Send(testRequestMessage);
+                channel2ClientSide.Send(testRequestMessage);
+
+                // block here until all messages have been exchanged
+                while (Interlocked.Read(ref messageCount) != 4)
+                {
+                    Thread.Sleep(1);
+                }
+
+                // confirm the messages match
+                Assert.Equal(2, clientMessages.Count);
+                Assert.Equal(2, serverMessages.Count);
+                Assert.Contains(1, clientMessages.Select(x => x.Item2));
+                Assert.Contains(2, clientMessages.Select(x => x.Item2));
+                Assert.Contains(1, serverMessages.Select(x => x.Item2));
+                Assert.Contains(2, serverMessages.Select(x => x.Item2));
+                Assert.All(clientMessages.Select(x => x.Item1), m => Assert.Equal(m.MyIntValue, testResponseMessage.MyIntValue));
+                Assert.All(clientMessages.Select(x => x.Item1), m => Assert.Equal(m.MyStringValue, testResponseMessage.MyStringValue));
+                Assert.All(serverMessages.Select(x => x.Item1), m => Assert.Equal(m.MyIntValue, testRequestMessage.MyIntValue));
+                Assert.All(serverMessages.Select(x => x.Item1), m => Assert.Equal(m.MyStringValue, testRequestMessage.MyStringValue));
             }
         }
 

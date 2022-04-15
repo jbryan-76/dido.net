@@ -33,7 +33,6 @@ namespace AnywhereNET
         public void Read(Stream stream)
         {
             ContentType = Enum.Parse<ContentTypes>(stream.ReadString());
-            //ContentType = (ContentTypes)stream.ReadInt32BE();
             int length = stream.ReadInt32BE();
             Bytes = stream.ReadBytes(length);
         }
@@ -41,7 +40,6 @@ namespace AnywhereNET
         public void Write(Stream stream)
         {
             stream.WriteString(ContentType.ToString());
-            //stream.WriteInt32BE((int)ContentType);
             stream.WriteInt32BE(Bytes?.Length ?? 0);
             stream.Write(Bytes);
         }
