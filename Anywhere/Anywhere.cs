@@ -82,11 +82,19 @@ namespace AnywhereNET
     {
         /// <summary>
         /// Signature for a method that handles the result of asynchronous
-        /// execution of an expression.
+        /// execution of a task.
         /// </summary>
         /// <typeparam name="T"></typeparam>
         /// <param name="result"></param>
         public delegate void ResultHandler<T>(T result);
+
+        /// <summary>
+        /// Signature for a method that handles execptions during asynchronous
+        /// execution of a task.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="result"></param>
+        public delegate void ExceptionHandler(Exception ex);
 
         // TODO some of the configuration should be transmitted to the runner and applied globally so it
         // can properly implement remote file access.
@@ -98,7 +106,7 @@ namespace AnywhereNET
         private AnywhereConfiguration Configuration;
 
         /// <summary>
-        /// Create a new instance to execute expressions.
+        /// Create a new instance to execute tasks.
         /// </summary>
         /// <param name="configuration"></param>
         public Anywhere(AnywhereConfiguration? configuration = null)
@@ -107,7 +115,7 @@ namespace AnywhereNET
         }
 
         /// <summary>
-        /// Execute the provided expression and return its result.
+        /// Execute the provided expression as a task and return its result.
         /// </summary>
         /// <typeparam name="Tprop"></typeparam>
         /// <param name="expression">The expression to execute.</param>
@@ -129,7 +137,7 @@ namespace AnywhereNET
         }
 
         /// <summary>
-        /// Execute the provided expression and invoke the provided handler with the result.
+        /// Execute the provided expression as a task and invoke the provided handler with the result.
         /// Use this form when the expression is expected to take a long time to complete.
         /// <para/>NOTE the provided handler is run in a separate thread.
         /// </summary>
@@ -138,20 +146,25 @@ namespace AnywhereNET
         /// <param name="resultHandler">A result handler invoked after the expression completes. 
         /// Note this handler runs in a separate thread.</param>
         /// <param name="executionMode">An optional execution mode to override the currently configured mode.</param>
-        public void Execute<Tprop>(Expression<Func<ExecutionContext, Tprop>> expression, ResultHandler<Tprop> resultHandler, ExecutionModes? executionMode = null)
+        public void Execute<Tprop>(Expression<Func<ExecutionContext, Tprop>> expression, ResultHandler<Tprop> resultHandler, ExceptionHandler? execptionHandler = null, ExecutionModes? executionMode = null)
         {
-            //var source = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             var thread = new Thread(async () =>
             {
-                // TODO: how to handle exceptions?
-                var result = await ExecuteAsync(expression, executionMode);
-                resultHandler(result);
+                try
+                {
+                    var result = await ExecuteAsync(expression, executionMode);
+                    resultHandler(result);
+                }
+                catch (Exception ex)
+                {
+                    execptionHandler?.Invoke(ex);
+                }
             });
             thread.Start();
         }
 
         /// <summary>
-        /// Execute the provided expression locally (ie using the current application domain
+        /// Execute the provided expression as a task locally (ie using the current application domain
         /// and environment).
         /// </summary>
         /// <typeparam name="Tprop"></typeparam>
@@ -170,12 +183,12 @@ namespace AnywhereNET
         // TODO: if the orchestrator is in job mode, start a background thread to call a handler when the result is available?
 
         /// <summary>
-        /// Execute the provided expression in a remote environment.
+        /// Execute the provided expression as a task in a remote environment.
         /// </summary>
         /// <typeparam name="Tprop"></typeparam>
         /// <param name="expression"></param>
         /// <returns></returns>
-        /// <exception cref="NotImplementedException"></exception>
+        /// <exception cref="InvalidOperationException"></exception>
         public async Task<Tprop> RemoteExecuteAsync<Tprop>(Expression<Func<ExecutionContext, Tprop>> expression)
         {
             if (Configuration.OrchestratorUri == null && Configuration.RunnerUri == null)
@@ -183,23 +196,38 @@ namespace AnywhereNET
                 throw new InvalidOperationException($"Configuration error: At least one of {nameof(Configuration.OrchestratorUri)} or {nameof(Configuration.RunnerUri)} must be set to a valid value.");
             }
 
-            try
+            int maxTries = Math.Max(1, Configuration.MaxTries);
+            int tries = 0;
+            while (true)
             {
-                var result = await DoRemoteExecute(expression);
-                return result;
-            }
-            catch (Exception e)
-            {
-                // TODO: retry comm attempts to orchestrator or runner before failing
-
-                throw;
+                ++tries;
+                try
+                {
+                    return await DoRemoteExecuteAsync(expression);
+                }
+                catch (Exception e)
+                {
+                    // TODO: only retry if the exception is a TaskTimeoutException or RunnerBusyException
+                    if (tries == maxTries)
+                    {
+                        throw;
+                    }
+                }
             }
         }
 
-        private async Task<Tprop> DoRemoteExecute<Tprop>(Expression<Func<ExecutionContext, Tprop>> expression)
+        /// <summary>
+        /// Execute the provided expression as a task in a remote environment.
+        /// </summary>
+        /// <typeparam name="Tprop"></typeparam>
+        /// <param name="expression"></param>
+        /// <returns></returns>
+        /// <exception cref="TaskGeneralException"></exception>
+        /// <exception cref="TaskDeserializationException"></exception>
+        /// <exception cref="TaskInvokationException"></exception>
+        /// <exception cref="InvalidOperationException"></exception>
+        private async Task<Tprop> DoRemoteExecuteAsync<Tprop>(Expression<Func<ExecutionContext, Tprop>> expression)
         {
-            //var source = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-
             var runnerUri = Configuration.RunnerUri;
             if (Configuration.OrchestratorUri != null && Configuration.RunnerUri == null)
             {
@@ -288,16 +316,17 @@ namespace AnywhereNET
                         switch (error.ErrorType)
                         {
                             case TaskErrorMessage.ErrorTypes.General:
-                                throw new TaskGeneralErrorException(error.Error);
+                                throw new TaskGeneralException(error.Error);
                             case TaskErrorMessage.ErrorTypes.Deserialization:
-                                throw new TaskDeserializationErrorException(error.Error);
+                                throw new TaskDeserializationException(error.Error);
                             case TaskErrorMessage.ErrorTypes.Invokation:
-                                throw new TaskInvokationErrorException(error.Error);
+                                throw new TaskInvokationException(error.Error);
                             default:
                                 throw new InvalidOperationException($"Task error type {error.ErrorType} is unknown");
                         }
-                    // TODO: if ExpressionTimeoutMessage, throw
-                    // TODO: if ExpressionCancelMessage, throw
+                    // TODO: if TaskTimeoutMessage, throw TaskTimeoutException
+                    // TODO: if RunnerBusyMessage, throw RunnerBusyException
+                    // TODO: if TaskCancelMessage, throw TaskCancelException
                     default:
                         throw new InvalidOperationException($"Message {message.GetType()} is unknown");
                 }
@@ -330,7 +359,7 @@ namespace AnywhereNET
         /// Deserialize an expression from a byte array, using the provided environment
         /// to resolve any required assemblies and load them into the proper runtime assembly
         /// context.
-        /// <para/>NOTE the byte array must be created with Serialize().
+        /// <para/>NOTE the byte array must be created with SerializeAsync().
         /// </summary>
         /// <typeparam name="Tprop"></typeparam>
         /// <param name="data"></param>

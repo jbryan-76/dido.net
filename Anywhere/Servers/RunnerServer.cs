@@ -120,7 +120,7 @@ namespace AnywhereNET
                 var client = listener.AcceptTcpClient();
 
                 // create a secure connection to the endpoint
-                var connection = new Connection(client, cert, "runner");
+                var connection = new Connection(client, cert);
 
                 // the orchestrator uses an optimistic scheduling strategy, which means
                 // it will route traffic to runners based on the conditions known at the 

@@ -5,6 +5,7 @@ using System.Security.Cryptography.X509Certificates;
 
 namespace AnywhereNET
 {
+    // TODO: rename this to mediator? scheduler?
     // TODO: orchestrator should determine which runner in its pool has resources available to run.
     public class OrchestratorServer
     {

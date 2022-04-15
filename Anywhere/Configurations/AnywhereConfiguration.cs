@@ -15,24 +15,24 @@
         public delegate Task<Stream?> LocalAssemblyResolver(string assemblyName);
 
         /// <summary>
-        /// 
+        /// The maximum number of attempts to make when executing a remote task.
         /// </summary>
-        public int MaxRetries { get; set; } = 3;
+        public int MaxTries { get; set; } = 3;
 
         /// <summary>
-        /// The default mode that will be used for executing all expressions.
+        /// The default mode that will be used for executing tasks.
         /// </summary>
         public ExecutionModes ExecutionMode { get; set; }
             = ExecutionModes.Remote;
 
         /// <summary>
         /// The uri for the orchestrator service used to negotiate the specific runner service
-        /// that remotely executes expressions.
+        /// that remotely executes tasks.
         /// </summary>
         public Uri? OrchestratorUri { get; set; } = null;
 
         /// <summary>
-        /// The uri for a dedicated runner service used to remotely execute expressions.
+        /// The uri for a dedicated runner service used to remotely execute tasks.
         /// If set, this overrides any configured orchestrator.
         /// </summary>
         public Uri? RunnerUri { get; set; } = null;

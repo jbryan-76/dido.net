@@ -71,6 +71,7 @@ namespace AnywhereNET.Test.Common
             // set up a singleton anywhere instance
             Configuration = new AnywhereConfiguration
             {
+                MaxTries = 1,
                 ExecutionMode = ExecutionModes.Local,
                 ResolveLocalAssemblyAsync = (assemblyName) => AssemblyResolver.ResolveAssembly(Environment, assemblyName)
             };
