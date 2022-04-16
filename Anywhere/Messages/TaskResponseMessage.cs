@@ -10,7 +10,7 @@ namespace AnywhereNET
 
         public TaskResponseMessage() { }
 
-        public TaskResponseMessage(object result)
+        public TaskResponseMessage(object? result)
         {
             // TODO: the current JsonSerializer cannot serialize eg built-in
             // TODO: value types (int, string, etc) to BSON. fix this somehow

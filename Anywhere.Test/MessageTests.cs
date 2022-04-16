@@ -39,7 +39,7 @@ namespace AnywhereNET.Test
                 var rx = new RunnerStatusMessage();
                 rx.Read(stream);
                 Assert.Equal(tx.State, rx.State);
-                Assert.Equal(tx.RunningTasks, rx.RunningTasks);
+                Assert.Equal(tx.ActiveTasks, rx.ActiveTasks);
                 Assert.Equal(tx.QueueLength, rx.QueueLength);
             }
         }

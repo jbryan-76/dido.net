@@ -1,9 +1,5 @@
 ﻿namespace AnywhereNET
 {
-    // TODO: TaskCancelMessage
-    // TODO: TaskTimeoutMessage
-    // TODO: RunnerBusyMessage
-
     internal class TaskErrorMessage : IMessage
     {
         public enum ErrorTypes

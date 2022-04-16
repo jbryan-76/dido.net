@@ -2,28 +2,6 @@
 
 namespace AnywhereNET
 {
-    internal class RunnerBusyMessage : IMessage
-    {
-        public void Read(Stream stream)
-        {
-        }
-
-        public void Write(Stream stream)
-        {
-        }
-    }
-
-    internal class RunnerErrorMessage : IMessage
-    {
-        public void Read(Stream stream)
-        {
-        }
-
-        public void Write(Stream stream)
-        {
-        }
-    }
-
     internal class RunnerStatusMessage : IMessage
     {
         /// <summary>
@@ -39,7 +17,7 @@ namespace AnywhereNET
 
         public States State { get; set; }
 
-        public int RunningTasks { get; set; } = 0;
+        public int ActiveTasks { get; set; } = 0;
 
         public int QueueLength { get; set; } = 0;
 
@@ -47,24 +25,24 @@ namespace AnywhereNET
 
         public RunnerStatusMessage() { }
 
-        public RunnerStatusMessage(States status, int availableSlots, int queueLength)
+        public RunnerStatusMessage(States status, int activeTasks, int queueLength)
         {
             State = status;
-            RunningTasks = availableSlots;
+            ActiveTasks = activeTasks;
             QueueLength = queueLength;
         }
 
         public void Read(Stream stream)
         {
             State = Enum.Parse<States>(stream.ReadString());
-            RunningTasks = stream.ReadInt32BE();
+            ActiveTasks = stream.ReadInt32BE();
             QueueLength = stream.ReadInt32BE();
         }
 
         public void Write(Stream stream)
         {
             stream.WriteString(State.ToString());
-            stream.WriteInt32BE(RunningTasks);
+            stream.WriteInt32BE(ActiveTasks);
             stream.WriteInt32BE(QueueLength);
         }
     }
