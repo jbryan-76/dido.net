@@ -1,6 +1,6 @@
 ﻿using System.Runtime.InteropServices;
 
-namespace AnywhereNET
+namespace DidoNet
 {
     internal class RunnerStatusMessage : IMessage
     {

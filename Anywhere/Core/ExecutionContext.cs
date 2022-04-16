@@ -1,4 +1,4 @@
-﻿namespace AnywhereNET
+﻿namespace DidoNet
 {
     /// <summary>
     /// Provides configuration and utilities for remote execution of tasks.
@@ -20,6 +20,8 @@
         /// and abort execution if a cancellation is requested.
         /// </summary>
         public CancellationToken Cancel { get; internal set; }
+
+        // TODO: set current try? maxtries?
 
         internal Channel FilesChannel { get; set; }
     }

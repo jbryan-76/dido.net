@@ -1,10 +1,10 @@
-﻿using AnywhereNET.Test.Common;
-using AnywhereNET.TestLib;
-using AnywhereNET.TestLibDependency;
+﻿using DidoNet.Test.Common;
+using DidoNet.TestLib;
+using DidoNet.TestLibDependency;
 using System;
 using Xunit;
 
-namespace AnywhereNET.Test
+namespace DidoNet.Test
 {
     public class ApiTests : IClassFixture<AnywhereTestFixture>
     {
@@ -36,7 +36,7 @@ namespace AnywhereNET.Test
 
             var expectedResult = testObject.MemberMethodWithDependency(testModel);
 
-            var actualResult = await TestFixture.Anywhere.DebugLocalExecuteAsync((context) => testObject.MemberMethodWithDependency(testModel));
+            var actualResult = await Dido.DebugRunLocalAsync((context) => testObject.MemberMethodWithDependency(testModel), TestFixture.Configuration);
 
             Assert.Equal(expectedResult, actualResult);
         }
@@ -62,7 +62,7 @@ namespace AnywhereNET.Test
 
             var expectedResult = testObject.MemberMethodWithDependency(testModel);
 
-            var actualResult = await TestFixture.Anywhere.ReleaseLocalExecuteAsync((context) => testObject.MemberMethodWithDependency(testModel));
+            var actualResult = await Dido.ReleaseRunLocalAsync((context) => testObject.MemberMethodWithDependency(testModel), TestFixture.Configuration);
 
             Assert.Equal(expectedResult, actualResult);
         }

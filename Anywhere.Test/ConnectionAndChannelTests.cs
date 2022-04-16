@@ -1,4 +1,4 @@
-﻿using AnywhereNET.Test.Common;
+﻿using DidoNet.Test.Common;
 using System;
 using System.Collections.Concurrent;
 using System.IO;
@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace AnywhereNET.Test
+namespace DidoNet.Test
 {
     public class ConnectionAndChannelTests
     {

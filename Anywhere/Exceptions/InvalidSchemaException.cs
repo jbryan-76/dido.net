@@ -1,4 +1,4 @@
-﻿namespace AnywhereNET
+﻿namespace DidoNet
 {
     /// <summary>
     /// Represents errors that occur when a combination of properties or attributes in a data model violates the rules

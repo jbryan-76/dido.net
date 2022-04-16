@@ -1,6 +1,6 @@
 ﻿using System.Reflection;
 
-namespace AnywhereNET
+namespace DidoNet
 {
     internal class MethodInfoModel : MemberInfoModel
     {

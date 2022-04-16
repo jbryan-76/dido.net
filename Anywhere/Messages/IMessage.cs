@@ -1,4 +1,4 @@
-﻿namespace AnywhereNET
+﻿namespace DidoNet
 {
     public interface IMessage
     {

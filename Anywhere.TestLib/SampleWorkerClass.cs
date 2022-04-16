@@ -1,6 +1,6 @@
-﻿using AnywhereNET.TestLibDependency;
+﻿using DidoNet.TestLibDependency;
 
-namespace AnywhereNET.TestLib
+namespace DidoNet.TestLib
 {
     /// <summary>
     /// A test class containing sample methods for unit testing basic Anywhere

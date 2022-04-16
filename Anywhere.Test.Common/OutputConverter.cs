@@ -1,7 +1,7 @@
 ﻿using System.Text;
 using Xunit.Abstractions;
 
-namespace AnywhereNET.Test.Common
+namespace DidoNet.Test.Common
 {
     internal class OutputConverter : TextWriter
     {

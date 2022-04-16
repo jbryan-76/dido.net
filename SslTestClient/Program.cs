@@ -1,4 +1,4 @@
-﻿using AnywhereNET;
+﻿using DidoNet;
 using System.Net.Sockets;
 
 namespace foo

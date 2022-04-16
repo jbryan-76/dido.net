@@ -3,7 +3,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
 
-namespace AnywhereNET
+namespace DidoNet
 {
     // TODO: rename this to mediator? scheduler?
     // TODO: orchestrator should determine which runner in its pool has resources available to run.

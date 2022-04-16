@@ -2,7 +2,7 @@
 using System.Linq;
 using Xunit;
 
-namespace AnywhereNET.Test
+namespace DidoNet.Test
 {
     public class StreamExtensionTests
     {

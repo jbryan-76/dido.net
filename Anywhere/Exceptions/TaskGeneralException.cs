@@ -1,4 +1,4 @@
-﻿namespace AnywhereNET
+﻿namespace DidoNet
 {
     /// <summary>
     /// Represents a general error that occurs when a task is running on a runner.

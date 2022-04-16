@@ -1,4 +1,4 @@
-﻿namespace AnywhereNET.TestLib
+﻿namespace DidoNet.TestLib
 {
     public class SampleModelClass
     {

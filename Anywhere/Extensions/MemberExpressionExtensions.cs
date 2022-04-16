@@ -1,7 +1,7 @@
 ﻿using System.Linq.Expressions;
 using System.Reflection;
 
-namespace AnywhereNET
+namespace DidoNet
 {
     public static class MemberExpressionExtensions
     {

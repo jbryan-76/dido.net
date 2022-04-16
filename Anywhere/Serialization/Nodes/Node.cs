@@ -2,7 +2,7 @@
 using Newtonsoft.Json.Converters;
 using System.Linq.Expressions;
 
-namespace AnywhereNET
+namespace DidoNet
 {
     internal class Node
     {

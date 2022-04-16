@@ -1,6 +1,6 @@
 ﻿using Newtonsoft.Json;
 
-namespace AnywhereNET
+namespace DidoNet
 {
     internal class TaskResponseMessage : IMessage
     {

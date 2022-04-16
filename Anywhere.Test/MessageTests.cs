@@ -3,7 +3,7 @@ using System.IO;
 using System.Linq;
 using Xunit;
 
-namespace AnywhereNET.Test
+namespace DidoNet.Test
 {
     public class MessageTests
     {
@@ -33,7 +33,7 @@ namespace AnywhereNET.Test
         {
             using (var stream = new MemoryStream())
             {
-                var tx = new RunnerStatusMessage(AnywhereNET.RunnerStatusMessage.States.Ready, 3, 5);
+                var tx = new RunnerStatusMessage(DidoNet.RunnerStatusMessage.States.Ready, 3, 5);
                 tx.Write(stream);
                 stream.Position = 0;
                 var rx = new RunnerStatusMessage();

@@ -4,7 +4,7 @@ using System.Net.Sockets;
 using System.Runtime.Loader;
 using System.Security.Cryptography.X509Certificates;
 
-namespace AnywhereNET
+namespace DidoNet
 {
     // NOTE: it's outside the scope of this library to decide how and when to spin up new Runners.
 
@@ -86,6 +86,9 @@ namespace AnywhereNET
             IsRunning = 1;
             WorkLoopThread = new Thread(() => WorkLoop(listener, cert));
             WorkLoopThread.Start();
+
+            // debounce the server by giving it a beat or two to startup
+            Thread.Sleep(10);
         }
 
         public void Stop()
@@ -105,6 +108,8 @@ namespace AnywhereNET
         {
             while (Interlocked.Read(ref IsRunning) == 1)
             {
+                // TODO: check for active workers that have been cancelled or timed out but haven't stopped yet?
+
                 CleanupCompletedWorkers();
 
                 // if there are any queued workers and there is capacity to start them, go ahead
@@ -264,17 +269,16 @@ namespace AnywhereNET
                     {
                         switch (message)
                         {
+                            // process the message requesting to execute a task
                             case TaskRequestMessage request:
                                 using (var stream = new MemoryStream(request.Bytes))
                                 {
-                                    // TODO: execute in a task.Run so it can be cancelled or timed out
-
-                                    Func<ExecutionContext, object>? decodedExpression = null;
+                                    Func<ExecutionContext, object>? expression = null;
 
                                     try
                                     {
                                         // deserialize the expression
-                                        decodedExpression = await ExpressionSerializer.DeserializeAsync<object>(stream, environment);
+                                        expression = await ExpressionSerializer.DeserializeAsync<object>(stream, environment);
                                     }
                                     catch (Exception ex)
                                     {
@@ -283,34 +287,64 @@ namespace AnywhereNET
                                         tasksChannel.Send(errorMessage);
                                     }
 
+                                    Timer? timeout = null;
                                     try
                                     {
-                                        // TODO: set up a timer to cancel and send back a timeout message
+                                        // set up a timer if necessary to cancel the task if it times out
+                                        long didTimeout = 0;
+                                        if (request.TimeoutInMs > 0)
+                                        {
+                                            timeout = new Timer((arg) =>
+                                            {
+                                                // try to cancel the task
+                                                worker.Cancel.Cancel();
 
-                                        // execute it
-                                        var result = decodedExpression?.Invoke(environment.ExecutionContext);
+                                                // indicate that a timeout occurred
+                                                Interlocked.Exchange(ref didTimeout, 1);
 
-                                        // if a cancellation was requested, the result can't be trusted,
-                                        // so ensure a cancellation exception is thrown
-                                        worker.Cancel.Token.ThrowIfCancellationRequested();
+                                                // let the application know the task did not complete due to a timeout
+                                                tasksChannel.Send(new TaskTimeoutMessage());
+                                            }, null, request.TimeoutInMs, Timeout.Infinite);
+                                        }
 
-                                        // send the result back to the application on the expression channel
-                                        var resultMessage = new TaskResponseMessage(result);
-                                        tasksChannel.Send(resultMessage);
+                                        // now execute the task by invoking the expression
+                                        var result = expression?.Invoke(environment.ExecutionContext);
+
+                                        // dispose the timeout (if it exists) to prevent it from triggering
+                                        // accidentally if the task already completed successfully
+                                        timeout?.Dispose();
+
+                                        // if the task did not timeout, continue processing
+                                        // (otherwise a timeout message was already sent)
+                                        if (Interlocked.Read(ref didTimeout) == 0)
+                                        {
+                                            // if a cancellation was requested, the result can't be trusted,
+                                            // so ensure a cancellation exception is thrown
+                                            // (it will be handled in the catch block below)
+                                            worker.Cancel.Token.ThrowIfCancellationRequested();
+
+                                            // otherwise send the result back to the application
+                                            var resultMessage = new TaskResponseMessage(result);
+                                            tasksChannel.Send(resultMessage);
+                                        }
+                                    }
+                                    catch (TaskCanceledException ex)
+                                    {
+                                        tasksChannel.Send(new TaskCancelMessage());
                                     }
                                     catch (Exception ex)
                                     {
-                                        // TODO: if it's cancelled catch the cancelation exception
                                         // catch and report invokation errors
                                         var errorMessage = new TaskErrorMessage(ex, TaskErrorMessage.ErrorTypes.Invokation);
                                         tasksChannel.Send(errorMessage);
+                                        timeout?.Dispose();
                                     }
 
                                     reset.Set();
                                 }
                                 break;
 
-                            case TaskCancelException cancel:
+                            case TaskCancelMessage cancel:
                                 worker.Cancel.Cancel();
                                 break;
 

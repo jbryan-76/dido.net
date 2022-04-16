@@ -1,7 +1,7 @@
 ﻿using System.Collections;
 using System.Reflection;
 
-namespace AnywhereNET
+namespace DidoNet
 {
     public static class TypeExtensions
     {

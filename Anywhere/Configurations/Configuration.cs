@@ -1,9 +1,9 @@
-﻿namespace AnywhereNET
+﻿namespace DidoNet
 {
     /// <summary>
-    /// Configures an Anywhere instance.
+    /// Configures the execution of a task.
     /// </summary>
-    public class AnywhereConfiguration
+    public class Configuration
     {
         /// <summary>
         /// Signature for a method that resolves a provided assembly by name,
@@ -20,10 +20,16 @@
         public int MaxTries { get; set; } = 3;
 
         /// <summary>
+        /// How long (in milliseconds) to wait before cancelling a task
+        /// and throwing a TaskTimeoutException.
+        /// </summary>
+        public int TimeoutInMs { get; set; } = Timeout.Infinite;
+
+        /// <summary>
         /// The default mode that will be used for executing tasks.
         /// </summary>
         public ExecutionModes ExecutionMode { get; set; }
-            = ExecutionModes.Remote;
+            = ExecutionModes.Local;
 
         /// <summary>
         /// The uri for the orchestrator service used to negotiate the specific runner service
@@ -33,9 +39,11 @@
 
         /// <summary>
         /// The uri for a dedicated runner service used to remotely execute tasks.
-        /// If set, this overrides any configured orchestrator.
+        /// If set, any configured orchestrator will not be used.
         /// </summary>
         public Uri? RunnerUri { get; set; } = null;
+
+        //public CancellationTokenSource CancellationTokenSource { get; private set; } = new CancellationTokenSource();
 
         /// <summary>
         /// A delegate method for resolving local runtime assemblies used by the host application.

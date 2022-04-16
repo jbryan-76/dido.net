@@ -1,4 +1,4 @@
-﻿namespace AnywhereNET
+﻿namespace DidoNet
 {
     /// <summary>
     /// Modes indicating how and where an expression is executed.

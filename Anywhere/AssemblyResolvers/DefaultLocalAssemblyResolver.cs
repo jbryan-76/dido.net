@@ -1,6 +1,6 @@
 ﻿using System.Reflection;
 
-namespace AnywhereNET
+namespace DidoNet
 {
     /// <summary>
     /// A default implementation to resolve assemblies using the application's 
@@ -8,8 +8,6 @@ namespace AnywhereNET
     /// </summary>
     public class DefaultLocalAssemblyResolver
     {
-        private List<string> AssemblyFiles = new List<string>();
-
         /// <summary>
         /// Resolve and return the provided assembly from the default application domain.
         /// In practice this resolves the assembly from the application's base directory.
@@ -20,14 +18,11 @@ namespace AnywhereNET
         {
             // TODO: recursive?
             // enumerate all the assembly files in the application directory
-            if (AssemblyFiles.Count == 0)
-            {
-                AssemblyFiles = Directory
-                    .EnumerateFiles(AppContext.BaseDirectory, $"*.{OSConfiguration.AssemblyExtension}")
-                    .ToList();
-            }
+            var files = Directory
+                .EnumerateFiles(AppContext.BaseDirectory, $"*.{OSConfiguration.AssemblyExtension}")
+                .ToList();
 
-            foreach (var file in AssemblyFiles)
+            foreach (var file in files.ToArray())
             {
                 try
                 {

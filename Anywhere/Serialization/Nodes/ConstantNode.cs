@@ -1,7 +1,7 @@
 ﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Serialization;
 
-namespace AnywhereNET
+namespace DidoNet
 {
     internal class ConstantNode : Node
     {

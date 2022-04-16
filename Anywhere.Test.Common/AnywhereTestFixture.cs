@@ -1,6 +1,6 @@
 ﻿using System.Runtime.Loader;
 
-namespace AnywhereNET.Test.Common
+namespace DidoNet.Test.Common
 {
     /// <summary>
     /// A common test fixture to support unit testing data shared between test projects.
@@ -37,9 +37,9 @@ namespace AnywhereNET.Test.Common
         /// </summary>
         static readonly string SharedTestDataFolder = "Anywhere.Shared.Test.Data";
 
-        public Anywhere Anywhere;
+        //public Dido Anywhere;
 
-        public AnywhereConfiguration Configuration;
+        public Configuration Configuration;
 
         public Environment Environment;
 
@@ -57,7 +57,7 @@ namespace AnywhereNET.Test.Common
 
             AssemblyResolver = new DebugRemoteAssemblyResolver(TestLibAssembliesFolder);
 
-            // set up a singleton environment instance
+            // set up a common environment instance
             Environment = new Environment
             {
                 ResolveRemoteAssemblyAsync = AssemblyResolver.ResolveAssembly,
@@ -68,14 +68,14 @@ namespace AnywhereNET.Test.Common
                 AssemblyContext = new AssemblyLoadContext("test", true)
             };
 
-            // set up a singleton anywhere instance
-            Configuration = new AnywhereConfiguration
+            // set up a common configuration instance
+            Configuration = new Configuration
             {
                 MaxTries = 1,
                 ExecutionMode = ExecutionModes.Local,
                 ResolveLocalAssemblyAsync = (assemblyName) => AssemblyResolver.ResolveAssembly(Environment, assemblyName)
             };
-            Anywhere = new Anywhere(Configuration);
+            //Anywhere = new Dido(Configuration);
         }
 
         /// <summary>
@@ -110,7 +110,7 @@ namespace AnywhereNET.Test.Common
                 // if so, search it for the assemblies
                 if (testLibFolder != null)
                 {
-                    var file = Directory.GetFiles(testLibFolder, $"{AnywhereTestFixture.TestLibName}.{AnywhereNET.OSConfiguration.AssemblyExtension}", SearchOption.AllDirectories)
+                    var file = Directory.GetFiles(testLibFolder, $"{AnywhereTestFixture.TestLibName}.{DidoNet.OSConfiguration.AssemblyExtension}", SearchOption.AllDirectories)
                         .FirstOrDefault();
                     if (file != null)
                     {

@@ -1,9 +1,9 @@
-using AnywhereNET.Test.Common;
+using DidoNet.Test.Common;
 using System;
 using System.IO;
 using Xunit;
 
-namespace AnywhereNET.Test.Runner
+namespace DidoNet.Test.Runner
 {
     public class DeserializationAndInvocationTests : IClassFixture<AnywhereTestFixture>
     {
@@ -45,7 +45,7 @@ namespace AnywhereNET.Test.Runner
             // deserialize the method lambda, using the custom resolver to resolve dependencies.
             // NOTE: the original saved expression was an int32, but here the return type is explicitly
             // being set to an int64 (long) because the json deserializer deserializes all integers to int64
-            var method = await TestFixture.Anywhere.DeserializeAsync<long>(bytes, TestFixture.Environment);
+            var method = await Dido.DeserializeAsync<long>(bytes, TestFixture.Environment);
             if (method == null)
             {
                 throw new InvalidOperationException($"Could not deserialize method from '{path}'");
@@ -81,7 +81,7 @@ namespace AnywhereNET.Test.Runner
             // deserialize the method lambda, using the custom resolver to resolve dependencies.
             // NOTE: the original saved expression was an int32, but here the return type is explicitly
             // being set to an int64 (long) because the json deserializer deserializes all integers to int64
-            var method = await TestFixture.Anywhere.DeserializeAsync<long>(bytes, TestFixture.Environment);
+            var method = await Dido.DeserializeAsync<long>(bytes, TestFixture.Environment);
             if (method == null)
             {
                 throw new InvalidOperationException($"Could not deserialize method from '{path}'");
@@ -115,7 +115,7 @@ namespace AnywhereNET.Test.Runner
             var expectedResult = Newtonsoft.Json.JsonConvert.DeserializeObject(File.ReadAllText(path));
 
             // deserialize the method lambda, using the custom resolver to resolve dependencies
-            var method = await TestFixture.Anywhere.DeserializeAsync<string>(bytes, TestFixture.Environment);
+            var method = await Dido.DeserializeAsync<string>(bytes, TestFixture.Environment);
             if (method == null)
             {
                 throw new InvalidOperationException($"Could not deserialize method from '{path}'");

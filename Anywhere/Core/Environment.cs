@@ -1,7 +1,7 @@
 ﻿using System.Reflection;
 using System.Runtime.Loader;
 
-namespace AnywhereNET
+namespace DidoNet
 {
     /// <summary>
     /// Specifies the global static runtime configuration for an Anywhere Environment service application.

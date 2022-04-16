@@ -3,7 +3,7 @@ using System.Linq;
 using System.Threading;
 using Xunit;
 
-namespace AnywhereNET.Test
+namespace DidoNet.Test
 {
     public class QueueBufferStreamTests
     {

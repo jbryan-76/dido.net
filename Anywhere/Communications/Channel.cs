@@ -1,6 +1,6 @@
 ﻿using System.Collections.Concurrent;
 
-namespace AnywhereNET
+namespace DidoNet
 {
     /// <summary>
     /// Represents a single unique bidirectional communications stream on a Connection.
@@ -81,7 +81,8 @@ namespace AnywhereNET
         /// an IOException will be thrown instead of returning true.
         /// <para/>Note: since this call utilizes a thread in the thread pool, only use in
         /// situations where the caller does not expect to wait very long for data to arrive,
-        /// otherwise the call will use an entire thread while waiting, which may block other work.
+        /// (ie no more than a few seconds) otherwise the call will utilize an entire thread while 
+        /// waiting, which may block other work.
         /// </summary>
         /// <param name="connection"></param>
         /// <returns></returns>

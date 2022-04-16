@@ -1,4 +1,4 @@
-﻿namespace AnywhereNET.TestLibDependency
+﻿namespace DidoNet.TestLibDependency
 {
     /// <summary>
     /// A POCO model used for testing proper serialization and invokation of

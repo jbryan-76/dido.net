@@ -1,7 +1,7 @@
 ﻿using Newtonsoft.Json.Serialization;
 using System.Reflection;
 
-namespace AnywhereNET
+namespace DidoNet
 {
     /// <summary>
     /// A JSON serialization binder to locate the correct type from the set of loaded assemblies

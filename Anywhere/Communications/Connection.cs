@@ -5,7 +5,7 @@ using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 
-namespace AnywhereNET
+namespace DidoNet
 {
     /// <summary>
     /// Represents a single bidirectional communications connection between a server and client.

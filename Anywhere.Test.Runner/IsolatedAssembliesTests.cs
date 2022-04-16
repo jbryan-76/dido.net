@@ -1,4 +1,4 @@
-﻿using AnywhereNET.Test.Common;
+﻿using DidoNet.Test.Common;
 using System;
 using System.IO;
 using System.Linq.Expressions;
@@ -7,7 +7,7 @@ using System.Runtime.Loader;
 using System.Threading;
 using Xunit;
 
-namespace AnywhereNET.Test.Runner
+namespace DidoNet.Test.Runner
 {
     public class IsolatedAssembliesTests : IClassFixture<AnywhereTestFixture>
     {
@@ -44,11 +44,11 @@ namespace AnywhereNET.Test.Runner
             testLibDependencyStream.Dispose();
 
             // get the test class type and method to be used below in the dynamically created expression
-            var sampleWorkerType = testLibAssembly.GetType("AnywhereNET.TestLib.SampleWorkerClass");
+            var sampleWorkerType = testLibAssembly.GetType("DidoNet.TestLib.SampleWorkerClass");
             var methodInfo = sampleWorkerType.GetMethod("SimpleMemberMethod");
 
             // create the test instance and sample method argument
-            var testObject = testLibAssembly.CreateInstance("AnywhereNET.TestLib.SampleWorkerClass");
+            var testObject = testLibAssembly.CreateInstance("DidoNet.TestLib.SampleWorkerClass");
             int testArgument = 123;
 
             // a constant referring to the local SampleWorkerClass test object
@@ -117,11 +117,11 @@ namespace AnywhereNET.Test.Runner
             testLibDependencyStream.Dispose();
 
             // get the test class type and method to be used below in the dynamically created expression
-            var sampleWorkerType = testLibAssembly.GetType("AnywhereNET.TestLib.SampleWorkerClass");
+            var sampleWorkerType = testLibAssembly.GetType("DidoNet.TestLib.SampleWorkerClass");
             var methodInfo = sampleWorkerType.GetMethod("SimpleMemberMethod");
 
             // create the test instance and sample method argument
-            dummy.TestObject = testLibAssembly.CreateInstance("AnywhereNET.TestLib.SampleWorkerClass");
+            dummy.TestObject = testLibAssembly.CreateInstance("DidoNet.TestLib.SampleWorkerClass");
             dummy.TestArgument = 456;
 
             // a constant referring to "this" object (ie the test class instance)
@@ -172,6 +172,5 @@ namespace AnywhereNET.Test.Runner
                 Assert.Equal(expectedResult, result);
             }
         }
-
     }
 }

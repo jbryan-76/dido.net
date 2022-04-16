@@ -1,6 +1,6 @@
 ﻿using System.Text;
 
-namespace AnywhereNET
+namespace DidoNet
 {
     public enum FrameTypes
     {

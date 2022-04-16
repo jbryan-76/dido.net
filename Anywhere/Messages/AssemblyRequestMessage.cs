@@ -1,4 +1,4 @@
-﻿namespace AnywhereNET
+﻿namespace DidoNet
 {
     internal class AssemblyRequestMessage : IMessage
     {

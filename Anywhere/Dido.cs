@@ -3,6 +3,8 @@ using System.Net.Sockets;
 using System.Runtime.Loader;
 
 // TODO: need a better name than "Anywhere"
+// TODO: dido? distribute, disseminate, divide, spread, separate, put
+// TODO: alio? to another place
 
 // generate self-signed certs automatically
 // https://stackoverflow.com/questions/695802/using-ssl-and-sslstream-for-peer-to-peer-authentication
@@ -72,13 +74,13 @@ using System.Runtime.Loader;
 // 2) convert to a pkcs12 pfx
 // openssl pkcs12 -export -out cert.pfx -inkey test.key -in test.pem -password pass:1234
 
-namespace AnywhereNET
+namespace DidoNet
 {
     /// <summary>
     /// Provides support for executing expressions locally for debugging, or remotely for
     /// distributed processing.
     /// </summary>
-    public class Anywhere
+    public static class Dido
     {
         /// <summary>
         /// Signature for a method that handles the result of asynchronous
@@ -100,19 +102,19 @@ namespace AnywhereNET
         // can properly implement remote file access.
         // TODO create an Anywhere.IO to mirror System.IO at least for File and Path. readonly? or write too?
 
-        /// <summary>
-        /// The configuration for this instance.
-        /// </summary>
-        private AnywhereConfiguration Configuration;
+        ///// <summary>
+        ///// The configuration for this instance.
+        ///// </summary>
+        //private AnywhereConfiguration Configuration;
 
-        /// <summary>
-        /// Create a new instance to execute tasks.
-        /// </summary>
-        /// <param name="configuration"></param>
-        public Anywhere(AnywhereConfiguration? configuration = null)
-        {
-            Configuration = configuration ?? new AnywhereConfiguration();
-        }
+        ///// <summary>
+        ///// Create a new instance to execute tasks.
+        ///// </summary>
+        ///// <param name="configuration"></param>
+        //public Anywhere(AnywhereConfiguration? configuration = null)
+        //{
+        //    Configuration = configuration ?? new AnywhereConfiguration();
+        //}
 
         /// <summary>
         /// Execute the provided expression as a task and return its result.
@@ -122,17 +124,20 @@ namespace AnywhereNET
         /// <param name="executionMode">An optional execution mode to override the currently configured mode.</param>
         /// <returns></returns>
         /// <exception cref="InvalidOperationException"></exception>
-        public Task<Tprop> ExecuteAsync<Tprop>(Expression<Func<ExecutionContext, Tprop>> expression, ExecutionModes? executionMode = null)
+        public static Task<Tprop> RunAsync<Tprop>(
+            Expression<Func<ExecutionContext, Tprop>> expression,
+            Configuration? configuration = null)
         {
-            executionMode = executionMode ?? Configuration.ExecutionMode;
-            switch (executionMode)
+            configuration ??= new Configuration();
+
+            switch (configuration.ExecutionMode)
             {
                 case ExecutionModes.Local:
-                    return LocalExecuteAsync<Tprop>(expression);
+                    return RunLocalAsync<Tprop>(expression, configuration);
                 case ExecutionModes.Remote:
-                    return RemoteExecuteAsync<Tprop>(expression);
+                    return RunRemoteAsync<Tprop>(expression, configuration);
                 default:
-                    return Task.FromException<Tprop>(new InvalidOperationException($"Illegal or unknown value for '{nameof(Configuration.ExecutionMode)}': {Configuration.ExecutionMode}"));
+                    return Task.FromException<Tprop>(new InvalidOperationException($"Illegal or unknown value for '{nameof(configuration.ExecutionMode)}': {configuration.ExecutionMode}"));
             }
         }
 
@@ -146,13 +151,17 @@ namespace AnywhereNET
         /// <param name="resultHandler">A result handler invoked after the expression completes. 
         /// Note this handler runs in a separate thread.</param>
         /// <param name="executionMode">An optional execution mode to override the currently configured mode.</param>
-        public void Execute<Tprop>(Expression<Func<ExecutionContext, Tprop>> expression, ResultHandler<Tprop> resultHandler, ExceptionHandler? execptionHandler = null, ExecutionModes? executionMode = null)
+        public static void Run<Tprop>(
+            Expression<Func<ExecutionContext, Tprop>> expression,
+            ResultHandler<Tprop> resultHandler,
+            Configuration? configuration = null,
+            ExceptionHandler? execptionHandler = null)
         {
             var thread = new Thread(async () =>
             {
                 try
                 {
-                    var result = await ExecuteAsync(expression, executionMode);
+                    var result = await RunAsync(expression, configuration);
                     resultHandler(result);
                 }
                 catch (Exception ex)
@@ -170,12 +179,15 @@ namespace AnywhereNET
         /// <typeparam name="Tprop"></typeparam>
         /// <param name="expression"></param>
         /// <returns></returns>
-        public Task<Tprop> LocalExecuteAsync<Tprop>(Expression<Func<ExecutionContext, Tprop>> expression)
+        public static Task<Tprop> RunLocalAsync<Tprop>(
+            Expression<Func<ExecutionContext, Tprop>> expression,
+            Configuration? configuration = null)
         {
+            configuration ??= new Configuration();
 #if (DEBUG)
-            return DebugLocalExecuteAsync(expression);
+            return DebugRunLocalAsync(expression, configuration);
 #else
-            return ReleaseLocalExecute(expression);
+            return ReleaseRunLocalAsync(expression, configuration);
 #endif
         }
 
@@ -189,21 +201,22 @@ namespace AnywhereNET
         /// <param name="expression"></param>
         /// <returns></returns>
         /// <exception cref="InvalidOperationException"></exception>
-        public async Task<Tprop> RemoteExecuteAsync<Tprop>(Expression<Func<ExecutionContext, Tprop>> expression)
+        public static async Task<Tprop> RunRemoteAsync<Tprop>(Expression<Func<ExecutionContext, Tprop>> expression,
+            Configuration configuration)
         {
-            if (Configuration.OrchestratorUri == null && Configuration.RunnerUri == null)
+            if (configuration.OrchestratorUri == null && configuration.RunnerUri == null)
             {
                 throw new InvalidOperationException($"Configuration error: At least one of {nameof(Configuration.OrchestratorUri)} or {nameof(Configuration.RunnerUri)} must be set to a valid value.");
             }
 
-            int maxTries = Math.Max(1, Configuration.MaxTries);
+            int maxTries = Math.Max(1, configuration.MaxTries);
             int tries = 0;
             while (true)
             {
                 ++tries;
                 try
                 {
-                    return await DoRemoteExecuteAsync(expression);
+                    return await DoRunRemoteAsync(expression, configuration);
                 }
                 catch (Exception e)
                 {
@@ -226,23 +239,24 @@ namespace AnywhereNET
         /// <exception cref="TaskDeserializationException"></exception>
         /// <exception cref="TaskInvokationException"></exception>
         /// <exception cref="InvalidOperationException"></exception>
-        private async Task<Tprop> DoRemoteExecuteAsync<Tprop>(Expression<Func<ExecutionContext, Tprop>> expression)
+        private static async Task<Tprop> DoRunRemoteAsync<Tprop>(Expression<Func<ExecutionContext, Tprop>> expression,
+            Configuration configuration)
         {
-            var runnerUri = Configuration.RunnerUri;
-            if (Configuration.OrchestratorUri != null && Configuration.RunnerUri == null)
+            var runnerUri = configuration.RunnerUri;
+            if (configuration.OrchestratorUri != null && configuration.RunnerUri == null)
             {
                 // TODO: open a connection to the orchestrator
                 // TODO: request an available runner from the orchestrator
                 // TODO: receive the runner connection details
                 // TODO: close the connection
-                runnerUri = Configuration.OrchestratorUri;
+                runnerUri = configuration.OrchestratorUri;
             }
 
             // create a secure connection to the remote runner
             var client = new TcpClient(runnerUri!.Host, runnerUri.Port);
             using (var connection = new Connection(client, runnerUri.Host))
             {
-                // create communication channels to the runner for: tasks, assemblies, files
+                // create communication channels to the runner for: task messages, assemblies, files
                 var tasksChannel = new MessageChannel(connection, Constants.TaskChannelNumber);
                 var assembliesChannel = connection.GetChannel(Constants.AssemblyChannelNumber);
                 var filesChannel = connection.GetChannel(Constants.FileChannelNumber);
@@ -250,6 +264,7 @@ namespace AnywhereNET
                 // TODO: handle file messages
 
                 // handle assembly messages
+                // TODO: make this a message channel instead
                 assembliesChannel.BlockingReads = true;
                 assembliesChannel.OnDataAvailable += async (channel) =>
                 {
@@ -265,7 +280,7 @@ namespace AnywhereNET
                     }
 
                     // resolve the desired assembly and send it back
-                    using (var stream = await Configuration.ResolveLocalAssemblyAsync(request.AssemblyName))
+                    using (var stream = await configuration.ResolveLocalAssemblyAsync(request.AssemblyName))
                     using (var mem = new MemoryStream())
                     {
                         AssemblyResponseMessage response;
@@ -286,6 +301,9 @@ namespace AnywhereNET
                 var responseSource = new TaskCompletionSource<IMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
                 tasksChannel.OnMessageReceived += (message, channel) =>
                 {
+                    // after kicking off the task request below, exactly one response message is expected back,
+                    // which is received in this handler and attached to the response source, to be awaited
+                    // below and then processed
                     responseSource.SetResult(message);
                 };
 
@@ -294,15 +312,16 @@ namespace AnywhereNET
                 using (var stream = new MemoryStream())
                 {
                     await ExpressionSerializer.SerializeAsync(expression, stream);
-                    var expressionRequest = new TaskRequestMessage(stream.ToArray());
+                    var expressionRequest = new TaskRequestMessage(stream.ToArray(), configuration.TimeoutInMs);
                     tasksChannel.Send(expressionRequest);
                 }
 
-                // then until a response is received
+                // TODO: add a cancellation source to the config and monitor it in another thread
+                // TODO: and send the message when a cancellation is requested
+
+                // then wait until a response is received
                 Task.WaitAll(responseSource.Task);
                 var message = responseSource.Task.Result;
-                // TODO: add support for a timeout
-                // TODO: add support for a cancellation token
 
                 // cleanup the connection
                 connection.Dispose();
@@ -324,9 +343,12 @@ namespace AnywhereNET
                             default:
                                 throw new InvalidOperationException($"Task error type {error.ErrorType} is unknown");
                         }
-                    // TODO: if TaskTimeoutMessage, throw TaskTimeoutException
-                    // TODO: if RunnerBusyMessage, throw RunnerBusyException
-                    // TODO: if TaskCancelMessage, throw TaskCancelException
+                    case TaskTimeoutMessage timeout:
+                        throw string.IsNullOrEmpty(timeout.Message) ? new TaskTimeoutException() : new TaskTimeoutException(timeout.Message);
+                    case TaskCancelMessage cancel:
+                        throw string.IsNullOrEmpty(cancel.Message) ? new TaskCanceledException() : new TaskCanceledException(cancel.Message);
+                    case RunnerBusyMessage busy:
+                        throw string.IsNullOrEmpty(busy.Message) ? new RunnerBusyException() : new RunnerBusyException(busy.Message);
                     default:
                         throw new InvalidOperationException($"Message {message.GetType()} is unknown");
                 }
@@ -341,7 +363,7 @@ namespace AnywhereNET
         /// <param name="expression"></param>
         /// <returns></returns>
         /// <exception cref="InvalidOperationException"></exception>
-        public async Task<byte[]> SerializeAsync<Tprop>(Expression<Func<ExecutionContext, Tprop>> expression)
+        public static async Task<byte[]> SerializeAsync<Tprop>(Expression<Func<ExecutionContext, Tprop>> expression)
         {
             if (expression == null)
             {
@@ -365,7 +387,7 @@ namespace AnywhereNET
         /// <param name="data"></param>
         /// <param name="env"></param>
         /// <returns></returns>
-        public Task<Func<ExecutionContext, Tprop>> DeserializeAsync<Tprop>(byte[] data, Environment env)
+        public static Task<Func<ExecutionContext, Tprop>> DeserializeAsync<Tprop>(byte[] data, Environment env)
         {
             using (var stream = new MemoryStream(data))
             {
@@ -382,7 +404,8 @@ namespace AnywhereNET
         /// <typeparam name="Tprop"></typeparam>
         /// <param name="expression"></param>
         /// <returns></returns>
-        internal async Task<Tprop> DebugLocalExecuteAsync<Tprop>(Expression<Func<ExecutionContext, Tprop>> expression)
+        internal static async Task<Tprop> DebugRunLocalAsync<Tprop>(Expression<Func<ExecutionContext, Tprop>> expression,
+            Configuration configuration)
         {
             var context = new ExecutionContext
             {
@@ -398,6 +421,8 @@ namespace AnywhereNET
 
             var data = await SerializeAsync(expression);
             var lambda = await DeserializeAsync<Tprop>(data, env);
+
+            // TODO: handle timeout and cancel and maxtries
             var result = lambda.Invoke(context);
 
             env.AssemblyContext.Unload();
@@ -412,7 +437,8 @@ namespace AnywhereNET
         /// <typeparam name="Tprop"></typeparam>
         /// <param name="expression"></param>
         /// <returns></returns>
-        internal Task<Tprop> ReleaseLocalExecuteAsync<Tprop>(Expression<Func<ExecutionContext, Tprop>> expression)
+        internal static Task<Tprop> ReleaseRunLocalAsync<Tprop>(Expression<Func<ExecutionContext, Tprop>> expression,
+            Configuration configuration)
         {
             var context = new ExecutionContext
             {
@@ -422,6 +448,8 @@ namespace AnywhereNET
             // when executing locally in release mode, simply compile and invoke the expression,
             // bypassing all internal (de)serialization and validation checks
             var func = expression.Compile();
+
+            // TODO: handle timeout and cancel and maxtries
             return Task.FromResult(func.Invoke(context));
         }
     }

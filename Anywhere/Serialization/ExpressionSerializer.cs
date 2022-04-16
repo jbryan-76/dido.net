@@ -4,7 +4,7 @@ using System.Linq.Expressions;
 using System.Runtime.Loader;
 using System.Text;
 
-namespace AnywhereNET
+namespace DidoNet
 {
     internal static class ExpressionSerializer
     {
