@@ -182,7 +182,7 @@ namespace DidoNet
             {
                 var tasksChannel = new MessageChannel(worker.Connection, Constants.TaskChannelNumber);
                 tasksChannel.Send(new TaskCancelMessage());
-                worker.Connection.Dispose();
+                worker.Dispose();
             }
             QueuedWorkers.Clear();
 
@@ -197,9 +197,7 @@ namespace DidoNet
             {
                 try
                 {
-                    worker?.Thread.Join(1000);
-                    worker?.Connection.Dispose();
-                    worker?.Cancel.Dispose();
+                    worker?.Dispose();
                 }
                 catch (Exception)
                 {
@@ -328,7 +326,7 @@ namespace DidoNet
                                             tasksChannel.Send(resultMessage);
                                         }
                                     }
-                                    catch (TaskCanceledException ex)
+                                    catch (OperationCanceledException ex)
                                     {
                                         tasksChannel.Send(new TaskCancelMessage());
                                     }
@@ -383,7 +381,7 @@ namespace DidoNet
             }
         }
 
-        private class Worker
+        private class Worker : IDisposable
         {
             public Guid Id { get; private set; } = Guid.NewGuid();
             public Thread Thread;
@@ -402,6 +400,13 @@ namespace DidoNet
             {
                 Thread = new Thread(() => Server.ProcessClient(this));
                 Thread.Start();
+            }
+
+            public void Dispose()
+            {
+                Thread.Join(1000);
+                Connection.Dispose();
+                Cancel.Dispose();
             }
         }
     }

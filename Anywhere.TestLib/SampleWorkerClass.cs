@@ -38,5 +38,20 @@ namespace DidoNet.TestLib
         {
             return arg.GenerateCombinedString();
         }
+
+        /// <summary>
+        /// A static method that loops forever until the given cancellation token
+        /// is cancelled.
+        /// </summary>
+        /// <param name="cancel"></param>
+        /// <returns></returns>
+        public static bool InfiniteLoopWithCancellation(CancellationToken cancel)
+        {
+            while (!cancel.IsCancellationRequested)
+            {
+                Thread.Sleep(1);
+            }
+            return true;
+        }
     }
 }

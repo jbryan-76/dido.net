@@ -126,16 +126,16 @@ namespace DidoNet
         /// <exception cref="InvalidOperationException"></exception>
         public static Task<Tprop> RunAsync<Tprop>(
             Expression<Func<ExecutionContext, Tprop>> expression,
-            Configuration? configuration = null)
+            Configuration? configuration = null, CancellationToken? cancellationToken = null)
         {
             configuration ??= new Configuration();
 
             switch (configuration.ExecutionMode)
             {
                 case ExecutionModes.Local:
-                    return RunLocalAsync<Tprop>(expression, configuration);
+                    return RunLocalAsync<Tprop>(expression, configuration, cancellationToken);
                 case ExecutionModes.Remote:
-                    return RunRemoteAsync<Tprop>(expression, configuration);
+                    return RunRemoteAsync<Tprop>(expression, configuration, cancellationToken);
                 default:
                     return Task.FromException<Tprop>(new InvalidOperationException($"Illegal or unknown value for '{nameof(configuration.ExecutionMode)}': {configuration.ExecutionMode}"));
             }
@@ -155,13 +155,14 @@ namespace DidoNet
             Expression<Func<ExecutionContext, Tprop>> expression,
             ResultHandler<Tprop> resultHandler,
             Configuration? configuration = null,
-            ExceptionHandler? execptionHandler = null)
+            ExceptionHandler? execptionHandler = null,
+            CancellationToken? cancellationToken = null)
         {
             var thread = new Thread(async () =>
             {
                 try
                 {
-                    var result = await RunAsync(expression, configuration);
+                    var result = await RunAsync(expression, configuration, cancellationToken);
                     resultHandler(result);
                 }
                 catch (Exception ex)
@@ -181,14 +182,31 @@ namespace DidoNet
         /// <returns></returns>
         public static Task<Tprop> RunLocalAsync<Tprop>(
             Expression<Func<ExecutionContext, Tprop>> expression,
-            Configuration? configuration = null)
+            Configuration? configuration = null,
+            CancellationToken? cancellationToken = null)
         {
             configuration ??= new Configuration();
+
+            // create an (unused) cancellation token source if no cancellation token has been provided
+            CancellationTokenSource? source = null;
+            if (cancellationToken == null)
+            {
+                source = new CancellationTokenSource();
+                cancellationToken = source.Token;
+            }
+
+            try
+            {
 #if (DEBUG)
-            return DebugRunLocalAsync(expression, configuration);
+                return DebugRunLocalAsync(expression, configuration, cancellationToken.Value);
 #else
-            return ReleaseRunLocalAsync(expression, configuration);
+                return ReleaseRunLocalAsync(expression, configuration, cancellationToken.Value);
 #endif
+            }
+            finally
+            {
+                source?.Dispose();
+            }
         }
 
         // TODO: if the orchestrator is in job mode, poll for the result?
@@ -201,31 +219,48 @@ namespace DidoNet
         /// <param name="expression"></param>
         /// <returns></returns>
         /// <exception cref="InvalidOperationException"></exception>
-        public static async Task<Tprop> RunRemoteAsync<Tprop>(Expression<Func<ExecutionContext, Tprop>> expression,
-            Configuration configuration)
+        public static async Task<Tprop> RunRemoteAsync<Tprop>(
+            Expression<Func<ExecutionContext, Tprop>> expression,
+            Configuration configuration,
+            CancellationToken? cancellationToken = null)
         {
             if (configuration.OrchestratorUri == null && configuration.RunnerUri == null)
             {
                 throw new InvalidOperationException($"Configuration error: At least one of {nameof(Configuration.OrchestratorUri)} or {nameof(Configuration.RunnerUri)} must be set to a valid value.");
             }
 
-            int maxTries = Math.Max(1, configuration.MaxTries);
-            int tries = 0;
-            while (true)
+            // create an (unused) cancellation token source if no cancellation token has been provided
+            CancellationTokenSource? source = null;
+            if (cancellationToken == null)
             {
-                ++tries;
-                try
+                source = new CancellationTokenSource();
+                cancellationToken = source.Token;
+            }
+
+            try
+            {
+                int maxTries = Math.Max(1, configuration.MaxTries);
+                int tries = 0;
+                while (true)
                 {
-                    return await DoRunRemoteAsync(expression, configuration);
-                }
-                catch (Exception e)
-                {
-                    // TODO: only retry if the exception is a TaskTimeoutException or RunnerBusyException
-                    if (tries == maxTries)
+                    ++tries;
+                    try
                     {
-                        throw;
+                        return await DoRunRemoteAsync(expression, configuration, cancellationToken.Value);
+                    }
+                    catch (Exception e)
+                    {
+                        // TODO: only retry if the exception is a TimeoutException or RunnerBusyException
+                        if (tries == maxTries)
+                        {
+                            throw;
+                        }
                     }
                 }
+            }
+            finally
+            {
+                source?.Dispose();
             }
         }
 
@@ -239,8 +274,10 @@ namespace DidoNet
         /// <exception cref="TaskDeserializationException"></exception>
         /// <exception cref="TaskInvokationException"></exception>
         /// <exception cref="InvalidOperationException"></exception>
-        private static async Task<Tprop> DoRunRemoteAsync<Tprop>(Expression<Func<ExecutionContext, Tprop>> expression,
-            Configuration configuration)
+        private static async Task<Tprop> DoRunRemoteAsync<Tprop>(
+            Expression<Func<ExecutionContext, Tprop>> expression,
+            Configuration configuration,
+            CancellationToken cancellationToken)
         {
             var runnerUri = configuration.RunnerUri;
             if (configuration.OrchestratorUri != null && configuration.RunnerUri == null)
@@ -302,24 +339,27 @@ namespace DidoNet
                 tasksChannel.OnMessageReceived += (message, channel) =>
                 {
                     // after kicking off the task request below, exactly one response message is expected back,
-                    // which is received in this handler and attached to the response source, to be awaited
+                    // which is received in this handler and attached to the response source to be awaited
                     // below and then processed
                     responseSource.SetResult(message);
                 };
 
-                // kickoff the task by serializing the expression and
-                // transmitting it to the remote runner
+                // kickoff the task by serializing the expression and transmitting it to the remote runner
                 using (var stream = new MemoryStream())
                 {
                     await ExpressionSerializer.SerializeAsync(expression, stream);
-                    var expressionRequest = new TaskRequestMessage(stream.ToArray(), configuration.TimeoutInMs);
-                    tasksChannel.Send(expressionRequest);
+                    var requestMessage = new TaskRequestMessage(stream.ToArray(), configuration.TimeoutInMs);
+                    tasksChannel.Send(requestMessage);
                 }
 
-                // TODO: add a cancellation source to the config and monitor it in another thread
-                // TODO: and send the message when a cancellation is requested
+                // when the cancellation token is canceled, send the cancel message to the runner
+                cancellationToken.Register(() =>
+                {
+                    var cancelMessage = new TaskCancelMessage();
+                    tasksChannel.Send(cancelMessage);
+                });
 
-                // then wait until a response is received
+                // now wait until a response is received
                 Task.WaitAll(responseSource.Task);
                 var message = responseSource.Task.Result;
 
@@ -344,9 +384,9 @@ namespace DidoNet
                                 throw new InvalidOperationException($"Task error type {error.ErrorType} is unknown");
                         }
                     case TaskTimeoutMessage timeout:
-                        throw string.IsNullOrEmpty(timeout.Message) ? new TaskTimeoutException() : new TaskTimeoutException(timeout.Message);
+                        throw string.IsNullOrEmpty(timeout.Message) ? new TimeoutException() : new TimeoutException(timeout.Message);
                     case TaskCancelMessage cancel:
-                        throw string.IsNullOrEmpty(cancel.Message) ? new TaskCanceledException() : new TaskCanceledException(cancel.Message);
+                        throw string.IsNullOrEmpty(cancel.Message) ? new OperationCanceledException() : new OperationCanceledException(cancel.Message);
                     case RunnerBusyMessage busy:
                         throw string.IsNullOrEmpty(busy.Message) ? new RunnerBusyException() : new RunnerBusyException(busy.Message);
                     default:
@@ -404,11 +444,14 @@ namespace DidoNet
         /// <typeparam name="Tprop"></typeparam>
         /// <param name="expression"></param>
         /// <returns></returns>
-        internal static async Task<Tprop> DebugRunLocalAsync<Tprop>(Expression<Func<ExecutionContext, Tprop>> expression,
-            Configuration configuration)
+        internal static async Task<Tprop> DebugRunLocalAsync<Tprop>(
+            Expression<Func<ExecutionContext, Tprop>> expression,
+            Configuration configuration,
+            CancellationToken cancellationToken)
         {
             var context = new ExecutionContext
             {
+                Cancel = cancellationToken,
                 ExecutionMode = ExecutionModes.Local,
             };
 
@@ -419,15 +462,24 @@ namespace DidoNet
                 ResolveRemoteAssemblyAsync = new DebugRemoteAssemblyResolver(AppContext.BaseDirectory).ResolveAssembly
             };
 
-            var data = await SerializeAsync(expression);
-            var lambda = await DeserializeAsync<Tprop>(data, env);
+            try
+            {
+                // to adequately test the end-to-end processing and current configuration,
+                // serialize and deserialize the expression
+                var data = await SerializeAsync(expression);
+                var func = await DeserializeAsync<Tprop>(data, env);
 
-            // TODO: handle timeout and cancel and maxtries
-            var result = lambda.Invoke(context);
-
-            env.AssemblyContext.Unload();
-
-            return result;
+                // run the expression with the optional configured timeout and return its result
+                var result = await Task
+                    .Run(() => func.Invoke(context))
+                    .WaitAsync(TimeSpan.FromMilliseconds(configuration.TimeoutInMs));
+                cancellationToken.ThrowIfCancellationRequested();
+                return result;
+            }
+            finally
+            {
+                env.AssemblyContext.Unload();
+            }
         }
 
         /// <summary>
@@ -437,11 +489,14 @@ namespace DidoNet
         /// <typeparam name="Tprop"></typeparam>
         /// <param name="expression"></param>
         /// <returns></returns>
-        internal static Task<Tprop> ReleaseRunLocalAsync<Tprop>(Expression<Func<ExecutionContext, Tprop>> expression,
-            Configuration configuration)
+        internal static async Task<Tprop> ReleaseRunLocalAsync<Tprop>(
+            Expression<Func<ExecutionContext, Tprop>> expression,
+            Configuration configuration,
+            CancellationToken cancellationToken)
         {
             var context = new ExecutionContext
             {
+                Cancel = cancellationToken,
                 ExecutionMode = ExecutionModes.Local,
             };
 
@@ -449,8 +504,12 @@ namespace DidoNet
             // bypassing all internal (de)serialization and validation checks
             var func = expression.Compile();
 
-            // TODO: handle timeout and cancel and maxtries
-            return Task.FromResult(func.Invoke(context));
+            // run the expression with the optional configured timeout and return its result
+            var result = await Task
+                .Run(() => func.Invoke(context))
+                .WaitAsync(TimeSpan.FromMilliseconds(configuration.TimeoutInMs));
+            cancellationToken.ThrowIfCancellationRequested();
+            return result;
         }
     }
 }

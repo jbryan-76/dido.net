@@ -21,7 +21,7 @@
 
         /// <summary>
         /// How long (in milliseconds) to wait before cancelling a task
-        /// and throwing a TaskTimeoutException.
+        /// and throwing a TimeoutException.
         /// </summary>
         public int TimeoutInMs { get; set; } = Timeout.Infinite;
 

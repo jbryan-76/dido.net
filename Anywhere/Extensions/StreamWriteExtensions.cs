@@ -163,7 +163,10 @@ namespace DidoNet
         {
             var bytes = Encoding.UTF8.GetBytes(value);
             stream.WriteInt32BE(bytes.Length);
-            stream.Write(bytes);
+            if (bytes.Length > 0)
+            {
+                stream.Write(bytes);
+            }
         }
 
         /// <summary>

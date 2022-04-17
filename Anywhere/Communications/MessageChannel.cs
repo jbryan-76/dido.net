@@ -21,7 +21,7 @@
         /// <summary>
         /// The unique id for the underlying channel messages are exchanged on.
         /// </summary>
-        public ushort ChannelNumber {  get { return Channel.ChannelNumber; } }
+        public ushort ChannelNumber { get { return Channel.ChannelNumber; } }
 
         /// <summary>
         /// Create a new message channel that uses the provided Channel.

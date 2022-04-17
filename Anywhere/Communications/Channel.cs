@@ -6,6 +6,8 @@ namespace DidoNet
     /// Represents a single unique bidirectional communications stream on a Connection.
     /// This allows multiple independent channels to communicate using a single Connection
     /// by multiplexing their data.
+    /// <para/>NOTE While reading and writing can be done on separate threads,
+    /// never use more than 1 thread to write (or read).
     /// </summary>
     public class Channel : Stream
     {

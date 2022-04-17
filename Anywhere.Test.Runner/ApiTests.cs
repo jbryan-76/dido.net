@@ -36,7 +36,7 @@ namespace DidoNet.Test.Runner
         /// Performs an end-to-end test of Anywhere.RemoteExecuteAsync using a local loopback server.
         /// </summary>
         [Fact]
-        public async void RemoteExecute()
+        public async void RunRemote()
         {
             // create a test lambda expression
             int testArgument = 123;
@@ -75,7 +75,7 @@ namespace DidoNet.Test.Runner
         /// Performs an end-to-end test of Anywhere.RemoteExecuteAsync using a local loopback server.
         /// </summary>
         [Fact]
-        public async void RemoteExecuteWithDeferredResultHandling()
+        public async void RunRemoteWithDeferredResultHandling()
         {
             // create a test lambda expression
             int testArgument = 123;
@@ -132,7 +132,7 @@ namespace DidoNet.Test.Runner
         }
 
         [Fact]
-        public async void RemoteExecuteWithTimeout()
+        public async void RunRemoteWithTimeout()
         {
             // create and start a secure localhost loopback runner server that can execute serialized expressions
             var runnerServer = new RunnerServer();
@@ -150,11 +150,47 @@ namespace DidoNet.Test.Runner
                 ResolveLocalAssemblyAsync = (assemblyName) => TestFixture.AssemblyResolver.ResolveAssembly(TestFixture.Environment, assemblyName)
             };
 
-            // execute the busy loop using the remote runner and confirm it throws a timed out exception
-            await Assert.ThrowsAsync<TaskTimeoutException>(async () =>
+            // execute the busy loop using the remote runner and confirm it throws TimeoutException
+            await Assert.ThrowsAsync<TimeoutException>(async () =>
             {
                 var result = await Dido.RunAsync<bool>((context) => BusyLoopWithCancellation.DoFakeWork(context), configuration);
             });
+
+            // cleanup
+            runnerServer.Dispose();
+        }
+
+        [Fact]
+        public async void RunRemoteWithCancel()
+        {
+            // create and start a secure localhost loopback runner server that can execute serialized expressions
+            var runnerServer = new RunnerServer();
+            int port = GetNextAvailablePort();
+            await runnerServer.Start(TestSelfSignedCert.ServerCertificate, port, IPAddress.Loopback);
+
+            // create configuration to use the loopback server
+            var configuration = new Configuration
+            {
+                MaxTries = 1,
+                RunnerUri = new Uri($"https://localhost:{port}"),
+                ExecutionMode = ExecutionModes.Remote,
+                // use the unit test assembly resolver instead of the default implementation
+                ResolveLocalAssemblyAsync = (assemblyName) => TestFixture.AssemblyResolver.ResolveAssembly(TestFixture.Environment, assemblyName)
+            };
+
+            // create a cancellation source and timer to cancel the task after 1 second
+            using (var source = new CancellationTokenSource())
+            using (var timer = new Timer((_) => source.Cancel(), null, 3000, 0))
+            {
+                // execute the busy loop using the remote runner and confirm it throws OperationCanceledException
+                await Assert.ThrowsAsync<OperationCanceledException>(async () =>
+                {
+                    var result = await Dido.RunAsync<bool>(
+                        (context) => BusyLoopWithCancellation.DoFakeWork(context),
+                        configuration,
+                        source.Token);
+                });
+            }
 
             // cleanup
             runnerServer.Dispose();
