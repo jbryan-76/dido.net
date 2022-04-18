@@ -312,8 +312,13 @@ namespace DidoNet
             {
                 throw new InvalidOperationException("Can't create channel: not connected.");
             }
-            Channels.TryAdd(channelNumber, new Channel(this, channelNumber));
-            return Channels[channelNumber];
+            lock(Channels)
+            {
+                //if(Channels.TryGetValue(channelNumber, out var channel))
+            }
+            //Channels.TryAdd(channelNumber, new Channel(this, channelNumber));
+            return Channels.GetOrAdd(channelNumber, (num) => new Channel(this, num));
+            //return Channels[channelNumber];
         }
 
         /// <summary>
@@ -508,6 +513,8 @@ namespace DidoNet
                     }
                     else if (frame is DisconnectFrame)
                     {
+                        ThreadHelpers.Debug($"Got disconnect frame. killing threads. writeQ={WriteFrameQueue.Count} readQ={ReadBuffer.Length}");
+
                         // signal all threads to terminate
                         Interlocked.Exchange(ref Connected, 0);
                         // NOTE: ignore disconnects for unit test monitoring
@@ -576,6 +583,7 @@ namespace DidoNet
                     Length = length,
                     Payload = payload!
                 });
+                ThreadHelpers.Debug($"connection {Name} just read frame {frame}");
                 return frame;
             }
             else
@@ -593,6 +601,7 @@ namespace DidoNet
         /// <param name="frame"></param>
         private void WriteFrame(Frame frame)
         {
+            ThreadHelpers.Debug($"connection {Name} writing frame {frame}");
             Stream.WriteByte(frame.Type);
             Stream.WriteUInt16BE(frame.Channel);
             Stream.WriteInt32BE(frame.Length);

@@ -130,7 +130,7 @@ namespace DidoNet
                     var client = listener.AcceptTcpClient();
 
                     // create a secure connection to the endpoint
-                    var connection = new Connection(client, cert);
+                    var connection = new Connection(client, cert, "runner");
 
                     // the orchestrator uses an optimistic scheduling strategy, which means
                     // it will route traffic to runners based on the conditions known at the 
@@ -197,6 +197,7 @@ namespace DidoNet
             {
                 try
                 {
+                    ThreadHelpers.Debug($"RUNNER: disposing completed worker");
                     worker?.Dispose();
                 }
                 catch (Exception)
@@ -236,8 +237,10 @@ namespace DidoNet
         {
             // create communication channels to the application for: task communication, assemblies, files
             var tasksChannel = new MessageChannel(worker.Connection, Constants.TaskChannelNumber);
-            var assembliesChannel = worker.Connection.GetChannel(Constants.AssemblyChannelNumber);
             var filesChannel = worker.Connection.GetChannel(Constants.FileChannelNumber);
+
+            tasksChannel.Channel.Name = "RUNNER";
+            filesChannel.Name = "RUNNER";
 
             try
             {
@@ -249,100 +252,28 @@ namespace DidoNet
                     Cancel = worker.Cancel.Token
                 };
 
-                // create the runtime environment
-                var environment = new Environment
-                {
-                    AssemblyContext = new AssemblyLoadContext(Guid.NewGuid().ToString(), true),
-                    ExecutionContext = worker.Context,
-                    ResolveRemoteAssemblyAsync = new DefaultRemoteAssemblyResolver(assembliesChannel).ResolveAssembly,
-                };
-
                 // use a reset event to block until the task is complete
                 var reset = new AutoResetEvent(false);
 
+                Thread? taskExecutionThread = null;
+
                 // set up a handler to process task-related messages
-                tasksChannel.OnMessageReceived += async (message, channel) =>
+                tasksChannel.OnMessageReceived = (message, channel) =>
                 {
                     try
                     {
+                        ThreadHelpers.Debug($"RUNNER: processing message {message.GetType().FullName}");
+
                         switch (message)
                         {
                             // process the message requesting to execute a task
                             case TaskRequestMessage request:
-                                using (var stream = new MemoryStream(request.Bytes))
-                                {
-                                    Func<ExecutionContext, object>? expression = null;
-
-                                    try
-                                    {
-                                        // deserialize the expression
-                                        expression = await ExpressionSerializer.DeserializeAsync<object>(stream, environment);
-                                    }
-                                    catch (Exception ex)
-                                    {
-                                        // catch and report deserialization errors
-                                        var errorMessage = new TaskErrorMessage(ex, TaskErrorMessage.ErrorTypes.Deserialization);
-                                        tasksChannel.Send(errorMessage);
-                                    }
-
-                                    Timer? timeout = null;
-                                    try
-                                    {
-                                        // set up a timer if necessary to cancel the task if it times out
-                                        long didTimeout = 0;
-                                        if (request.TimeoutInMs > 0)
-                                        {
-                                            timeout = new Timer((arg) =>
-                                            {
-                                                // try to cancel the task
-                                                worker.Cancel.Cancel();
-
-                                                // indicate that a timeout occurred
-                                                Interlocked.Exchange(ref didTimeout, 1);
-
-                                                // let the application know the task did not complete due to a timeout
-                                                tasksChannel.Send(new TaskTimeoutMessage());
-                                            }, null, request.TimeoutInMs, Timeout.Infinite);
-                                        }
-
-                                        // now execute the task by invoking the expression
-                                        var result = expression?.Invoke(environment.ExecutionContext);
-
-                                        // dispose the timeout (if it exists) to prevent it from triggering
-                                        // accidentally if the task already completed successfully
-                                        timeout?.Dispose();
-
-                                        // if the task did not timeout, continue processing
-                                        // (otherwise a timeout message was already sent)
-                                        if (Interlocked.Read(ref didTimeout) == 0)
-                                        {
-                                            // if a cancellation was requested, the result can't be trusted,
-                                            // so ensure a cancellation exception is thrown
-                                            // (it will be handled in the catch block below)
-                                            worker.Cancel.Token.ThrowIfCancellationRequested();
-
-                                            // otherwise send the result back to the application
-                                            var resultMessage = new TaskResponseMessage(result);
-                                            tasksChannel.Send(resultMessage);
-                                        }
-                                    }
-                                    catch (OperationCanceledException ex)
-                                    {
-                                        tasksChannel.Send(new TaskCancelMessage());
-                                    }
-                                    catch (Exception ex)
-                                    {
-                                        // catch and report invokation errors
-                                        var errorMessage = new TaskErrorMessage(ex, TaskErrorMessage.ErrorTypes.Invokation);
-                                        tasksChannel.Send(errorMessage);
-                                        timeout?.Dispose();
-                                    }
-
-                                    reset.Set();
-                                }
+                                taskExecutionThread = new Thread(() => ExecuteTask(worker, request, reset, tasksChannel));
+                                taskExecutionThread.Start();
                                 break;
 
                             case TaskCancelMessage cancel:
+                                ThreadHelpers.Debug($"RUNNER cancelling the worker");
                                 worker.Cancel.Cancel();
                                 break;
 
@@ -352,16 +283,21 @@ namespace DidoNet
                     }
                     catch (Exception ex)
                     {
-                        // all exceptions must be handled explicitly since this handler is running in another
-                        // thread that is never awaited
+                        // handle all unexpected exceptions explicitly by notifying the application
                         var errorMessage = new TaskErrorMessage(ex, TaskErrorMessage.ErrorTypes.General);
+                        ThreadHelpers.Debug($"RUNNER got error: {ex.ToString()}");
                         tasksChannel.Send(errorMessage);
+                        worker.Cancel.Cancel();
                         reset.Set();
                     }
                 };
 
                 // block until the expression completes or fails
+                ThreadHelpers.Debug($"RUNNER: waiting for the task to finish");
                 reset.WaitOne();
+                ThreadHelpers.Debug($"RUNNER: task finished, joining");
+                taskExecutionThread?.Join();
+                ThreadHelpers.Debug($"RUNNER: task complete");
             }
             catch (Exception ex)
             {
@@ -378,6 +314,128 @@ namespace DidoNet
                 CompletedWorkers.Enqueue(worker);
 
                 SendStatusToOrchestrator();
+            }
+        }
+
+        private async void ExecuteTask(Worker worker, TaskRequestMessage request, AutoResetEvent reset, MessageChannel tasksChannel)
+        {
+            var assembliesChannel = worker.Connection.GetChannel(Constants.AssemblyChannelNumber);
+
+            assembliesChannel.Name = "RUNNER";
+
+            // create the runtime environment
+            var environment = new Environment
+            {
+                AssemblyContext = new AssemblyLoadContext(Guid.NewGuid().ToString(), true),
+                ExecutionContext = worker.Context,
+                ResolveRemoteAssemblyAsync = new DefaultRemoteAssemblyResolver(assembliesChannel).ResolveAssembly,
+            };
+
+            using (var stream = new MemoryStream(request.Bytes))
+            {
+                Func<ExecutionContext, object>? expression = null;
+
+                try
+                {
+                    // deserialize the expression
+                    expression = await ExpressionSerializer.DeserializeAsync<object>(stream, environment);
+                }
+                catch (Exception ex)
+                {
+                    // catch and report deserialization errors
+                    var errorMessage = new TaskErrorMessage(ex, TaskErrorMessage.ErrorTypes.Deserialization);
+                    tasksChannel.Send(errorMessage);
+                    // indicate to the main thread that the task is done
+                    reset.Set();
+                    return;
+                }
+
+                Timer? timeout = null;
+                try
+                {
+                    // set up a timer if necessary to cancel the task if it times out
+                    long didTimeout = 0;
+                    if (request.TimeoutInMs > 0)
+                    {
+                        ThreadHelpers.Debug($"RUNNER: timeout in {request.TimeoutInMs}ms");
+                        timeout = new Timer((arg) =>
+                        {
+                            // try to cancel the task
+                            worker.Cancel.Cancel();
+
+                            // indicate that a timeout occurred
+                            Interlocked.Exchange(ref didTimeout, 1);
+
+                            // let the application know immediately the task did not complete due to a timeout
+                            // (this way if the task does not cancel soon at least the application
+                            // can start a retry)
+                            ThreadHelpers.Debug($"RUNNER: sending timeout message");
+                            tasksChannel.Send(new TaskTimeoutMessage());
+                            ThreadHelpers.Debug($"RUNNER: timeout message sent");
+
+                            // indicate the timeout message was sent
+                            Interlocked.Exchange(ref didTimeout, 2);
+                        }, null, request.TimeoutInMs, Timeout.Infinite);
+                    }
+
+                    // now execute the task by invoking the expression.
+                    // the task will run for as long as necessary.
+                    ThreadHelpers.Debug($"RUNNER: starting task");
+                    var result = expression?.Invoke(environment.ExecutionContext);
+                    ThreadHelpers.Debug($"RUNNER: finished task");
+
+                    // dispose the timeout now (if it exists) to prevent it from triggering
+                    // accidentally if the task already completed successfully
+                    timeout?.Dispose();
+                    timeout = null;
+
+                    // if the task did not timeout, continue processing
+                    // (otherwise a timeout message was already sent)
+                    if (Interlocked.Read(ref didTimeout) == 0)
+                    {
+                        // if a cancellation was requested, the result can't be trusted,
+                        // so ensure a cancellation exception is thrown
+                        // (it will be handled in the catch block below)
+                        worker.Cancel.Token.ThrowIfCancellationRequested();
+
+                        // otherwise send the result back to the application
+                        var resultMessage = new TaskResponseMessage(result);
+                        ThreadHelpers.Debug($"RUNNER: sending result message");
+                        tasksChannel.Send(resultMessage);
+                        ThreadHelpers.Debug($"RUNNER: result message sent");
+                    }
+                    else
+                    {
+                        // otherwise handle a rare edge-case where the task completes before
+                        // the timeout message finishes sending (since that message is sent in
+                        // a pool thread managed by the Timer), in which case delay here
+                        // until the message is sent (to prevent the underlying stream from
+                        // closing while the message is still writing to it).
+                        while (Interlocked.Read(ref didTimeout) == 1)
+                        {
+                            ThreadHelpers.Yield();
+                        }
+                    }
+                }
+                catch (OperationCanceledException ex)
+                {
+                    ThreadHelpers.Debug($"RUNNER: sending cancelled message");
+                    tasksChannel.Send(new TaskCancelMessage());
+                    ThreadHelpers.Debug($"RUNNER: cancelled message sent");
+                }
+                catch (Exception ex)
+                {
+                    // catch and report invokation errors
+                    var errorMessage = new TaskErrorMessage(ex, TaskErrorMessage.ErrorTypes.Invokation);
+                    tasksChannel.Send(errorMessage);
+                }
+                finally
+                {
+                    timeout?.Dispose();
+                }
+
+                // indicate to the main worker thread that the task is done
+                reset.Set();
             }
         }
 

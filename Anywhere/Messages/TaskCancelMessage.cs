@@ -15,7 +15,9 @@
 
         public void Read(Stream stream)
         {
+            ThreadHelpers.Debug($"starting to read cancel message");
             Message = stream.ReadString();
+            ThreadHelpers.Debug($"read cancel message: {Message}");
         }
 
         public void Write(Stream stream)

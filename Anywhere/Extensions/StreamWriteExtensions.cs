@@ -5,6 +5,21 @@ namespace DidoNet
     public static class StreamWriteExtensions
     {
         /// <summary>
+        /// Write the provided byte array to a stream.
+        /// </summary>
+        /// <param name="stream"></param>
+        /// <param name="bytes"></param>
+        public static void WriteBytes(this Stream stream, byte[] bytes)
+        {
+            Thread.Sleep(new Random().Next(50));
+            //Console.WriteLine($"writing {bytes.Length} bytes");
+            if (bytes.Length > 0)
+            {
+                stream.Write(bytes);
+            }
+        }
+
+        /// <summary>
         /// Write the provided boolean value to a stream.
         /// </summary>
         /// <param name="stream"></param>
@@ -16,7 +31,7 @@ namespace DidoNet
             {
                 Array.Reverse(bytes);
             }
-            stream.Write(bytes);
+            WriteBytes(stream, bytes); //stream.Write(bytes);
         }
 
         /// <summary>
@@ -31,7 +46,7 @@ namespace DidoNet
             {
                 Array.Reverse(bytes);
             }
-            stream.Write(bytes);
+            WriteBytes(stream, bytes); //stream.Write(bytes);
         }
 
         /// <summary>
@@ -46,7 +61,7 @@ namespace DidoNet
             {
                 Array.Reverse(bytes);
             }
-            stream.Write(bytes);
+            WriteBytes(stream, bytes); //stream.Write(bytes);
         }
 
         /// <summary>
@@ -61,7 +76,7 @@ namespace DidoNet
             {
                 Array.Reverse(bytes);
             }
-            stream.Write(bytes);
+            WriteBytes(stream, bytes); //stream.Write(bytes);
         }
 
         /// <summary>
@@ -76,7 +91,7 @@ namespace DidoNet
             {
                 Array.Reverse(bytes);
             }
-            stream.Write(bytes);
+            WriteBytes(stream, bytes); //stream.Write(bytes);
         }
 
         /// <summary>
@@ -91,7 +106,7 @@ namespace DidoNet
             {
                 Array.Reverse(bytes);
             }
-            stream.Write(bytes);
+            WriteBytes(stream, bytes); //stream.Write(bytes);
         }
 
         /// <summary>
@@ -106,7 +121,7 @@ namespace DidoNet
             {
                 Array.Reverse(bytes);
             }
-            stream.Write(bytes);
+            WriteBytes(stream, bytes); //stream.Write(bytes);
         }
 
         /// <summary>
@@ -121,7 +136,7 @@ namespace DidoNet
             {
                 Array.Reverse(bytes);
             }
-            stream.Write(bytes);
+            WriteBytes(stream, bytes); //stream.Write(bytes);
         }
 
         /// <summary>
@@ -136,7 +151,7 @@ namespace DidoNet
             {
                 Array.Reverse(bytes);
             }
-            stream.Write(bytes);
+            WriteBytes(stream, bytes); //stream.Write(bytes);
         }
 
         /// <summary>
@@ -151,7 +166,7 @@ namespace DidoNet
             {
                 Array.Reverse(bytes);
             }
-            stream.Write(bytes);
+            WriteBytes(stream, bytes); //stream.Write(bytes);
         }
 
         /// <summary>
@@ -162,11 +177,9 @@ namespace DidoNet
         public static void WriteString(this Stream stream, string value)
         {
             var bytes = Encoding.UTF8.GetBytes(value);
+            ThreadHelpers.Debug($"WriteString {bytes.Length}");
             stream.WriteInt32BE(bytes.Length);
-            if (bytes.Length > 0)
-            {
-                stream.Write(bytes);
-            }
+            WriteBytes(stream, bytes); //
         }
 
         /// <summary>

@@ -16,5 +16,10 @@
             // http://joeduffyblog.com/2006/08/22/priorityinduced-starvation-why-sleep1-is-better-than-sleep0-and-the-windows-balance-set-manager/
             Thread.Sleep(Math.Max(milliseconds, 1));
         }
+
+        public static void Debug(string message)
+        {
+            Console.WriteLine($"[{DateTimeOffset.UtcNow.ToString("o")}] |{Thread.CurrentThread.ManagedThreadId}| {message}");
+        }
     }
 }

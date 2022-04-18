@@ -19,8 +19,17 @@ namespace DidoNet
 
         /// <summary>
         /// An event handler that is triggered when any amount of new data is available.
+        /// The handler should consume as much data as possible from the channel.
+        /// <para/>Note: The handler is run in a separate thread and any thrown exception
+        /// will not be available until the channel is disposed, where it will be wrapped
+        /// in an AggregateException.
         /// </summary>
-        public event ChannelDataAvailableHandler? OnDataAvailable = null;
+        //public event ChannelDataAvailableHandler? OnDataAvailable = null;
+        public ChannelDataAvailableHandler? OnDataAvailable = null;
+
+        //public AutoResetEvent OnDataAvailable { get; private set; } = new AutoResetEvent(false);
+
+        public string Name { get; set; }
 
         /// <summary>
         /// The unique id for the channel.
@@ -71,6 +80,9 @@ namespace DidoNet
         /// A thread-safe queue of data received by the channel that is ready to be Read().
         /// </summary>
         private ConcurrentQueue<byte[]> ReadBuffer = new ConcurrentQueue<byte[]>();
+
+        private Thread? ReadThread = null;
+        private Exception? ReadThreadException = null;
 
         /// <summary>
         /// Indicates where in the ReadBuffer the next read should start.
@@ -257,6 +269,8 @@ namespace DidoNet
             ChannelNumber = channelNumber;
             WriteThread = new Thread(() => WriteLoop());
             WriteThread.Start();
+            ReadThread = new Thread(() => ReadLoop());
+            ReadThread.Start();
         }
 
         /// <summary>
@@ -269,7 +283,12 @@ namespace DidoNet
             ReadBuffer.Enqueue(bytes);
             // notify all event handlers new data is available.
             // (this needs to be done in a separate thread so as not to block the Connection read loop)
-            Task.Run(() => OnDataAvailable?.Invoke(this));
+            ThreadHelpers.Debug($"Channel {ChannelNumber} {Name} received {bytes.Length} bytes Q={ReadBuffer.Count}");
+            // TODO: this is still a problem. Received() has to enqueue the bytes sequentially.
+            // TODO: however there should be exactly one consumer (to maintain single thread processing).
+            // TODO: AND it cannot be invoked multiple times. it needs to be like a mutex or something
+            //Task.Run(() => OnDataAvailable?.Invoke(this));
+            //OnDataAvailable.Set();
         }
 
         /// <summary>
@@ -291,10 +310,12 @@ namespace DidoNet
             {
                 // make sure all pending data is sent before stopping the write thread
                 Flush();
-                // signal the write thread to stop
+                ThreadHelpers.Debug($"Disposing Channel {ChannelNumber} {Name}");
+                // signal the threads to stop
                 Interlocked.Exchange(ref IsDisposed, 1);
-                // wait for the write thread to finish
+                // wait for the threads to finish
                 WriteThread!.Join();
+                ReadThread!.Join();
             }
             if (disposing)
             {
@@ -302,11 +323,44 @@ namespace DidoNet
                 WriteBuffer.Dispose();
             }
             GC.SuppressFinalize(this);
-            
+
             // propagate any exceptions
+            var exceptions = new List<Exception>();
+            if (ReadThreadException != null)
+            {
+                exceptions.Add(ReadThreadException);
+            }
             if (WriteThreadException != null)
             {
-                throw WriteThreadException;
+                exceptions.Add(WriteThreadException);
+            }
+            if (exceptions.Count > 0)
+            {
+                throw new AggregateException(exceptions);
+            }
+        }
+
+        private void ReadLoop()
+        {
+            try
+            {
+                // loop forever until the object is disposed or the connection is closed
+                while (Interlocked.Read(ref IsDisposed) == 0 && IsConnected)
+                {
+                    if (IsDataAvailable)
+                    {
+                        ThreadHelpers.Debug($"Channel {ChannelNumber} {Name} data available");
+                        // NOTE by design this will block: the handler is meant to process
+                        // the incoming data serially in a single thread
+                        OnDataAvailable?.Invoke(this);
+                    }
+                    ThreadHelpers.Yield();
+                }
+                ThreadHelpers.Debug($"channel {ChannelNumber} {Name} read loop stopping readbuffer={ReadBuffer.Count}");
+            }
+            catch (Exception e)
+            {
+                ReadThreadException = e;
             }
         }
 
@@ -341,6 +395,7 @@ namespace DidoNet
                     }
                     ThreadHelpers.Yield();
                 }
+                ThreadHelpers.Debug($"channel {ChannelNumber} {Name} write loop stopping writebuffer={WriteBuffer.Length}");
             }
             catch (Exception e)
             {

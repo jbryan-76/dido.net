@@ -10,8 +10,13 @@
 
         /// <summary>
         /// An event handler that is triggered when a new message is received.
+        /// Messages are delivered serially and in order. The handler should consume 
+        /// the message as quickly as possible to avoid creating a backlog.
+        /// <para/>Note: The handler is run in a separate thread and any thrown exception
+        /// will not be available until the channel is disposed, where it will be wrapped
+        /// in an AggregateException.
         /// </summary>
-        public event MessageReceivedHandler? OnMessageReceived = null;
+        public MessageReceivedHandler? OnMessageReceived = null;
 
         /// <summary>
         /// The underlying channel messages are exchanged on.
@@ -23,6 +28,8 @@
         /// </summary>
         public ushort ChannelNumber { get { return Channel.ChannelNumber; } }
 
+        //private Thread Thread;
+
         /// <summary>
         /// Create a new message channel that uses the provided Channel.
         /// </summary>
@@ -31,7 +38,16 @@
         {
             Channel = channel;
             Channel.BlockingReads = true;
-            Channel.OnDataAvailable += (channel) => DataReceived();
+            //Channel.OnDataAvailable += (channel) => DataReceived();
+            Channel.OnDataAvailable = (channel) => DataReceived();
+            //Thread = new Thread(() =>
+            //{
+            //    while(true)
+            //    {
+            //        Channel.OnDataAvailable.WaitOne();
+            //        DataReceived();
+            //    }
+            //});
         }
 
         /// <summary>
@@ -48,9 +64,18 @@
         /// <param name="message"></param>
         public void Send(IMessage message)
         {
-            var messageType = message.GetType();
-            Channel.WriteString(messageType.AssemblyQualifiedName);
-            message.Write(Channel);
+            // lock the channel to only write one contiguous message at a time
+            lock (Channel)
+            {
+                var messageType = message.GetType();
+                ThreadHelpers.Debug($"{ChannelNumber} {Channel.Name} sending message {messageType.AssemblyQualifiedName}");
+                Channel.WriteString(messageType.AssemblyQualifiedName);
+                message.Write(Channel);
+                ThreadHelpers.Debug($"{ChannelNumber} {Channel.Name} sent message {messageType.AssemblyQualifiedName}");
+                Channel.Flush();
+                var checkType = Type.GetType(messageType.AssemblyQualifiedName);
+                ThreadHelpers.Debug($"{ChannelNumber} {Channel.Name} confirmed:  {checkType}");
+            }
         }
 
         // TODO: explore in future. an interesting idea, but there are some timing concerns
@@ -86,19 +111,32 @@
         private void DataReceived()
         {
             // TODO: send message length too so can read+discard on error?
+            ThreadHelpers.Debug($"{ChannelNumber} {Channel.Name} reading message type");
             var typeName = Channel.ReadString();
+            ThreadHelpers.Debug($"{ChannelNumber} {Channel.Name} receiving message {typeName}");
             var messageType = Type.GetType(typeName);
             if (messageType == null)
             {
+                ThreadHelpers.Debug($"{ChannelNumber} {Channel.Name} EXCEPTION: empty message type");
+
                 throw new InvalidOperationException($"Unknown message type '{typeName}'");
             }
             var message = Activator.CreateInstance(messageType) as IMessage;
             if (message == null)
             {
+                ThreadHelpers.Debug($"{ChannelNumber} {Channel.Name} EXCEPTION: can't create instance");
                 throw new InvalidOperationException($"Cannot create instance of message type '{typeName}'");
             }
+            ThreadHelpers.Debug($"{ChannelNumber} {Channel.Name} starting read message {typeName}");
             message.Read(Channel);
+            ThreadHelpers.Debug($"{ChannelNumber} {Channel.Name} received message {typeName}");
+            // this needs to be done in a separate thread so as not to block any event processing loops
             OnMessageReceived?.Invoke(message, this);
+            ThreadHelpers.Debug($"{ChannelNumber} {Channel.Name} invoked message receiver");
+            //if (OnMessageReceived != null)
+            //{
+            //    Task.Run(() => OnMessageReceived.Invoke(message, this));
+            //}
         }
     }
 

@@ -248,7 +248,7 @@ namespace DidoNet
                     {
                         return await DoRunRemoteAsync(expression, configuration, cancellationToken.Value);
                     }
-                    catch (Exception e)
+                    catch (Exception e) when (e is TimeoutException || e is RunnerBusyException)
                     {
                         // TODO: only retry if the exception is a TimeoutException or RunnerBusyException
                         if (tries == maxTries)
@@ -291,23 +291,29 @@ namespace DidoNet
 
             // create a secure connection to the remote runner
             var client = new TcpClient(runnerUri!.Host, runnerUri.Port);
-            using (var connection = new Connection(client, runnerUri.Host))
+            using (var connection = new Connection(client, runnerUri.Host, "dido"))
             {
                 // create communication channels to the runner for: task messages, assemblies, files
                 var tasksChannel = new MessageChannel(connection, Constants.TaskChannelNumber);
                 var assembliesChannel = connection.GetChannel(Constants.AssemblyChannelNumber);
                 var filesChannel = connection.GetChannel(Constants.FileChannelNumber);
 
+                tasksChannel.Channel.Name = "DIDO";
+                assembliesChannel.Name = "DIDO";
+                filesChannel.Name = "DIDO";
+
                 // TODO: handle file messages
 
                 // handle assembly messages
                 // TODO: make this a message channel instead
                 assembliesChannel.BlockingReads = true;
-                assembliesChannel.OnDataAvailable += async (channel) =>
+                assembliesChannel.OnDataAvailable = async (channel) =>
                 {
                     // receive the assembly request
+                    ThreadHelpers.Debug($"dido: reading AssemblyRequestMessage");
                     var request = new AssemblyRequestMessage();
                     request.Read(channel);
+                    ThreadHelpers.Debug($"dido: AssemblyRequestMessage READ");
 
                     if (string.IsNullOrEmpty(request.AssemblyName))
                     {
@@ -330,14 +336,17 @@ namespace DidoNet
                             stream.CopyTo(mem);
                             response = new AssemblyResponseMessage(mem.ToArray());
                         }
+                        ThreadHelpers.Debug($"dido: sending AssemblyResponseMessage");
                         response.Write(channel);
+                        ThreadHelpers.Debug($"dido: AssemblyRequestMessage WROTE");
                     }
                 };
 
                 // handle task messages
                 var responseSource = new TaskCompletionSource<IMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
-                tasksChannel.OnMessageReceived += (message, channel) =>
+                tasksChannel.OnMessageReceived = (message, channel) =>
                 {
+                    ThreadHelpers.Debug($"dido: received message {message.GetType()}");
                     // after kicking off the task request below, exactly one response message is expected back,
                     // which is received in this handler and attached to the response source to be awaited
                     // below and then processed
@@ -349,22 +358,32 @@ namespace DidoNet
                 {
                     await ExpressionSerializer.SerializeAsync(expression, stream);
                     var requestMessage = new TaskRequestMessage(stream.ToArray(), configuration.TimeoutInMs);
-                    tasksChannel.Send(requestMessage);
+                    lock (tasksChannel)
+                    {
+                        tasksChannel.Send(requestMessage);
+                    }
                 }
 
                 // when the cancellation token is canceled, send the cancel message to the runner
                 cancellationToken.Register(() =>
                 {
-                    var cancelMessage = new TaskCancelMessage();
-                    tasksChannel.Send(cancelMessage);
+                    ThreadHelpers.Debug($"dido: sending cancel message");
+                    lock (tasksChannel)
+                    {
+                        tasksChannel.Send(new TaskCancelMessage());
+                    }
                 });
 
                 // now wait until a response is received
+
+                ThreadHelpers.Debug($"dido: waiting for response...");
                 Task.WaitAll(responseSource.Task);
                 var message = responseSource.Task.Result;
+                ThreadHelpers.Debug($"dido: got response; starting dispose...");
 
                 // cleanup the connection
                 connection.Dispose();
+                ThreadHelpers.Debug($"dido: disposed");
 
                 // yield the result
                 switch (message)

@@ -185,7 +185,7 @@ namespace DidoNet.Test
 
                 // set a handler to receive messages on the server
                 TestMessage? receivedMessage = null;
-                messageChannel1ServerSide.OnMessageReceived += (message, channel) =>
+                messageChannel1ServerSide.OnMessageReceived = (message, channel) =>
                 {
                     // the underlying type of the received message should be the same,
                     // so simply cast it
@@ -243,10 +243,10 @@ namespace DidoNet.Test
                 };
 
                 // set handlers
-                channel1ClientSide.OnMessageReceived += clientHandler;
-                channel2ClientSide.OnMessageReceived += clientHandler;
-                channel1ServerSide.OnMessageReceived += serverHandler;
-                channel2ServerSide.OnMessageReceived += serverHandler;
+                channel1ClientSide.OnMessageReceived = clientHandler;
+                channel2ClientSide.OnMessageReceived = clientHandler;
+                channel1ServerSide.OnMessageReceived = serverHandler;
+                channel2ServerSide.OnMessageReceived = serverHandler;
 
                 // send messages
                 channel1ClientSide.Send(testRequestMessage);

@@ -28,8 +28,8 @@ namespace DidoNet.Test.Runner
         public ApiTests(AnywhereTestFixture fixture, ITestOutputHelper output)
         {
             TestFixture = fixture;
-            //var converter = new OutputConverter(output, "OUTPUT.txt");
-            //Console.SetOut(converter);
+            var converter = new OutputConverter(output, "OUTPUT.txt");
+            Console.SetOut(converter);
         }
 
         /// <summary>
@@ -180,7 +180,7 @@ namespace DidoNet.Test.Runner
 
             // create a cancellation source and timer to cancel the task after 1 second
             using (var source = new CancellationTokenSource())
-            using (var timer = new Timer((_) => source.Cancel(), null, 3000, 0))
+            using (var timer = new Timer((_) => source.Cancel(), null, 1000, 0))
             {
                 // execute the busy loop using the remote runner and confirm it throws OperationCanceledException
                 await Assert.ThrowsAsync<OperationCanceledException>(async () =>

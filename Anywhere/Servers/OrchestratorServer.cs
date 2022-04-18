@@ -127,7 +127,7 @@ namespace DidoNet
             {
                 // applications will contact the orchestrator using the application channel
                 // to make requests: eg get a runner, check job status, etc
-                applicationChannel.OnMessageReceived += (message, channel) =>
+                applicationChannel.OnMessageReceived = (message, channel) =>
                 {
                     // this connection is to the application.
                     // close the runner channel so as not to tie up a thread
@@ -146,7 +146,7 @@ namespace DidoNet
 
                 // runners will contact the orchestrator using the runner channel
                 // to update their status
-                runnerChannel.OnMessageReceived += (message, channel) =>
+                runnerChannel.OnMessageReceived = (message, channel) =>
                 {
                     // this connection is to a runner.
                     // close the application channel so as not to tie up a thread
