@@ -1,7 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
-using System.Runtime.Loader;
 using System.Security.Cryptography.X509Certificates;
 
 namespace DidoNet
@@ -25,11 +24,11 @@ namespace DidoNet
 
         private bool IsDisposed = false;
 
-        private ConcurrentDictionary<Guid, Worker> ActiveWorkers = new ConcurrentDictionary<Guid, Worker>();
+        private ConcurrentDictionary<Guid, TaskWorker> ActiveWorkers = new ConcurrentDictionary<Guid, TaskWorker>();
 
-        private ConcurrentQueue<Worker> CompletedWorkers = new ConcurrentQueue<Worker>();
+        private ConcurrentQueue<TaskWorker> CompletedWorkers = new ConcurrentQueue<TaskWorker>();
 
-        private ConcurrentQueue<Worker> QueuedWorkers = new ConcurrentQueue<Worker>();
+        private ConcurrentQueue<TaskWorker> QueuedWorkers = new ConcurrentQueue<TaskWorker>();
 
         public RunnerServer(RunnerConfiguration? configuration = null)
         {
@@ -51,7 +50,14 @@ namespace DidoNet
             GC.SuppressFinalize(this);
         }
 
-        public async Task Start(X509Certificate2 cert, int port, IPAddress? ip = null)
+        /// <summary>
+        /// Starts listening for incoming connection requests from applications.
+        /// </summary>
+        /// <param name="cert"></param>
+        /// <param name="port"></param>
+        /// <param name="ip"></param>
+        /// <returns></returns>
+        public void Start(X509Certificate2 cert, int port, IPAddress? ip = null)
         {
             ip ??= IPAddress.Any;
 
@@ -75,7 +81,7 @@ namespace DidoNet
                     Configuration.MaxTasks, Configuration.MaxQueue, Configuration.Label, Configuration.Tags));
                 OrchestratorChannel.Send(new RunnerStatusMessage(RunnerStatusMessage.States.Starting, 0, 0));
 
-                // TODO: start an infrequent (eg 60s) heartbeat to orchestrator to update status and environment stats
+                // TODO: start an infrequent (eg 60s) heartbeat to orchestrator to update status and environment stats (eg cpu, ram)?
             }
 
             // listen for incoming connections
@@ -91,6 +97,9 @@ namespace DidoNet
             Thread.Sleep(10);
         }
 
+        /// <summary>
+        /// Stops listening for incoming requests and shuts down the server.
+        /// </summary>
         public void Stop()
         {
             // inform the orchestrator that this runner is stopping
@@ -104,6 +113,12 @@ namespace DidoNet
             WorkLoopThread = null;
         }
 
+        /// <summary>
+        /// The work loop for the main runner thread, responsible for accepting incoming connections 
+        /// from applications that are requesting remote execution of tasks.
+        /// </summary>
+        /// <param name="listener"></param>
+        /// <param name="cert"></param>
         private void WorkLoop(TcpListener listener, X509Certificate2 cert)
         {
             while (Interlocked.Read(ref IsRunning) == 1)
@@ -118,7 +133,7 @@ namespace DidoNet
                     if (QueuedWorkers.TryDequeue(out var worker))
                     {
                         ActiveWorkers.TryAdd(worker.Id, worker);
-                        worker.Start();
+                        worker.Start(WorkerComplete);
                         SendStatusToOrchestrator();
                     }
                 }
@@ -152,14 +167,14 @@ namespace DidoNet
                     else
                     {
                         // otherwise create a worker...
-                        var worker = new Worker(this, connection);
+                        var worker = new TaskWorker(connection);
 
                         if (ActiveWorkers.Count < Configuration.MaxTasks
                             && QueuedWorkers.Count == 0)
                         {
                             // ...and start it immediately if there is spare capacity...
                             ActiveWorkers.TryAdd(worker.Id, worker);
-                            worker.Start();
+                            worker.Start(WorkerComplete);
                         }
                         else
                         {
@@ -177,7 +192,6 @@ namespace DidoNet
             // the work loop is stopping:
             // clear the queue and send back cancellation messages to each requesting application,
             // then cancel and cleanup all workers
-
             foreach (var worker in QueuedWorkers.ToArray())
             {
                 var tasksChannel = new MessageChannel(worker.Connection, Constants.TaskChannelNumber);
@@ -191,9 +205,24 @@ namespace DidoNet
             CleanupCompletedWorkers();
         }
 
+        /// <summary>
+        /// A handler invoked when a worker completes.
+        /// </summary>
+        /// <param name="worker"></param>
+        private void WorkerComplete(TaskWorker worker)
+        {
+            // move the worker to the completed queue so it can be disposed by the main thread
+            ActiveWorkers.Remove(worker.Id, out _);
+            CompletedWorkers.Enqueue(worker);
+            SendStatusToOrchestrator();
+        }
+
+        /// <summary>
+        /// Disposes all completed workers.
+        /// </summary>
         private void CleanupCompletedWorkers()
         {
-            while (CompletedWorkers.TryDequeue(out Worker? worker))
+            while (CompletedWorkers.TryDequeue(out TaskWorker? worker))
             {
                 try
                 {
@@ -202,23 +231,30 @@ namespace DidoNet
                 }
                 catch (Exception)
                 {
-                    // ignore all exceptions thrown while trying to cleanup the worker
+                    // ignore all exceptions thrown while trying to cleanup the worker:
+                    // they are being disposed anyway
                 }
             }
         }
 
+        /// <summary>
+        /// Cancels all active workers and moves them to the completed queue for disposal.
+        /// </summary>
         private void CancelActiveWorkers()
         {
             foreach (var worker in ActiveWorkers.Values.ToArray())
             {
                 // try to cancel the executing task
-                worker.Cancel.Cancel();
-                // move the worker to completed to attempt to cleanly dispose it
+                worker.Cancel();
+                // move the worker to the completed queue to attempt to cleanly dispose it
                 ActiveWorkers.Remove(worker.Id, out _);
                 CompletedWorkers.Enqueue(worker);
             }
         }
 
+        /// <summary>
+        /// Sends a status message to the orchestrator so it can track this runner for task scheduling.
+        /// </summary>
         private void SendStatusToOrchestrator()
         {
             OrchestratorChannel?.Send(new RunnerStatusMessage(
@@ -226,246 +262,6 @@ namespace DidoNet
                 ActiveWorkers.Count,
                 QueuedWorkers.Count)
             );
-        }
-
-        /// <summary>
-        /// Processes the task request from a single remote connected application.
-        /// </summary>
-        /// <param name="worker"></param>
-        /// <exception cref="InvalidOperationException"></exception>
-        private void ProcessClient(Worker worker)
-        {
-            // create communication channels to the application for: task communication, assemblies, files
-            var tasksChannel = new MessageChannel(worker.Connection, Constants.TaskChannelNumber);
-            var filesChannel = worker.Connection.GetChannel(Constants.FileChannelNumber);
-
-            tasksChannel.Channel.Name = "RUNNER";
-            filesChannel.Name = "RUNNER";
-
-            try
-            {
-                // create the execution context that is available to the expression while it's running
-                worker.Context = new ExecutionContext
-                {
-                    ExecutionMode = ExecutionModes.Local,
-                    FilesChannel = filesChannel,
-                    Cancel = worker.Cancel.Token
-                };
-
-                // use a reset event to block until the task is complete
-                var reset = new AutoResetEvent(false);
-
-                Thread? taskExecutionThread = null;
-
-                // set up a handler to process task-related messages
-                tasksChannel.OnMessageReceived = (message, channel) =>
-                {
-                    try
-                    {
-                        ThreadHelpers.Debug($"RUNNER: processing message {message.GetType().FullName}");
-
-                        switch (message)
-                        {
-                            // process the message requesting to execute a task
-                            case TaskRequestMessage request:
-                                taskExecutionThread = new Thread(() => ExecuteTask(worker, request, reset, tasksChannel));
-                                taskExecutionThread.Start();
-                                break;
-
-                            case TaskCancelMessage cancel:
-                                ThreadHelpers.Debug($"RUNNER cancelling the worker");
-                                worker.Cancel.Cancel();
-                                break;
-
-                            default:
-                                throw new InvalidOperationException($"Message {message.GetType()} is unknown");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        // handle all unexpected exceptions explicitly by notifying the application
-                        var errorMessage = new TaskErrorMessage(ex, TaskErrorMessage.ErrorTypes.General);
-                        ThreadHelpers.Debug($"RUNNER got error: {ex.ToString()}");
-                        tasksChannel.Send(errorMessage);
-                        worker.Cancel.Cancel();
-                        reset.Set();
-                    }
-                };
-
-                // block until the expression completes or fails
-                ThreadHelpers.Debug($"RUNNER: waiting for the task to finish");
-                reset.WaitOne();
-                ThreadHelpers.Debug($"RUNNER: task finished, joining");
-                taskExecutionThread?.Join();
-                ThreadHelpers.Debug($"RUNNER: task complete");
-            }
-            catch (Exception ex)
-            {
-                // send the exception back to the application on the expression channel
-                var errorMessage = new TaskErrorMessage(ex, TaskErrorMessage.ErrorTypes.General);
-                tasksChannel.Send(errorMessage);
-                // TODO: log it?
-            }
-            finally
-            {
-                // move the worker to the completed queue so it can
-                // be disposed by the main thread
-                ActiveWorkers.Remove(worker.Id, out _);
-                CompletedWorkers.Enqueue(worker);
-
-                SendStatusToOrchestrator();
-            }
-        }
-
-        private async void ExecuteTask(Worker worker, TaskRequestMessage request, AutoResetEvent reset, MessageChannel tasksChannel)
-        {
-            var assembliesChannel = worker.Connection.GetChannel(Constants.AssemblyChannelNumber);
-
-            assembliesChannel.Name = "RUNNER";
-
-            // create the runtime environment
-            var environment = new Environment
-            {
-                AssemblyContext = new AssemblyLoadContext(Guid.NewGuid().ToString(), true),
-                ExecutionContext = worker.Context,
-                ResolveRemoteAssemblyAsync = new DefaultRemoteAssemblyResolver(assembliesChannel).ResolveAssembly,
-            };
-
-            using (var stream = new MemoryStream(request.Bytes))
-            {
-                Func<ExecutionContext, object>? expression = null;
-
-                try
-                {
-                    // deserialize the expression
-                    expression = await ExpressionSerializer.DeserializeAsync<object>(stream, environment);
-                }
-                catch (Exception ex)
-                {
-                    // catch and report deserialization errors
-                    var errorMessage = new TaskErrorMessage(ex, TaskErrorMessage.ErrorTypes.Deserialization);
-                    tasksChannel.Send(errorMessage);
-                    // indicate to the main thread that the task is done
-                    reset.Set();
-                    return;
-                }
-
-                Timer? timeout = null;
-                try
-                {
-                    // set up a timer if necessary to cancel the task if it times out
-                    long didTimeout = 0;
-                    if (request.TimeoutInMs > 0)
-                    {
-                        ThreadHelpers.Debug($"RUNNER: timeout in {request.TimeoutInMs}ms");
-                        timeout = new Timer((arg) =>
-                        {
-                            // try to cancel the task
-                            worker.Cancel.Cancel();
-
-                            // indicate that a timeout occurred
-                            Interlocked.Exchange(ref didTimeout, 1);
-
-                            // let the application know immediately the task did not complete due to a timeout
-                            // (this way if the task does not cancel soon at least the application
-                            // can start a retry)
-                            ThreadHelpers.Debug($"RUNNER: sending timeout message");
-                            tasksChannel.Send(new TaskTimeoutMessage());
-                            ThreadHelpers.Debug($"RUNNER: timeout message sent");
-
-                            // indicate the timeout message was sent
-                            Interlocked.Exchange(ref didTimeout, 2);
-                        }, null, request.TimeoutInMs, Timeout.Infinite);
-                    }
-
-                    // now execute the task by invoking the expression.
-                    // the task will run for as long as necessary.
-                    ThreadHelpers.Debug($"RUNNER: starting task");
-                    var result = expression?.Invoke(environment.ExecutionContext);
-                    ThreadHelpers.Debug($"RUNNER: finished task");
-
-                    // dispose the timeout now (if it exists) to prevent it from triggering
-                    // accidentally if the task already completed successfully
-                    timeout?.Dispose();
-                    timeout = null;
-
-                    // if the task did not timeout, continue processing
-                    // (otherwise a timeout message was already sent)
-                    if (Interlocked.Read(ref didTimeout) == 0)
-                    {
-                        // if a cancellation was requested, the result can't be trusted,
-                        // so ensure a cancellation exception is thrown
-                        // (it will be handled in the catch block below)
-                        worker.Cancel.Token.ThrowIfCancellationRequested();
-
-                        // otherwise send the result back to the application
-                        var resultMessage = new TaskResponseMessage(result);
-                        ThreadHelpers.Debug($"RUNNER: sending result message");
-                        tasksChannel.Send(resultMessage);
-                        ThreadHelpers.Debug($"RUNNER: result message sent");
-                    }
-                    else
-                    {
-                        // otherwise handle a rare edge-case where the task completes before
-                        // the timeout message finishes sending (since that message is sent in
-                        // a pool thread managed by the Timer), in which case delay here
-                        // until the message is sent (to prevent the underlying stream from
-                        // closing while the message is still writing to it).
-                        while (Interlocked.Read(ref didTimeout) == 1)
-                        {
-                            ThreadHelpers.Yield();
-                        }
-                    }
-                }
-                catch (OperationCanceledException ex)
-                {
-                    ThreadHelpers.Debug($"RUNNER: sending cancelled message");
-                    tasksChannel.Send(new TaskCancelMessage());
-                    ThreadHelpers.Debug($"RUNNER: cancelled message sent");
-                }
-                catch (Exception ex)
-                {
-                    // catch and report invokation errors
-                    var errorMessage = new TaskErrorMessage(ex, TaskErrorMessage.ErrorTypes.Invokation);
-                    tasksChannel.Send(errorMessage);
-                }
-                finally
-                {
-                    timeout?.Dispose();
-                }
-
-                // indicate to the main worker thread that the task is done
-                reset.Set();
-            }
-        }
-
-        private class Worker : IDisposable
-        {
-            public Guid Id { get; private set; } = Guid.NewGuid();
-            public Thread Thread;
-            public Connection Connection;
-            public RunnerServer Server;
-            public ExecutionContext Context;
-            public CancellationTokenSource Cancel = new CancellationTokenSource();
-
-            public Worker(RunnerServer server, Connection connection)
-            {
-                Server = server;
-                Connection = connection;
-            }
-
-            public void Start()
-            {
-                Thread = new Thread(() => Server.ProcessClient(this));
-                Thread.Start();
-            }
-
-            public void Dispose()
-            {
-                Thread.Join(1000);
-                Connection.Dispose();
-                Cancel.Dispose();
-            }
         }
     }
 }

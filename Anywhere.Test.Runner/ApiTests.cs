@@ -28,8 +28,8 @@ namespace DidoNet.Test.Runner
         public ApiTests(AnywhereTestFixture fixture, ITestOutputHelper output)
         {
             TestFixture = fixture;
-            var converter = new OutputConverter(output, "OUTPUT.txt");
-            Console.SetOut(converter);
+            //var converter = new OutputConverter(output, "OUTPUT.txt");
+            //Console.SetOut(converter);
         }
 
         /// <summary>
@@ -49,7 +49,7 @@ namespace DidoNet.Test.Runner
             // create and start a secure localhost loopback runner server that can execute serialized expressions
             var runnerServer = new RunnerServer();
             int port = GetNextAvailablePort();
-            await runnerServer.Start(TestSelfSignedCert.ServerCertificate, port, IPAddress.Loopback);
+            runnerServer.Start(TestSelfSignedCert.ServerCertificate, port, IPAddress.Loopback);
 
             // create configuration to use the loopback server
             var configuration = new Configuration
@@ -88,7 +88,7 @@ namespace DidoNet.Test.Runner
             // create and start a secure localhost loopback runner server that can execute serialized expressions
             var runnerServer = new RunnerServer();
             int port = GetNextAvailablePort();
-            await runnerServer.Start(TestSelfSignedCert.ServerCertificate, port, IPAddress.Loopback);
+            runnerServer.Start(TestSelfSignedCert.ServerCertificate, port, IPAddress.Loopback);
 
             // create configuration to use the loopback server
             var configuration = new Configuration
@@ -137,7 +137,7 @@ namespace DidoNet.Test.Runner
             // create and start a secure localhost loopback runner server that can execute serialized expressions
             var runnerServer = new RunnerServer();
             int port = GetNextAvailablePort();
-            await runnerServer.Start(TestSelfSignedCert.ServerCertificate, port, IPAddress.Loopback);
+            runnerServer.Start(TestSelfSignedCert.ServerCertificate, port, IPAddress.Loopback);
 
             // create configuration to use the loopback server and to timeout after a half second
             var configuration = new Configuration
@@ -166,7 +166,7 @@ namespace DidoNet.Test.Runner
             // create and start a secure localhost loopback runner server that can execute serialized expressions
             var runnerServer = new RunnerServer();
             int port = GetNextAvailablePort();
-            await runnerServer.Start(TestSelfSignedCert.ServerCertificate, port, IPAddress.Loopback);
+            runnerServer.Start(TestSelfSignedCert.ServerCertificate, port, IPAddress.Loopback);
 
             // create configuration to use the loopback server
             var configuration = new Configuration

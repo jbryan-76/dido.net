@@ -293,52 +293,53 @@ namespace DidoNet
             var client = new TcpClient(runnerUri!.Host, runnerUri.Port);
             using (var connection = new Connection(client, runnerUri.Host, "dido"))
             {
+                // TODO: refactor below into separate class to handle all the business logic
+
                 // create communication channels to the runner for: task messages, assemblies, files
                 var tasksChannel = new MessageChannel(connection, Constants.TaskChannelNumber);
-                var assembliesChannel = connection.GetChannel(Constants.AssemblyChannelNumber);
+                var assembliesChannel = new MessageChannel(connection, Constants.AssemblyChannelNumber);
                 var filesChannel = connection.GetChannel(Constants.FileChannelNumber);
 
+                // TODO: cleanup once stable
                 tasksChannel.Channel.Name = "DIDO";
-                assembliesChannel.Name = "DIDO";
+                assembliesChannel.Channel.Name = "DIDO";
                 filesChannel.Name = "DIDO";
 
                 // TODO: handle file messages
 
                 // handle assembly messages
-                // TODO: make this a message channel instead
-                assembliesChannel.BlockingReads = true;
-                assembliesChannel.OnDataAvailable = async (channel) =>
+                assembliesChannel.OnMessageReceived = async (message, channel) =>
                 {
-                    // receive the assembly request
-                    ThreadHelpers.Debug($"dido: reading AssemblyRequestMessage");
-                    var request = new AssemblyRequestMessage();
-                    request.Read(channel);
-                    ThreadHelpers.Debug($"dido: AssemblyRequestMessage READ");
-
-                    if (string.IsNullOrEmpty(request.AssemblyName))
+                    switch (message)
                     {
-                        var response = new AssemblyResponseMessage(new ArgumentNullException(nameof(AssemblyRequestMessage.AssemblyName)));
-                        response.Write(channel);
-                        return;
-                    }
+                        case AssemblyRequestMessage request:
+                            if (string.IsNullOrEmpty(request.AssemblyName))
+                            {
+                                var response = new AssemblyResponseMessage(new ArgumentNullException(nameof(AssemblyRequestMessage.AssemblyName)));
+                                channel.Send(response);
+                                return;
+                            }
 
-                    // resolve the desired assembly and send it back
-                    using (var stream = await configuration.ResolveLocalAssemblyAsync(request.AssemblyName))
-                    using (var mem = new MemoryStream())
-                    {
-                        AssemblyResponseMessage response;
-                        if (stream == null)
-                        {
-                            response = new AssemblyResponseMessage(new FileNotFoundException($"Assembly '{request.AssemblyName}' could not be resolved."));
-                        }
-                        else
-                        {
-                            stream.CopyTo(mem);
-                            response = new AssemblyResponseMessage(mem.ToArray());
-                        }
-                        ThreadHelpers.Debug($"dido: sending AssemblyResponseMessage");
-                        response.Write(channel);
-                        ThreadHelpers.Debug($"dido: AssemblyRequestMessage WROTE");
+                            // resolve the desired assembly and send it back
+                            using (var stream = await configuration.ResolveLocalAssemblyAsync(request.AssemblyName))
+                            using (var mem = new MemoryStream())
+                            {
+                                // TODO: refactor this
+                                AssemblyResponseMessage response;
+                                if (stream == null)
+                                {
+                                    response = new AssemblyResponseMessage(new FileNotFoundException($"Assembly '{request.AssemblyName}' could not be resolved."));
+                                }
+                                else
+                                {
+                                    stream.CopyTo(mem);
+                                    response = new AssemblyResponseMessage(mem.ToArray());
+                                }
+                                ThreadHelpers.Debug($"dido: sending AssemblyResponseMessage");
+                                channel.Send(response);
+                                ThreadHelpers.Debug($"dido: AssemblyRequestMessage WROTE");
+                            }
+                            break;
                     }
                 };
 

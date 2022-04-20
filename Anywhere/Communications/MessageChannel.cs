@@ -1,5 +1,13 @@
 ﻿namespace DidoNet
 {
+    /// <summary>
+    /// Wraps a single unique bidirectional communications channel on a Connection
+    /// and specializes it for sending and receiving atomic messages conforming to the IMessage interface.
+    /// Messages should be relatively small, and the underlying channel should EXCLUSIVELY be used by the MessageChannel
+    /// (ie do not send both messages and general stream traffic or the data may be interleaved).
+    /// <para/>NOTE While this class is thread-safe and reading and writing can be done on separate threads,
+    /// never use more than 1 thread per direction (read or write), as it may result in data interleaving.
+    /// </summary>
     public class MessageChannel
     {
         /// <summary>
@@ -16,7 +24,15 @@
         /// will not be available until the channel is disposed, where it will be wrapped
         /// in an AggregateException.
         /// </summary>
-        public MessageReceivedHandler? OnMessageReceived = null;
+        public MessageReceivedHandler? OnMessageReceived
+        {
+            get { return MessageReceived; }
+            set
+            {
+                MessageReceived = value;
+                Channel.OnDataAvailable = (channel) => DataReceived();
+            }
+        }
 
         /// <summary>
         /// The underlying channel messages are exchanged on.
@@ -24,30 +40,20 @@
         public Channel Channel { get; private set; }
 
         /// <summary>
-        /// The unique id for the underlying channel messages are exchanged on.
+        /// The unique id for the underlying communications channel.
         /// </summary>
         public ushort ChannelNumber { get { return Channel.ChannelNumber; } }
 
-        //private Thread Thread;
+        private MessageReceivedHandler? MessageReceived = null;
 
         /// <summary>
-        /// Create a new message channel that uses the provided Channel.
+        /// Create a new message channel that uses the provided Channel to send and receive messages.
         /// </summary>
         /// <param name="channel"></param>
         public MessageChannel(Channel channel)
         {
             Channel = channel;
             Channel.BlockingReads = true;
-            //Channel.OnDataAvailable += (channel) => DataReceived();
-            Channel.OnDataAvailable = (channel) => DataReceived();
-            //Thread = new Thread(() =>
-            //{
-            //    while(true)
-            //    {
-            //        Channel.OnDataAvailable.WaitOne();
-            //        DataReceived();
-            //    }
-            //});
         }
 
         /// <summary>
@@ -64,7 +70,7 @@
         /// <param name="message"></param>
         public void Send(IMessage message)
         {
-            // lock the channel to only write one contiguous message at a time
+            // lock the channel to only write one message at a time (in case the caller is not heeding the warning)
             lock (Channel)
             {
                 var messageType = message.GetType();
@@ -105,10 +111,11 @@
         //}
 
         /// <summary>
-        /// When more data is available, read the message and invoke the handler.
+        /// Block and receive a message from the underlying channel.
         /// </summary>
+        /// <returns></returns>
         /// <exception cref="InvalidOperationException"></exception>
-        private void DataReceived()
+        public IMessage ReceiveMessage()
         {
             // TODO: send message length too so can read+discard on error?
             ThreadHelpers.Debug($"{ChannelNumber} {Channel.Name} reading message type");
@@ -130,13 +137,38 @@
             ThreadHelpers.Debug($"{ChannelNumber} {Channel.Name} starting read message {typeName}");
             message.Read(Channel);
             ThreadHelpers.Debug($"{ChannelNumber} {Channel.Name} received message {typeName}");
-            // this needs to be done in a separate thread so as not to block any event processing loops
+
+            return message;
+        }
+
+        /// <summary>
+        /// Block and receive a message of the indicated type from the underlying channel.
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <returns></returns>
+        /// <exception cref="InvalidOperationException"></exception>
+        public T ReceiveMessage<T>() where T : class, IMessage
+        {
+            var message = ReceiveMessage();
+            if (message is T)
+            {
+                return (message as T)!;
+            }
+            else
+            {
+                throw new InvalidOperationException($"Received message is type '{message.GetType()}', which cannot be assigned to intended type '{typeof(T)}'.");
+            }
+        }
+
+        /// <summary>
+        /// When more data is available, read the message and invoke the handler.
+        /// </summary>
+        /// <exception cref="InvalidOperationException"></exception>
+        private void DataReceived()
+        {
+            var message = ReceiveMessage();
             OnMessageReceived?.Invoke(message, this);
             ThreadHelpers.Debug($"{ChannelNumber} {Channel.Name} invoked message receiver");
-            //if (OnMessageReceived != null)
-            //{
-            //    Task.Run(() => OnMessageReceived.Invoke(message, this));
-            //}
         }
     }
 

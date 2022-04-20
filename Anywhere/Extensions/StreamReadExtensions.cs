@@ -14,7 +14,7 @@ namespace DidoNet
         /// <param name="value"></param>
         public static byte[] ReadBytes(this Stream stream, int length)
         {
-            Thread.Sleep(new Random().Next(50));
+            //Thread.Sleep(new Random().Next(50));
             //Console.WriteLine($"  trying to read {length} bytes");
             var bytes = new byte[length];
             var remaining = length;

@@ -11,7 +11,7 @@ namespace DidoNet
         /// <param name="bytes"></param>
         public static void WriteBytes(this Stream stream, byte[] bytes)
         {
-            Thread.Sleep(new Random().Next(50));
+            //Thread.Sleep(new Random().Next(50));
             //Console.WriteLine($"writing {bytes.Length} bytes");
             if (bytes.Length > 0)
             {

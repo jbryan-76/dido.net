@@ -2,6 +2,7 @@
 
 namespace DidoNet
 {
+    // TODO: refactor this into multiple message types
     internal class AssemblyResponseMessage : IMessage
     {
         public enum ContentTypes

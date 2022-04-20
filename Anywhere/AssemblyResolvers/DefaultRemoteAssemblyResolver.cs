@@ -2,23 +2,23 @@
 {
     public class DefaultRemoteAssemblyResolver
     {
-        private Channel Channel { get; set; }
+        private MessageChannel Channel { get; set; }
 
-        public DefaultRemoteAssemblyResolver(Channel channel)
+        public DefaultRemoteAssemblyResolver(MessageChannel channel)
         {
             Channel = channel;
-            Channel.BlockingReads = true;
+
+            // TODO: add a handler and refactor AssemblyResponseMessage
         }
 
         public Task<Stream?> ResolveAssembly(Environment env, string assemblyName)
         {
             // request the assembly from the application
             var request = new AssemblyRequestMessage(assemblyName);
-            request.Write(Channel);
+            Channel.Send(request);
 
             // receive the response
-            var response = new AssemblyResponseMessage();
-            response.Read(Channel);
+            var response = Channel.ReceiveMessage<AssemblyResponseMessage>();
 
             // the current caller will dispose the stream, so wrap the response
             // in another stream to keep the channel open

@@ -2,6 +2,8 @@
 {
     internal class ThreadHelpers
     {
+        public static bool DebuggingEnabled = false;
+
         /// <summary>
         /// Yields the remaining cpu time slice of the current thread and 
         /// forces a context switch, optionally sleeping up to the provided
@@ -19,7 +21,10 @@
 
         public static void Debug(string message)
         {
-            Console.WriteLine($"[{DateTimeOffset.UtcNow.ToString("o")}] |{Thread.CurrentThread.ManagedThreadId}| {message}");
+            if (DebuggingEnabled)
+            {
+                Console.WriteLine($"[{DateTimeOffset.UtcNow.ToString("o")}] |{Thread.CurrentThread.ManagedThreadId}| {message}");
+            }
         }
     }
 }
