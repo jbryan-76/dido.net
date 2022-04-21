@@ -16,6 +16,7 @@
 
         /// <summary>
         /// The maximum number of attempts to make when executing a remote task.
+        /// Use a value <= 0 to retry forever.
         /// </summary>
         public int MaxTries { get; set; } = 3;
 
@@ -32,14 +33,14 @@
             = ExecutionModes.Local;
 
         /// <summary>
-        /// The uri for the orchestrator service used to negotiate the specific runner service
+        /// The uri for the mediator service used to negotiate the specific runner service
         /// that remotely executes tasks.
         /// </summary>
-        public Uri? OrchestratorUri { get; set; } = null;
+        public Uri? MediatorUri { get; set; } = null;
 
         /// <summary>
         /// The uri for a dedicated runner service used to remotely execute tasks.
-        /// If set, any configured orchestrator will not be used.
+        /// If set, any configured mediator will not be used.
         /// </summary>
         public Uri? RunnerUri { get; set; } = null;
 

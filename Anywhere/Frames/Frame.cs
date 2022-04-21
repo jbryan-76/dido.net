@@ -10,9 +10,6 @@ namespace DidoNet
         Heartbeat
     }
 
-    // TODO: for sending, create larger message constructs that are broken up into frames and multiplexed into an async producer/consumer queue for sending
-    // TODO: for receiving, create buffers to aggregate frames until the larger messages are complete
-
     public class Frame
     {
         static public int MaxFrameSize = 512 * 1024;

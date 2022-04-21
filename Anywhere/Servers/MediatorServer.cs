@@ -5,15 +5,13 @@ using System.Security.Cryptography.X509Certificates;
 
 namespace DidoNet
 {
-    // TODO: rename this to mediator? scheduler?
-    // TODO: orchestrator should determine which runner in its pool has resources available to run.
-    public class OrchestratorServer
+    public class MediatorServer
     {
         private long IsRunning = 0;
 
         private Thread? WorkLoopThread;
 
-        private OrchestratorConfiguration Configuration;
+        private MediatorConfiguration Configuration;
 
         private bool IsDisposed = false;
 
@@ -23,9 +21,9 @@ namespace DidoNet
 
         private ConcurrentQueue<ConnectedClient> CompletedClients = new ConcurrentQueue<ConnectedClient>();
 
-        public OrchestratorServer(OrchestratorConfiguration? configuration = null)
+        public MediatorServer(MediatorConfiguration? configuration = null)
         {
-            Configuration = configuration ?? new OrchestratorConfiguration();
+            Configuration = configuration ?? new MediatorConfiguration();
         }
 
         public void Dispose()
@@ -125,7 +123,7 @@ namespace DidoNet
             Connection? runnerConnection = null;
             try
             {
-                // applications will contact the orchestrator using the application channel
+                // applications will contact the mediator using the application channel
                 // to make requests: eg get a runner, check job status, etc
                 applicationChannel.OnMessageReceived = (message, channel) =>
                 {
@@ -139,12 +137,13 @@ namespace DidoNet
 
                     // TODO: process the message
                     // TODO: find the next best available runner and tell the app to use it
-                    // TODO: this requires heuristic load balancing strategies
+                    // TODO: this requires heuristic load balancing strategies based on which 
+                    // TODO: runner in the pool has resources available to run.
                     // TODO: eg whether runner is in use, how many "slots" are open, its queue size,
                     // TODO: eg OS, memory support, etc
                 };
 
-                // runners will contact the orchestrator using the runner channel
+                // runners will contact the mediator using the runner channel
                 // to update their status
                 runnerChannel.OnMessageReceived = (message, channel) =>
                 {

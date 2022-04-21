@@ -4,14 +4,14 @@ namespace DidoNet
 {
     internal class Constants
     {
-        #region Application <-> Orchestrator <-> Runner channels
+        #region Application <-> Mediator <-> Runner channels
         /// <summary>
-        /// A channel for transporting data between an Application and an Orchestrator.
+        /// A channel for transporting data between an Application and a Mediator.
         /// </summary>
         internal static readonly ushort ApplicationChannelNumber = 10;
 
         /// <summary>
-        /// A channel for transporting data between a Runner and an Orchestrator.
+        /// A channel for transporting data between a Runner and a Mediator.
         /// </summary>
         internal static readonly ushort RunnerChannelNumber = 11;
         #endregion

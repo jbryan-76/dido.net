@@ -15,11 +15,6 @@ using System.Runtime.Loader;
 // - if method is a member method, calling instance must be bi-directionally serializable
 // - otherwise method is a static method and is not called on an instance
 
-// Anywhere (lib): models, public API, enums, callbacks, local execution, delegates
-// Anywhere.Env: an execution environment to run code
-// Anywhere.Orch: an orchestrator to distribute work among environments
-// Anywhere.Test: unit tests
-
 // comm between lib and env: network api? message queue?
 // delegate this to a wrapper layer?
 
@@ -209,8 +204,8 @@ namespace DidoNet
             }
         }
 
-        // TODO: if the orchestrator is in job mode, poll for the result?
-        // TODO: if the orchestrator is in job mode, start a background thread to call a handler when the result is available?
+        // TODO: if the Mediator is in job mode, poll for the result?
+        // TODO: if the Mediator is in job mode, start a background thread to call a handler when the result is available?
 
         /// <summary>
         /// Execute the provided expression as a task in a remote environment.
@@ -224,9 +219,9 @@ namespace DidoNet
             Configuration configuration,
             CancellationToken? cancellationToken = null)
         {
-            if (configuration.OrchestratorUri == null && configuration.RunnerUri == null)
+            if (configuration.MediatorUri == null && configuration.RunnerUri == null)
             {
-                throw new InvalidOperationException($"Configuration error: At least one of {nameof(Configuration.OrchestratorUri)} or {nameof(Configuration.RunnerUri)} must be set to a valid value.");
+                throw new InvalidOperationException($"Configuration error: At least one of {nameof(Configuration.MediatorUri)} or {nameof(Configuration.RunnerUri)} must be set to a valid value.");
             }
 
             // create an (unused) cancellation token source if no cancellation token has been provided
@@ -239,7 +234,6 @@ namespace DidoNet
 
             try
             {
-                int maxTries = Math.Max(1, configuration.MaxTries);
                 int tries = 0;
                 while (true)
                 {
@@ -248,10 +242,12 @@ namespace DidoNet
                     {
                         return await DoRunRemoteAsync(expression, configuration, cancellationToken.Value);
                     }
+                    // only retry if the exception is a TimeoutException or RunnerBusyException
+                    // (otherwise the exception is for a different error and should bubble up)
                     catch (Exception e) when (e is TimeoutException || e is RunnerBusyException)
                     {
-                        // TODO: only retry if the exception is a TimeoutException or RunnerBusyException
-                        if (tries == maxTries)
+                        // don't retry forever
+                        if (configuration.MaxTries > 0 && tries == configuration.MaxTries)
                         {
                             throw;
                         }
@@ -280,13 +276,13 @@ namespace DidoNet
             CancellationToken cancellationToken)
         {
             var runnerUri = configuration.RunnerUri;
-            if (configuration.OrchestratorUri != null && configuration.RunnerUri == null)
+            if (configuration.MediatorUri != null && configuration.RunnerUri == null)
             {
-                // TODO: open a connection to the orchestrator
-                // TODO: request an available runner from the orchestrator
+                // TODO: open a connection to the mediator
+                // TODO: request an available runner from the mediator
                 // TODO: receive the runner connection details
                 // TODO: close the connection
-                runnerUri = configuration.OrchestratorUri;
+                runnerUri = configuration.MediatorUri;
             }
 
             // create a secure connection to the remote runner
@@ -315,7 +311,7 @@ namespace DidoNet
                         case AssemblyRequestMessage request:
                             if (string.IsNullOrEmpty(request.AssemblyName))
                             {
-                                var response = new AssemblyResponseMessage(new ArgumentNullException(nameof(AssemblyRequestMessage.AssemblyName)));
+                                var response = new AssemblyErrorMessage(new ArgumentNullException(nameof(AssemblyRequestMessage.AssemblyName)));
                                 channel.Send(response);
                                 return;
                             }
@@ -324,11 +320,10 @@ namespace DidoNet
                             using (var stream = await configuration.ResolveLocalAssemblyAsync(request.AssemblyName))
                             using (var mem = new MemoryStream())
                             {
-                                // TODO: refactor this
-                                AssemblyResponseMessage response;
+                                IMessage response;
                                 if (stream == null)
                                 {
-                                    response = new AssemblyResponseMessage(new FileNotFoundException($"Assembly '{request.AssemblyName}' could not be resolved."));
+                                    response = new AssemblyErrorMessage(new FileNotFoundException($"Assembly '{request.AssemblyName}' could not be resolved."));
                                 }
                                 else
                                 {

@@ -33,10 +33,10 @@
         public int MaxQueue { get; set; } = 0;
 
         /// <summary>
-        /// The uri for the orchestrator service used to monitor and manage runners.
+        /// The uri for the mediator service used to monitor and manage runners.
         /// If null, the runner will operate in an independent/isolated mode.
         /// </summary>
-        public Uri? OrchestratorUri { get; set; } = null;
+        public Uri? MediatorUri { get; set; } = null;
 
         /// <summary>
         /// The uri for applications to use to connect to a runner.

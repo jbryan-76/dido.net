@@ -281,14 +281,7 @@ namespace DidoNet
         {
             // when the connection receives data for this channel, enqueue it to be later read by a consumer
             ReadBuffer.Enqueue(bytes);
-            // notify all event handlers new data is available.
-            // (this needs to be done in a separate thread so as not to block the Connection read loop)
             ThreadHelpers.Debug($"Channel {ChannelNumber} {Name} received {bytes.Length} bytes Q={ReadBuffer.Count}");
-            // TODO: this is still a problem. Received() has to enqueue the bytes sequentially.
-            // TODO: however there should be exactly one consumer (to maintain single thread processing).
-            // TODO: AND it cannot be invoked multiple times. it needs to be like a mutex or something
-            //Task.Run(() => OnDataAvailable?.Invoke(this));
-            //OnDataAvailable.Set();
         }
 
         /// <summary>

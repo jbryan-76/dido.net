@@ -16,9 +16,9 @@ namespace DidoNet
 
         private Thread? WorkLoopThread = null;
 
-        private Connection? OrchestratorConnection = null;
+        private Connection? MediatorConnection = null;
 
-        private MessageChannel? OrchestratorChannel = null;
+        private MessageChannel? MediatorChannel = null;
 
         private RunnerConfiguration Configuration;
 
@@ -44,7 +44,7 @@ namespace DidoNet
             Stop();
             if (!IsDisposed)
             {
-                OrchestratorConnection?.Dispose();
+                MediatorConnection?.Dispose();
                 IsDisposed = true;
             }
             GC.SuppressFinalize(this);
@@ -68,20 +68,20 @@ namespace DidoNet
                 Configuration.Endpoint = new UriBuilder("https", ip.ToString(), port).Uri;
             }
 
-            if (Configuration.OrchestratorUri != null)
+            if (Configuration.MediatorUri != null)
             {
-                // create a secure connection to the optional orchestrator
-                var uri = Configuration.OrchestratorUri;
+                // create a secure connection to the optional mediator
+                var uri = Configuration.MediatorUri;
                 var client = new TcpClient(uri!.Host, uri.Port);
-                OrchestratorConnection = new Connection(client, uri.Host);
-                OrchestratorChannel = new MessageChannel(OrchestratorConnection, Constants.RunnerChannelNumber);
+                MediatorConnection = new Connection(client, uri.Host);
+                MediatorChannel = new MessageChannel(MediatorConnection, Constants.RunnerChannelNumber);
 
-                // announce this runner to the orchestrator
-                OrchestratorChannel.Send(new RunnerStartMessage(Configuration.Endpoint.ToString(),
+                // announce this runner to the mediator
+                MediatorChannel.Send(new RunnerStartMessage(Configuration.Endpoint.ToString(),
                     Configuration.MaxTasks, Configuration.MaxQueue, Configuration.Label, Configuration.Tags));
-                OrchestratorChannel.Send(new RunnerStatusMessage(RunnerStatusMessage.States.Starting, 0, 0));
+                MediatorChannel.Send(new RunnerStatusMessage(RunnerStatusMessage.States.Starting, 0, 0));
 
-                // TODO: start an infrequent (eg 60s) heartbeat to orchestrator to update status and environment stats (eg cpu, ram)?
+                // TODO: start an infrequent (eg 60s) heartbeat to mediator to update status and environment stats (eg cpu, ram)?
             }
 
             // listen for incoming connections
@@ -102,8 +102,8 @@ namespace DidoNet
         /// </summary>
         public void Stop()
         {
-            // inform the orchestrator that this runner is stopping
-            OrchestratorChannel?.Send(new RunnerStatusMessage(RunnerStatusMessage.States.Stopping, 0, 0));
+            // inform the mediator that this runner is stopping
+            MediatorChannel?.Send(new RunnerStatusMessage(RunnerStatusMessage.States.Stopping, 0, 0));
 
             // signal the work thread to stop
             Interlocked.Exchange(ref IsRunning, 0);
@@ -134,7 +134,7 @@ namespace DidoNet
                     {
                         ActiveWorkers.TryAdd(worker.Id, worker);
                         worker.Start(WorkerComplete);
-                        SendStatusToOrchestrator();
+                        SendStatusToMediator();
                     }
                 }
 
@@ -147,7 +147,7 @@ namespace DidoNet
                     // create a secure connection to the endpoint
                     var connection = new Connection(client, cert, "runner");
 
-                    // the orchestrator uses an optimistic scheduling strategy, which means
+                    // the mediator uses an optimistic scheduling strategy, which means
                     // it will route traffic to runners based on the conditions known at the 
                     // time of the decision, which may differ from the runner conditions by
                     // the time the application connects. 
@@ -182,7 +182,7 @@ namespace DidoNet
                             QueuedWorkers.Enqueue(worker);
                         }
 
-                        SendStatusToOrchestrator();
+                        SendStatusToMediator();
                     }
                 }
 
@@ -214,7 +214,7 @@ namespace DidoNet
             // move the worker to the completed queue so it can be disposed by the main thread
             ActiveWorkers.Remove(worker.Id, out _);
             CompletedWorkers.Enqueue(worker);
-            SendStatusToOrchestrator();
+            SendStatusToMediator();
         }
 
         /// <summary>
@@ -253,11 +253,11 @@ namespace DidoNet
         }
 
         /// <summary>
-        /// Sends a status message to the orchestrator so it can track this runner for task scheduling.
+        /// Sends a status message to the mediator so it can track this runner for task scheduling.
         /// </summary>
-        private void SendStatusToOrchestrator()
+        private void SendStatusToMediator()
         {
-            OrchestratorChannel?.Send(new RunnerStatusMessage(
+            MediatorChannel?.Send(new RunnerStatusMessage(
                 RunnerStatusMessage.States.Ready,
                 ActiveWorkers.Count,
                 QueuedWorkers.Count)
