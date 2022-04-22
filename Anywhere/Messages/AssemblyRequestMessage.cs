@@ -23,5 +23,5 @@
                 stream.WriteString(AssemblyName);
             }
         }
-    }
+    } 
 }

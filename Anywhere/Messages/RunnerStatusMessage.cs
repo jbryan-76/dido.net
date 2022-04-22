@@ -2,20 +2,20 @@
 
 namespace DidoNet
 {
-    internal class RunnerStatusMessage : IMessage
+    /// <summary>
+    /// The set of available runner states.
+    /// </summary>
+    public enum RunnerStates
     {
-        /// <summary>
-        /// The set of available runner states.
-        /// </summary>
-        public enum States
-        {
-            Starting,
-            Ready,
-            Paused,
-            Stopping
-        }
+        Starting,
+        Ready,
+        Paused,
+        Stopping
+    }
 
-        public States State { get; set; }
+    internal class RunnerStatusMessage : IMessage, IRunnerStatus
+    {
+        public RunnerStates State { get; set; } = RunnerStates.Starting;
 
         public int ActiveTasks { get; set; } = 0;
 
@@ -25,7 +25,7 @@ namespace DidoNet
 
         public RunnerStatusMessage() { }
 
-        public RunnerStatusMessage(States status, int activeTasks, int queueLength)
+        public RunnerStatusMessage(RunnerStates status, int activeTasks, int queueLength)
         {
             State = status;
             ActiveTasks = activeTasks;
@@ -34,7 +34,7 @@ namespace DidoNet
 
         public void Read(Stream stream)
         {
-            State = Enum.Parse<States>(stream.ReadString());
+            State = Enum.Parse<RunnerStates>(stream.ReadString());
             ActiveTasks = stream.ReadInt32BE();
             QueueLength = stream.ReadInt32BE();
         }

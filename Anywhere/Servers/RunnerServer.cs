@@ -79,7 +79,7 @@ namespace DidoNet
                 // announce this runner to the mediator
                 MediatorChannel.Send(new RunnerStartMessage(Configuration.Endpoint.ToString(),
                     Configuration.MaxTasks, Configuration.MaxQueue, Configuration.Label, Configuration.Tags));
-                MediatorChannel.Send(new RunnerStatusMessage(RunnerStatusMessage.States.Starting, 0, 0));
+                MediatorChannel.Send(new RunnerStatusMessage(RunnerStates.Starting, 0, 0));
 
                 // TODO: start an infrequent (eg 60s) heartbeat to mediator to update status and environment stats (eg cpu, ram)?
             }
@@ -103,7 +103,7 @@ namespace DidoNet
         public void Stop()
         {
             // inform the mediator that this runner is stopping
-            MediatorChannel?.Send(new RunnerStatusMessage(RunnerStatusMessage.States.Stopping, 0, 0));
+            MediatorChannel?.Send(new RunnerStatusMessage(RunnerStates.Stopping, 0, 0));
 
             // signal the work thread to stop
             Interlocked.Exchange(ref IsRunning, 0);
@@ -258,7 +258,7 @@ namespace DidoNet
         private void SendStatusToMediator()
         {
             MediatorChannel?.Send(new RunnerStatusMessage(
-                RunnerStatusMessage.States.Ready,
+                RunnerStates.Ready,
                 ActiveWorkers.Count,
                 QueuedWorkers.Count)
             );

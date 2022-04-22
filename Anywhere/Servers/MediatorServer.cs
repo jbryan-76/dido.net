@@ -15,7 +15,7 @@ namespace DidoNet
 
         private bool IsDisposed = false;
 
-        private List<Connection> RunnerPool = new List<Connection>();
+        private List<Runner> RunnerPool = new List<Runner>();
 
         private ConcurrentDictionary<Guid, ConnectedClient> ActiveClients = new ConcurrentDictionary<Guid, ConnectedClient>();
 
@@ -111,6 +111,17 @@ namespace DidoNet
             }
         }
 
+        private Runner? GetNextAvailableRunner(RunnerRequestMessage request)
+        {
+            // TODO: find the next best available runner and tell the app to use it
+            // TODO: this requires heuristic load balancing strategies based on which 
+            // TODO: runner in the pool has resources available to run.
+            // TODO: eg whether runner is in use, how many "slots" are open, its queue size,
+            // TODO: eg OS, memory support, etc
+
+            return RunnerPool.FirstOrDefault();
+        }
+
         private async void ProcessClient(Guid id, Connection connection)
         {
             // create communication channels.
@@ -120,14 +131,14 @@ namespace DidoNet
             MessageChannel? applicationChannel = new MessageChannel(connection, Constants.ApplicationChannelNumber);
             MessageChannel? runnerChannel = new MessageChannel(connection, Constants.RunnerChannelNumber);
 
-            Connection? runnerConnection = null;
+            Runner? runner = null;
             try
             {
                 // applications will contact the mediator using the application channel
                 // to make requests: eg get a runner, check job status, etc
                 applicationChannel.OnMessageReceived = (message, channel) =>
                 {
-                    // this connection is to the application.
+                    // this connection is to an application.
                     // close the runner channel so as not to tie up a thread
                     if (runnerChannel != null)
                     {
@@ -135,16 +146,15 @@ namespace DidoNet
                         runnerChannel = null;
                     }
 
-                    // TODO: process the message
-                    // TODO: find the next best available runner and tell the app to use it
-                    // TODO: this requires heuristic load balancing strategies based on which 
-                    // TODO: runner in the pool has resources available to run.
-                    // TODO: eg whether runner is in use, how many "slots" are open, its queue size,
-                    // TODO: eg OS, memory support, etc
+                    switch(message)
+                    {
+                        case RunnerRequestMessage request:
+                            var runner = GetNextAvailableRunner(request);
+                            break;
+                    }
                 };
 
-                // runners will contact the mediator using the runner channel
-                // to update their status
+                // runners will contact the mediator using the runner channel to update their status
                 runnerChannel.OnMessageReceived = (message, channel) =>
                 {
                     // this connection is to a runner.
@@ -156,16 +166,25 @@ namespace DidoNet
                     }
 
                     // add the runner to the pool, if necessary
-                    if (runnerConnection == null)
+                    if (runner == null)
                     {
-                        runnerConnection = connection;
+                        runner = new Runner(connection);
                         lock (RunnerPool)
                         {
-                            RunnerPool.Add(runnerConnection);
+                            RunnerPool.Add(runner);
                         }
                     }
 
-                    // TODO: process the message
+                    // process the message
+                    switch (message)
+                    {
+                        case RunnerStartMessage start:
+                            runner.Init(start);
+                            break;
+                        case RunnerStatusMessage status:
+                            runner.Update(status);
+                            break;
+                    }
                 };
 
                 // the client will run forever until it disconnects or this server stops
@@ -184,11 +203,11 @@ namespace DidoNet
             finally
             {
                 // if the connection was for a runner, remove it from the pool
-                if (runnerConnection != null)
+                if (runner != null)
                 {
                     lock (RunnerPool)
                     {
-                        RunnerPool.Remove(runnerConnection);
+                        RunnerPool.Remove(runner);
                     }
                 }
 
@@ -203,12 +222,67 @@ namespace DidoNet
 
         private class ConnectedClient
         {
-            public Thread Thread;
-            public Connection Connection;
+            public Thread Thread { get; private set; }
+
+            public Connection Connection { get; private set; }
+
+            private Action<ConnectedClient>? OnComplete { get; set; }
+
+            private long IsRunning = 0;
+
             public ConnectedClient(Thread thread, Connection connection)
             {
                 Thread = thread;
                 Connection = connection;
+            }
+        }
+
+        private class Runner : IRunnerDetail, IRunnerStatus
+        {
+            public OSPlatforms Platform { get; set; } = OSPlatforms.Unknown;
+
+            public string OSVersion { get; set; } = "";
+
+            public string Endpoint { get; set; } = "";
+
+            public int MaxTasks { get; set; } = 0;
+
+            public int MaxQueue { get; set; } = 0;
+
+            public string Label { get; set; } = "";
+
+            public string[] Tags { get; set; } = new string[0];
+
+            public RunnerStates State { get; set; } = RunnerStates.Starting;
+
+            public int ActiveTasks { get; set; } = 0;
+
+            public int QueueLength { get; set; } = 0;
+
+            private Connection Connection { get; set; }
+
+            public Runner(Connection connection)
+            {
+                Connection = connection;
+            }
+
+            public void Init(RunnerStartMessage message)
+            {
+                Platform = message.Platform;
+                OSVersion = message.OSVersion;
+                Endpoint = message.Endpoint;
+                MaxTasks = message.MaxTasks;
+                MaxQueue = message.MaxQueue;
+                Label = message.Label;
+                Tags = message.Tags;
+                State = RunnerStates.Starting;
+            }
+
+            public void Update(RunnerStatusMessage message)
+            {
+                State = message.State;
+                ActiveTasks = message.ActiveTasks;
+                QueueLength = message.QueueLength;
             }
         }
     }

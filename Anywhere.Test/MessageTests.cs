@@ -33,7 +33,7 @@ namespace DidoNet.Test
         {
             using (var stream = new MemoryStream())
             {
-                var tx = new RunnerStatusMessage(DidoNet.RunnerStatusMessage.States.Ready, 3, 5);
+                var tx = new RunnerStatusMessage(DidoNet.RunnerStates.Ready, 3, 5);
                 tx.Write(stream);
                 stream.Position = 0;
                 var rx = new RunnerStatusMessage();

@@ -2,20 +2,20 @@
 
 namespace DidoNet
 {
-    internal class RunnerStartMessage : IMessage
+    /// <summary>
+    /// The set of known .NET platforms.
+    /// </summary>
+    public enum OSPlatforms
     {
-        /// <summary>
-        /// The set of known .NET platforms.
-        /// </summary>
-        public enum OSPlatforms
-        {
-            Unknown,
-            FreeBSD,
-            Linux,
-            OSX,
-            Windows
-        }
+        Unknown,
+        FreeBSD,
+        Linux,
+        OSX,
+        Windows
+    }
 
+    internal class RunnerStartMessage : IMessage, IRunnerDetail
+    {
         public OSPlatforms Platform { get; set; } = OSPlatforms.Unknown;
 
         public string OSVersion { get; set; } = "";
@@ -23,7 +23,7 @@ namespace DidoNet
         public string Endpoint { get; set; } = "";
 
         public int MaxTasks { get; set; } = 0;
-        
+
         public int MaxQueue { get; set; } = 0;
 
         public string Label { get; set; } = "";
