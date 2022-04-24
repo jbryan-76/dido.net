@@ -76,7 +76,40 @@ namespace DidoNet.Test
             }
         }
 
-        // TODO: verify explicit and immplicit disconnects (clean vs unexpected)
+        [Fact]
+        public async void Disconnect()
+        {
+            // create a local client/server system
+            using (var clientServerConnection = await ClientServerConnection.CreateAsync(GetNextAvailablePort()))
+            {
+                // disconnect the server explicitly and confirm the client gets implicitly disconnected
+                clientServerConnection.ServerConnection.Disconnect();
+                var now = DateTime.UtcNow;
+                while (clientServerConnection.ClientConnection.IsConnected)
+                {
+                    Thread.Sleep(1);
+                    if ((DateTime.UtcNow - now) >= TimeSpan.FromSeconds(1))
+                    {
+                        throw new TimeoutException("Connection did not terminate within the alotted time.");
+                    }
+                }
+            }
+
+            // repeat the test from the other direction
+            using (var clientServerConnection = await ClientServerConnection.CreateAsync(GetNextAvailablePort()))
+            {
+                clientServerConnection.ClientConnection.Disconnect();
+                var now = DateTime.UtcNow;
+                while (clientServerConnection.ServerConnection.IsConnected)
+                {
+                    Thread.Sleep(1);
+                    if ((DateTime.UtcNow - now) >= TimeSpan.FromSeconds(1))
+                    {
+                        throw new TimeoutException("Connection did not terminate within the alotted time.");
+                    }
+                }
+            }
+        }
 
         [Fact]
         public async void Channel()
