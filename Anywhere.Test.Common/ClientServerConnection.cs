@@ -178,7 +178,7 @@ namespace DidoNet.Test.Common
         }
 
         /// <summary>
-        /// Connect to an already running local loopback server at the provided port.
+        /// Connect as a client to an already running local loopback server at the provided port.
         /// </summary>
         /// <param name="port"></param>
         /// <returns></returns>

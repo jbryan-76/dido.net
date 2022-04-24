@@ -1,6 +1,7 @@
 ﻿using DidoNet.Test.Common;
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -74,6 +75,8 @@ namespace DidoNet.Test
                 clientServerConnection.Close();
             }
         }
+
+        // TODO: verify explicit and immplicit disconnects (clean vs unexpected)
 
         [Fact]
         public async void Channel()
@@ -270,6 +273,111 @@ namespace DidoNet.Test
                 Assert.All(serverMessages.Select(x => x.Item1), m => Assert.Equal(m.MyIntValue, testRequestMessage.MyIntValue));
                 Assert.All(serverMessages.Select(x => x.Item1), m => Assert.Equal(m.MyStringValue, testRequestMessage.MyStringValue));
             }
+        }
+
+        [Fact]
+        public async void MessageProducerConsumers()
+        {
+            // ordered storage for all sent and received messages
+            var clientSentMessages = new ConcurrentQueue<Tuple<TestMessage, int>>();
+            var clientReceivedMessages = new ConcurrentQueue<Tuple<TestMessage, int>>();
+            var serverSentMessages = new ConcurrentQueue<Tuple<TestMessage, int>>();
+            var serverReceivedMessages = new ConcurrentQueue<Tuple<TestMessage, int>>();
+
+            // how many messages to send
+            var rand = new Random();
+            int channel1ClientNumMessages = rand.Next(10, 30);
+            int channel1ServerNumMessages = rand.Next(10, 30);
+            int channel2ClientNumMessages = rand.Next(10, 30);
+            int channel2ServerNumMessages = rand.Next(10, 30);
+
+            // create a local client/server system
+            using (var clientServerConnection = await ClientServerConnection.CreateAsync(GetNextAvailablePort()))
+            {
+                // create both sides of 2 logical channels for the client and server to communicate
+                var channel1ClientSide = new MessageChannel(clientServerConnection.ClientConnection, 1);
+                var channel1ServerSide = new MessageChannel(clientServerConnection.ServerConnection, 1);
+                var channel2ClientSide = new MessageChannel(clientServerConnection.ClientConnection, 2);
+                var channel2ServerSide = new MessageChannel(clientServerConnection.ServerConnection, 2);
+
+                // create message handlers to track received messages
+                MessageChannel.MessageReceivedHandler serverHandler = (message, channel) =>
+                {
+                    serverReceivedMessages.Enqueue(new Tuple<TestMessage, int>((TestMessage)message, channel.ChannelNumber));
+                };
+                MessageChannel.MessageReceivedHandler clientHandler = (message, channel) =>
+                {
+                    clientReceivedMessages.Enqueue(new Tuple<TestMessage, int>((TestMessage)message, channel.ChannelNumber));
+                };
+                channel1ClientSide.OnMessageReceived = clientHandler;
+                channel2ClientSide.OnMessageReceived = clientHandler;
+                channel1ServerSide.OnMessageReceived = serverHandler;
+                channel2ServerSide.OnMessageReceived = serverHandler;
+
+                // create an action to send and track random messages
+                var producerAction = (int numMessages, MessageChannel channel, ConcurrentQueue<Tuple<TestMessage, int>> queue) =>
+                {
+                    var rand = new Random();
+                    for (int i = 0; i < numMessages; ++i)
+                    {
+                        Thread.Sleep(rand.Next(5, 50));
+                        var message = new TestMessage { MyIntValue = rand.Next(), MyStringValue = Guid.NewGuid().ToString() };
+                        queue.Enqueue(new Tuple<TestMessage, int>(message, channel.ChannelNumber));
+                        channel.Send(message);
+                    }
+                };
+
+                // start threads to randomly produce messages
+                var producerTasks = new Task[]
+                {
+                    Task.Run(() => producerAction(channel1ClientNumMessages, channel1ClientSide, clientSentMessages)),
+                    Task.Run(() => producerAction(channel1ServerNumMessages, channel1ServerSide, serverSentMessages)),
+                    Task.Run(() => producerAction(channel2ClientNumMessages, channel2ClientSide, clientSentMessages)),
+                    Task.Run(() => producerAction(channel2ServerNumMessages, channel2ServerSide, serverSentMessages)),
+                };
+
+                // wait for all producer threads to finish
+                Task.WaitAll(producerTasks);
+
+                // wait for all consumers to finish receiving all messages
+                while (serverReceivedMessages.Count != clientSentMessages.Count &&
+                    clientReceivedMessages.Count != serverSentMessages.Count)
+                {
+                    Thread.Sleep(1);
+                }
+            }
+
+            // confirm total message counts
+            Assert.Equal(channel1ClientNumMessages + channel2ClientNumMessages, clientSentMessages.Count);
+            Assert.Equal(channel1ServerNumMessages + channel2ServerNumMessages, serverSentMessages.Count);
+
+            var confirmMessageOrder = (List<TestMessage> sentMessages, List<TestMessage> receivedMessages) =>
+            {
+                Assert.Equal(sentMessages.Count, receivedMessages.Count);
+                for (int i = 0; i < sentMessages.Count; ++i)
+                {
+                    Assert.Equal(sentMessages[i].MyStringValue, receivedMessages[i].MyStringValue);
+                    Assert.Equal(sentMessages[i].MyIntValue, receivedMessages[i].MyIntValue);
+                }
+            };
+
+            // confirm message order
+            confirmMessageOrder(
+                clientSentMessages.Where(x => x.Item2 == 1).Select(x => x.Item1).ToList(), // channel1ClientSent
+                serverReceivedMessages.Where(x => x.Item2 == 1).Select(x => x.Item1).ToList() // channel1ServerReceived
+            );
+            confirmMessageOrder(
+                serverSentMessages.Where(x => x.Item2 == 1).Select(x => x.Item1).ToList(), // channel1ServerSent
+                clientReceivedMessages.Where(x => x.Item2 == 1).Select(x => x.Item1).ToList() // channel1ClientReceived
+            );
+            confirmMessageOrder(
+                clientSentMessages.Where(x => x.Item2 == 2).Select(x => x.Item1).ToList(), // channel2ClientSent
+                serverReceivedMessages.Where(x => x.Item2 == 2).Select(x => x.Item1).ToList() // channel2ServerReceived
+            );
+            confirmMessageOrder(
+                serverSentMessages.Where(x => x.Item2 == 2).Select(x => x.Item1).ToList(), // channel2ServerSent
+                clientReceivedMessages.Where(x => x.Item2 == 2).Select(x => x.Item1).ToList() // channel2ClientReceived
+            );
         }
 
         class TestMessage : IMessage
