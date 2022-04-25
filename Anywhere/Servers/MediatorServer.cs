@@ -128,8 +128,8 @@ namespace DidoNet
             // NOTE: by design, exactly one of these channels will receive data
             // depending on whether an application or a runner connected.
             // however, until one of the channels receives data, it's impossible to know which.
-            MessageChannel? applicationChannel = new MessageChannel(connection, Constants.ApplicationChannelNumber);
-            MessageChannel? runnerChannel = new MessageChannel(connection, Constants.RunnerChannelNumber);
+            var applicationChannel = new MessageChannel(connection, Constants.ApplicationChannelNumber);
+            var runnerChannel = new MessageChannel(connection, Constants.RunnerChannelNumber);
 
             Runner? runner = null;
             try
@@ -146,10 +146,19 @@ namespace DidoNet
                         runnerChannel = null;
                     }
 
-                    switch(message)
+                    // process the message
+                    switch (message)
                     {
                         case RunnerRequestMessage request:
                             var runner = GetNextAvailableRunner(request);
+                            if (runner == null)
+                            {
+                                channel.Send(new RunnerNotAvailableMessage());
+                            }
+                            else
+                            {
+                                channel.Send(new RunnerResponseMessage(runner.Endpoint));
+                            }
                             break;
                     }
                 };

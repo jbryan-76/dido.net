@@ -125,7 +125,7 @@ namespace DidoNet
                                 break;
 
                             default:
-                                throw new InvalidOperationException($"Message {message.GetType()} is unknown");
+                                throw new InvalidOperationException($"Unknown message type '{message.GetType()}'");
                         }
                     }
                     catch (Exception ex)

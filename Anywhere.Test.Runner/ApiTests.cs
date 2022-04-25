@@ -197,6 +197,54 @@ namespace DidoNet.Test.Runner
         }
 
         /// <summary>
+        /// Performs an end-to-end test of Anywhere.RemoteExecuteAsync using local loopback mediator and runner servers.
+        /// </summary>
+        [Fact]
+        public async void RunRemoteWithMediator()
+        {
+            // create a test lambda expression
+            int testArgument = 123;
+            var lambda = await CreateTestLambdaAsync(testArgument);
+
+            // compile and execute the lambda to get the expected result and confirm it matches expectations
+            var expectedResult = lambda.Compile().Invoke(TestFixture.Environment.ExecutionContext!);
+            Assert.Equal(testArgument, expectedResult);
+
+            // create and start a secure localhost loopback mediator server that can orchestrate runners
+            var mediatorServer = new MediatorServer();
+            int mediatorPort = GetNextAvailablePort();
+            mediatorServer.Start(TestSelfSignedCert.ServerCertificate, mediatorPort, IPAddress.Loopback);
+
+            // create and start a secure localhost loopback runner server that registers to the mediator
+            var runnerPort = GetNextAvailablePort();
+            var runnerServer = new RunnerServer(new RunnerConfiguration
+            {
+                Endpoint = new Uri($"https://localhost:{runnerPort}"),
+                MediatorUri = new Uri($"https://localhost:{mediatorPort}"),
+            });
+            runnerServer.Start(TestSelfSignedCert.ServerCertificate, runnerPort, IPAddress.Loopback);
+
+            // create a configuration to use the mediator to locate a runner to execute the task
+            var configuration = new Configuration
+            {
+                MaxTries = 1,
+                MediatorUri = new Uri($"https://localhost:{mediatorPort}"),
+                ExecutionMode = ExecutionModes.Remote,
+                // use the unit test assembly resolver instead of the default implementation
+                ResolveLocalAssemblyAsync = (assemblyName) => TestFixture.AssemblyResolver.ResolveAssembly(TestFixture.Environment, assemblyName)
+            };
+
+            // execute the lambda expression using the mediator to choose the runner
+            var result = await Dido.RunAsync<int>(lambda, configuration);
+
+            // confirm the results match
+            Assert.Equal(expectedResult, result);
+
+            // cleanup
+            runnerServer.Dispose();
+        }
+
+        /// <summary>
         /// Creates a sample lambda expression to be used in end-to-end execution tests.
         /// </summary>
         /// <typeparam name="Tprop"></typeparam>

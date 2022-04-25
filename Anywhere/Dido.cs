@@ -278,23 +278,41 @@ namespace DidoNet
             var runnerUri = configuration.RunnerUri;
             if (configuration.MediatorUri != null && configuration.RunnerUri == null)
             {
-                // TODO: open a connection to the mediator
-                // TODO: request an available runner from the mediator
-                // TODO: receive the runner connection details
-                // TODO: close the connection
-                runnerUri = configuration.MediatorUri;
+                // open a connection to the mediator
+                var mediatorClient = new TcpClient(configuration.MediatorUri.Host, configuration.MediatorUri.Port);
+                using (var mediatorConnection = new Connection(mediatorClient, configuration.MediatorUri.Host, "dido"))
+                {
+                    // create the communications channel and request an available runner from the mediator
+                    var applicationChannel = new MessageChannel(mediatorConnection, Constants.ApplicationChannelNumber);
+                    applicationChannel.Send(new RunnerRequestMessage());
+
+                    // receive and process the response
+                    var message = applicationChannel.ReceiveMessage();
+                    switch (message)
+                    {
+                        case RunnerResponseMessage response:
+                            runnerUri = new Uri(response.Endpoint);
+                            break;
+
+                        case RunnerNotAvailableMessage notAvailable:
+                            throw new RunnerNotAvailableException();
+
+                        default:
+                            throw new InvalidOperationException($"Unknown message type '{message.GetType()}'");
+                    }
+                }
             }
 
             // create a secure connection to the remote runner
-            var client = new TcpClient(runnerUri!.Host, runnerUri.Port);
-            using (var connection = new Connection(client, runnerUri.Host, "dido"))
+            var runnerClient = new TcpClient(runnerUri!.Host, runnerUri.Port);
+            using (var runnerConnection = new Connection(runnerClient, runnerUri.Host, "dido"))
             {
                 // TODO: refactor below into separate class to handle all the business logic
 
                 // create communication channels to the runner for: task messages, assemblies, files
-                var tasksChannel = new MessageChannel(connection, Constants.TaskChannelNumber);
-                var assembliesChannel = new MessageChannel(connection, Constants.AssemblyChannelNumber);
-                var filesChannel = connection.GetChannel(Constants.FileChannelNumber);
+                var tasksChannel = new MessageChannel(runnerConnection, Constants.TaskChannelNumber);
+                var assembliesChannel = new MessageChannel(runnerConnection, Constants.AssemblyChannelNumber);
+                var filesChannel = runnerConnection.GetChannel(Constants.FileChannelNumber);
 
                 // TODO: cleanup once stable
                 tasksChannel.Channel.Name = "DIDO";
@@ -378,7 +396,7 @@ namespace DidoNet
                 ThreadHelpers.Debug($"dido: got response; starting dispose...");
 
                 // cleanup the connection
-                connection.Dispose();
+                runnerConnection.Dispose();
                 ThreadHelpers.Debug($"dido: disposed");
 
                 // yield the result
@@ -405,7 +423,7 @@ namespace DidoNet
                     case RunnerBusyMessage busy:
                         throw string.IsNullOrEmpty(busy.Message) ? new RunnerBusyException() : new RunnerBusyException(busy.Message);
                     default:
-                        throw new InvalidOperationException($"Message {message.GetType()} is unknown");
+                        throw new InvalidOperationException($"Unknown message type '{message.GetType()}'");
                 }
             }
         }

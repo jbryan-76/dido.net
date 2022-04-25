@@ -44,6 +44,7 @@ namespace DidoNet.Test
             }
         }
 
-        // TODO: test remaining messages
+        // TODO: RunnerRequestMessage
+        // TODO: RunnerResponseMessage
     }
 }
