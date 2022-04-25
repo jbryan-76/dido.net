@@ -16,7 +16,7 @@
 
         /// <summary>
         /// The maximum number of attempts to make when executing a remote task.
-        /// Use a value <= 0 to retry forever.
+        /// Use a value &lt;= 0 to retry forever.
         /// </summary>
         public int MaxTries { get; set; } = 3;
 

@@ -10,26 +10,54 @@ namespace DidoNet
     public class RunnerServer : IDisposable
     {
         /// <summary>
-        /// Indicates whether the runner is running.
+        /// The current configuration of the runner.
+        /// </summary>
+        public RunnerConfiguration Configuration { get; private set; }
+
+        /// <summary>
+        /// Indicates whether the runner has started and is running.
         /// </summary>
         private long IsRunning = 0;
 
+        /// <summary>
+        /// The thread that accepts and processes new connections.
+        /// </summary>
         private Thread? WorkLoopThread = null;
 
+        /// <summary>
+        /// The connection to the optional mediator.
+        /// </summary>
         private Connection? MediatorConnection = null;
 
+        /// <summary>
+        /// The message channel to communicate with the mediator.
+        /// </summary>
         private MessageChannel? MediatorChannel = null;
 
-        private RunnerConfiguration Configuration;
-
+        /// <summary>
+        /// Indicates whether the instance is disposed.
+        /// </summary>
         private bool IsDisposed = false;
 
+        /// <summary>
+        /// The set of all active workers that are processing tasks.
+        /// </summary>
         private ConcurrentDictionary<Guid, TaskWorker> ActiveWorkers = new ConcurrentDictionary<Guid, TaskWorker>();
 
+        /// <summary>
+        /// The set of workers that have completed processing tasks and need to be disposed.
+        /// </summary>
         private ConcurrentQueue<TaskWorker> CompletedWorkers = new ConcurrentQueue<TaskWorker>();
 
+        /// <summary>
+        /// The set of queued workers that have not yet started processing tasks.
+        /// </summary>
         private ConcurrentQueue<TaskWorker> QueuedWorkers = new ConcurrentQueue<TaskWorker>();
 
+        /// <summary>
+        /// Create a new runner server with the given configuration.
+        /// </summary>
+        /// <param name="configuration"></param>
         public RunnerServer(RunnerConfiguration? configuration = null)
         {
             Configuration = configuration ?? new RunnerConfiguration();
@@ -121,6 +149,9 @@ namespace DidoNet
         /// <param name="cert"></param>
         private void WorkLoop(TcpListener listener, X509Certificate2 cert)
         {
+            // indicate this runner is ready to receive task requests
+            SendStatusToMediator();
+
             while (Interlocked.Read(ref IsRunning) == 1)
             {
                 // TODO: check for active workers that have been cancelled or timed out but haven't stopped yet?

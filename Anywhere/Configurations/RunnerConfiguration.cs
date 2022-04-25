@@ -1,21 +1,26 @@
 ﻿namespace DidoNet
 {
+    /// <summary>
+    /// Configures a runner.
+    /// </summary>
     public class RunnerConfiguration
     {
         /// <summary>
-        /// The optional label for the runner.
+        /// The optional label for the runner. 
+        /// When submitting a task request this can be used to select a specific runner.
         /// </summary>
         public string Label { get; set; } = "";
 
         /// <summary>
         /// The set of optional tags for the runner.
+        /// When submitting a task request this can be used to filter runners.
         /// </summary>
         public string[] Tags { get; set; } = new string[0];
 
         /// <summary>
         /// The maximum number of tasks to execute concurrently.
         /// For best performance, this should roughly correlate to the number of CPU cores available.
-        /// <para/>Allowed values are:
+        /// <para/>Legal values are:
         /// <para/>Less than or equal to zero (default) = Auto (will be set to the available 
         /// number of cpu cores present on the system).
         /// <para/>Anything else indicates the maximum number of tasks.
@@ -23,8 +28,8 @@
         public int MaxTasks { get; set; } = 0;
 
         /// <summary>
-        /// The maximum number of pending tasks to accept before rejecting.
-        /// <para/>Allowed values are:
+        /// The maximum number of pending tasks to accept and queue before rejecting.
+        /// <para/>Legal values are:
         /// <para/>Less than zero = Unlimited (up to the number of simultaneous connections allowed by the OS).
         /// <para/>Zero (default) = Tasks cannot be queued. New tasks are accepted only if fewer than
         /// the maximum number of concurrent tasks are currently running.

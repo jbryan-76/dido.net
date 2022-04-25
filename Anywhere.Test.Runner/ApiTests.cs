@@ -1,5 +1,6 @@
 ﻿using DidoNet.Test.Common;
 using System;
+using System.Linq;
 using System.Linq.Expressions;
 using System.Net;
 using System.Runtime.Loader;
@@ -223,6 +224,12 @@ namespace DidoNet.Test.Runner
                 MediatorUri = new Uri($"https://localhost:{mediatorPort}"),
             });
             runnerServer.Start(TestSelfSignedCert.ServerCertificate, runnerPort, IPAddress.Loopback);
+
+            // wait for the runner to reach a "ready" state in the mediator
+            while (mediatorServer.RunnerPool.Count == 0 || mediatorServer.RunnerPool.First().State != RunnerStates.Ready)
+            {
+                Thread.Sleep(1);
+            }
 
             // create a configuration to use the mediator to locate a runner to execute the task
             var configuration = new Configuration

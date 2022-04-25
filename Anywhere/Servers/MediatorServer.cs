@@ -7,20 +7,45 @@ namespace DidoNet
 {
     public class MediatorServer
     {
+        /// <summary>
+        /// The current configuration of the mediator.
+        /// </summary>
+        public MediatorConfiguration Configuration { get; private set; }
+
+        /// <summary>
+        /// The set of known runners;
+        /// </summary>
+        internal List<Runner> RunnerPool = new List<Runner>();
+
+        /// <summary>
+        /// Indicates whether the mediator has started and is running.
+        /// </summary>
         private long IsRunning = 0;
 
+        /// <summary>
+        /// The thread that accepts and processes new connections.
+        /// </summary>
         private Thread? WorkLoopThread;
 
-        private MediatorConfiguration Configuration;
-
+        /// <summary>
+        /// Indicates whether the instance is disposed.
+        /// </summary>
         private bool IsDisposed = false;
 
-        private List<Runner> RunnerPool = new List<Runner>();
-
+        /// <summary>
+        /// The set of all active connected clients;
+        /// </summary>
         private ConcurrentDictionary<Guid, ConnectedClient> ActiveClients = new ConcurrentDictionary<Guid, ConnectedClient>();
 
+        /// <summary>
+        /// The set of clients that have disconnected and need to be disposed.
+        /// </summary>
         private ConcurrentQueue<ConnectedClient> CompletedClients = new ConcurrentQueue<ConnectedClient>();
 
+        /// <summary>
+        /// Create a new mediator server with the given configuration.
+        /// </summary>
+        /// <param name="configuration"></param>
         public MediatorServer(MediatorConfiguration? configuration = null)
         {
             Configuration = configuration ?? new MediatorConfiguration();
@@ -36,7 +61,13 @@ namespace DidoNet
             GC.SuppressFinalize(this);
         }
 
-        public async Task Start(X509Certificate2 cert, int port, IPAddress? ip = null)
+        /// <summary>
+        /// Starts listening for incoming connection requests from applications and runners.
+        /// </summary>
+        /// <param name="cert"></param>
+        /// <param name="port"></param>
+        /// <param name="ip"></param>
+        public void Start(X509Certificate2 cert, int port, IPAddress? ip = null)
         {
             ip = ip ?? IPAddress.Any;
 
@@ -50,6 +81,9 @@ namespace DidoNet
             WorkLoopThread.Start();
         }
 
+        /// <summary>
+        /// Stops listening for incoming requests and shuts down the server.
+        /// </summary>
         public void Stop()
         {
             // signal the work thread to stop
@@ -64,6 +98,13 @@ namespace DidoNet
             CleanupCompletedClients();
         }
 
+        /// <summary>
+        /// The work loop for the main mediator thread, responsible for accepting incoming connections 
+        /// from applications that are requesting remote execution of tasks and the runners that are 
+        /// processing those tasks.
+        /// </summary>
+        /// <param name="listener"></param>
+        /// <param name="cert"></param>
         private void WorkLoop(TcpListener listener, X509Certificate2 cert)
         {
             while (Interlocked.Read(ref IsRunning) == 1)
@@ -92,6 +133,9 @@ namespace DidoNet
             }
         }
 
+        /// <summary>
+        /// Disposes all completed clients.
+        /// </summary>
         private void CleanupCompletedClients()
         {
             while (CompletedClients.TryDequeue(out ConnectedClient? client))
@@ -101,6 +145,9 @@ namespace DidoNet
             }
         }
 
+        /// <summary>
+        /// Disconnects and disposes all active clients.
+        /// </summary>
         private void DisconnectAndCleanupActiveClients()
         {
             foreach (var client in ActiveClients.Values)
@@ -111,18 +158,54 @@ namespace DidoNet
             }
         }
 
+        /// <summary>
+        /// Finds and returns the next best available runner using the filtering and matching criteria
+        /// of the provided request and the configuration and state of all runners in the runner pool.
+        /// </summary>
+        /// <param name="request"></param>
+        /// <returns></returns>
         private Runner? GetNextAvailableRunner(RunnerRequestMessage request)
         {
-            // TODO: find the next best available runner and tell the app to use it
-            // TODO: this requires heuristic load balancing strategies based on which 
-            // TODO: runner in the pool has resources available to run.
-            // TODO: eg whether runner is in use, how many "slots" are open, its queue size,
-            // TODO: eg OS, memory support, etc
+            // TODO: build the query once and reuse it
 
-            return RunnerPool.FirstOrDefault();
+            // initialize a query to the current set of ready runners
+            var query = RunnerPool.Where(x => x.State == RunnerStates.Ready);
+
+            // filter to include only matching platforms, if necessary
+            if (request.Platform != OSPlatforms.Unknown)
+            {
+                query = query.Where(x => x.Platform == request.Platform);
+            }
+
+            // filter to include only matching runner labels, if necessary
+            if (!string.IsNullOrEmpty(request.Label))
+            {
+                query = query.Where(x => x.Label == request.Label);
+            }
+
+            // filter to include only matching runner tags, if necessary
+            if (request.Tags?.Length > 0)
+            {
+                query = query.Where(x => x.Tags.Intersect(request.Tags).Any());
+            }
+
+            // exclude runners that have no available slots and no available queue
+            query = query.Where(x => x.ActiveTasks < x.MaxTasks && (x.MaxQueue <= 0 || x.QueueLength < x.MaxQueue));
+
+            // now sort them by "most availability":
+            // first by number of open slots (ie runners with immediate vacancies)
+            query = query.OrderByDescending(x => x.MaxTasks - x.ActiveTasks)
+                    // then by shortest queue (ie runners with the least pending work)
+                    .ThenBy(x => x.QueueLength);
+
+            // finally materialize and return the first (ie best) matching eligible runner
+            lock (RunnerPool)
+            {
+                return query.FirstOrDefault();
+            }
         }
 
-        private async void ProcessClient(Guid id, Connection connection)
+        private void ProcessClient(Guid id, Connection connection)
         {
             // create communication channels.
             // NOTE: by design, exactly one of these channels will receive data
@@ -246,26 +329,67 @@ namespace DidoNet
             }
         }
 
-        private class Runner : IRunnerDetail, IRunnerStatus
+        internal class Runner : IRunnerDetail, IRunnerStatus
         {
+            /// <summary>
+            /// The OS platform the runner is on.
+            /// </summary>
             public OSPlatforms Platform { get; set; } = OSPlatforms.Unknown;
 
+            /// <summary>
+            /// The OS version for the platform the runner is on.
+            /// </summary>
             public string OSVersion { get; set; } = "";
 
+            /// <summary>
+            /// The uri for applications to use to connect to the runner.
+            /// </summary>
             public string Endpoint { get; set; } = "";
 
+            /// <summary>
+            /// The maximum number of tasks the runner can execute concurrently.
+            /// <para/>Legal values are:
+            /// <para/>Less than or equal to zero (default) = Auto (will be set to the available 
+            /// number of cpu cores present on the system).
+            /// <para/>Anything else indicates the maximum number of tasks.
+            /// </summary>
             public int MaxTasks { get; set; } = 0;
 
+            /// <summary>
+            /// The maximum number of pending tasks the runner can accept and queue before rejecting.
+            /// <para/>Legal values are:
+            /// <para/>Less than zero = Unlimited (up to the number of simultaneous connections allowed by the OS).
+            /// <para/>Zero (default) = Tasks cannot be queued. New tasks are accepted only if fewer than
+            /// the maximum number of concurrent tasks are currently running.
+            /// <para/>Anything else indicates the maximum number of tasks to queue.
+            /// </summary>
             public int MaxQueue { get; set; } = 0;
 
+            /// <summary>
+            /// The optional runner label.
+            /// </summary>
             public string Label { get; set; } = "";
 
+            /// <summary>
+            /// The optional runner tags.
+            /// </summary>
             public string[] Tags { get; set; } = new string[0];
 
+            /// <summary>
+            /// The last known state of the runner.
+            /// </summary>
             public RunnerStates State { get; set; } = RunnerStates.Starting;
 
+            /// <summary>
+            /// The number of tasks the runner is currently executing.
+            /// By definition this is less than or equal to MaxTasks.
+            /// </summary>
             public int ActiveTasks { get; set; } = 0;
 
+            /// <summary>
+            /// The number of pending tasks the runner has in its queue.
+            /// By definition this is less than or equal to MaxQueue (unless MaxQueue is less than zero).
+            /// </summary>
             public int QueueLength { get; set; } = 0;
 
             private Connection Connection { get; set; }
