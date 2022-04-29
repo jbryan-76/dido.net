@@ -13,7 +13,7 @@ namespace DidoNet
         public MediatorConfiguration Configuration { get; private set; }
 
         /// <summary>
-        /// The set of known runners;
+        /// The set of known runners.
         /// </summary>
         internal List<Runner> RunnerPool = new List<Runner>();
 
@@ -99,6 +99,56 @@ namespace DidoNet
         }
 
         /// <summary>
+        /// Finds and returns the next best available runner using the filtering and matching criteria
+        /// of the provided request and the configuration and state of all runners in the runner pool.
+        /// </summary>
+        /// <param name="request"></param>
+        /// <returns></returns>
+        internal Runner? GetNextAvailableRunner(RunnerRequestMessage request)
+        {
+            // TODO: build the query once and reuse it
+
+            // initialize a query to the current set of ready runners
+            var query = RunnerPool.Where(x => x.State == RunnerStates.Ready);
+
+            // filter to include only matching platforms, if necessary
+            if (request.Platform != OSPlatforms.Unknown)
+            {
+                query = query.Where(x => x.Platform == request.Platform);
+            }
+
+            // filter to include only matching runner labels, if necessary
+            if (!string.IsNullOrEmpty(request.Label))
+            {
+                query = query.Where(x => x.Label == request.Label);
+            }
+
+            // filter to include only matching runner tags, if necessary
+            if (request.Tags?.Length > 0)
+            {
+                query = query.Where(x => x.Tags.Intersect(request.Tags).Any());
+            }
+
+            // filter to include runners that have:
+            query = query.Where(x => x.ActiveTasks < x.MaxTasks // available task slots
+                || x.MaxQueue < 0 // or unlimited queue
+                || x.QueueLength < x.MaxQueue // or available queue
+            );
+
+            // now sort them by "most availability":
+            // first by number of open slots (ie runners with immediate vacancies)
+            query = query.OrderByDescending(x => x.MaxTasks - x.ActiveTasks)
+                    // then by shortest queue (ie runners with the least pending work)
+                    .ThenBy(x => x.QueueLength);
+
+            // finally materialize and return the first (ie best) matching eligible runner
+            lock (RunnerPool)
+            {
+                return query.FirstOrDefault();
+            }
+        }
+
+        /// <summary>
         /// The work loop for the main mediator thread, responsible for accepting incoming connections 
         /// from applications that are requesting remote execution of tasks and the runners that are 
         /// processing those tasks.
@@ -158,53 +208,6 @@ namespace DidoNet
             }
         }
 
-        /// <summary>
-        /// Finds and returns the next best available runner using the filtering and matching criteria
-        /// of the provided request and the configuration and state of all runners in the runner pool.
-        /// </summary>
-        /// <param name="request"></param>
-        /// <returns></returns>
-        private Runner? GetNextAvailableRunner(RunnerRequestMessage request)
-        {
-            // TODO: build the query once and reuse it
-
-            // initialize a query to the current set of ready runners
-            var query = RunnerPool.Where(x => x.State == RunnerStates.Ready);
-
-            // filter to include only matching platforms, if necessary
-            if (request.Platform != OSPlatforms.Unknown)
-            {
-                query = query.Where(x => x.Platform == request.Platform);
-            }
-
-            // filter to include only matching runner labels, if necessary
-            if (!string.IsNullOrEmpty(request.Label))
-            {
-                query = query.Where(x => x.Label == request.Label);
-            }
-
-            // filter to include only matching runner tags, if necessary
-            if (request.Tags?.Length > 0)
-            {
-                query = query.Where(x => x.Tags.Intersect(request.Tags).Any());
-            }
-
-            // exclude runners that have no available slots and no available queue
-            query = query.Where(x => x.ActiveTasks < x.MaxTasks && (x.MaxQueue <= 0 || x.QueueLength < x.MaxQueue));
-
-            // now sort them by "most availability":
-            // first by number of open slots (ie runners with immediate vacancies)
-            query = query.OrderByDescending(x => x.MaxTasks - x.ActiveTasks)
-                    // then by shortest queue (ie runners with the least pending work)
-                    .ThenBy(x => x.QueueLength);
-
-            // finally materialize and return the first (ie best) matching eligible runner
-            lock (RunnerPool)
-            {
-                return query.FirstOrDefault();
-            }
-        }
-
         private void ProcessClient(Guid id, Connection connection)
         {
             // create communication channels.
@@ -260,7 +263,7 @@ namespace DidoNet
                     // add the runner to the pool, if necessary
                     if (runner == null)
                     {
-                        runner = new Runner(connection);
+                        runner = new Runner();
                         lock (RunnerPool)
                         {
                             RunnerPool.Add(runner);
@@ -391,13 +394,6 @@ namespace DidoNet
             /// By definition this is less than or equal to MaxQueue (unless MaxQueue is less than zero).
             /// </summary>
             public int QueueLength { get; set; } = 0;
-
-            private Connection Connection { get; set; }
-
-            public Runner(Connection connection)
-            {
-                Connection = connection;
-            }
 
             public void Init(RunnerStartMessage message)
             {

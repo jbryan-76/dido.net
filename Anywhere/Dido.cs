@@ -204,8 +204,11 @@ namespace DidoNet
             }
         }
 
-        // TODO: if the Mediator is in job mode, poll for the result?
-        // TODO: if the Mediator is in job mode, start a background thread to call a handler when the result is available?
+        // TODO: "jobs" API: must use a mediator and runners
+        // TODO: SubmitJobAsync(expression) => submit request to mediator, get back an id
+        // TODO: JobStatusAsync(id) => get job status/result by job id
+        // TODO: CancelJobAsync(id) => cancel job
+        // TODO: AddJobHandler(id,handler) => invoke handler when job is done (and have background thread poll)
 
         /// <summary>
         /// Execute the provided expression as a task in a remote environment.
@@ -276,7 +279,9 @@ namespace DidoNet
             CancellationToken cancellationToken)
         {
             var runnerUri = configuration.RunnerUri;
-            if (configuration.MediatorUri != null && configuration.RunnerUri == null)
+
+            // if there is a mediator configured but no runner, ask the mediator to choose a runner
+            if (configuration.MediatorUri != null && runnerUri == null)
             {
                 // open a connection to the mediator
                 var mediatorClient = new TcpClient(configuration.MediatorUri.Host, configuration.MediatorUri.Port);

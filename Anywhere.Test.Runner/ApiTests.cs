@@ -249,6 +249,7 @@ namespace DidoNet.Test.Runner
 
             // cleanup
             runnerServer.Dispose();
+            mediatorServer.Dispose();
         }
 
         /// <summary>
