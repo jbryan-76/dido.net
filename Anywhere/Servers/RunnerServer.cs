@@ -100,8 +100,8 @@ namespace DidoNet
             {
                 // create a secure connection to the optional mediator
                 var uri = Configuration.MediatorUri;
-                var client = new TcpClient(uri!.Host, uri.Port);
-                MediatorConnection = new Connection(client, uri.Host);
+                //var client = new TcpClient(uri!.Host, uri.Port);
+                MediatorConnection = new Connection(uri!.Host, uri.Port);
                 MediatorChannel = new MessageChannel(MediatorConnection, Constants.RunnerChannelNumber);
 
                 // announce this runner to the mediator
@@ -176,7 +176,7 @@ namespace DidoNet
                     var client = listener.AcceptTcpClient();
 
                     // create a secure connection to the endpoint
-                    var connection = new Connection(client, cert, "runner");
+                    var connection = new Connection(client, cert);
 
                     // the mediator uses an optimistic scheduling strategy, which means
                     // it will route traffic to runners based on the conditions known at the 

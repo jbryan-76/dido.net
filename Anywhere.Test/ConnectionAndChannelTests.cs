@@ -378,6 +378,10 @@ namespace DidoNet.Test
                 {
                     Thread.Sleep(1);
                 }
+
+                // wait a bit longer: there is some kind of weird bug where very rarely ConcurrentQueue.Count
+                // does not match the actual number of items in the queue
+                Thread.Sleep(10);
             }
 
             // confirm total message counts

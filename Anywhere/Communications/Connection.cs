@@ -168,8 +168,19 @@ namespace DidoNet
         }
 
         /// <summary>
+        /// Create a new secure connection in a server role at the provided endpoint (host+port)
+        /// and certificate for encryption.
+        /// </summary>
+        /// <param name="host"></param>
+        /// <param name="port"></param>
+        /// <param name="serverCertificate"></param>
+        /// <param name="name"></param>
+        public Connection(string host, int port, X509Certificate2 serverCertificate, string? name = null)
+            : this(new TcpClient(host, port), serverCertificate, name) { }
+
+        /// <summary>
         /// Create a new secure connection in a client role using the provided endpoint
-        /// and connected to the provided host server.
+        /// (which is connected to the provided target host server).
         /// </summary>
         /// <param name="endpoint">The TcpClient connected to the remote server endpoint.</param>
         /// <param name="targetHost">The hostname of the remote server which is used to authenticate the connection.</param>
@@ -206,6 +217,15 @@ namespace DidoNet
                 throw;
             }
         }
+
+        /// <summary>
+        /// Create a new secure connection in a client role to the provided server endpoint (host+port).
+        /// </summary>
+        /// <param name="host"></param>
+        /// <param name="port"></param>
+        /// <param name="name"></param>
+        public Connection(string host, int port, string? name = null)
+            : this(new TcpClient(host, port), host, name) { }
 
         /// <summary>
         /// Cleans up and disposes all managed and unmanaged resources.
@@ -312,7 +332,7 @@ namespace DidoNet
             {
                 throw new InvalidOperationException("Can't create channel: not connected.");
             }
-            lock(Channels)
+            lock (Channels)
             {
                 //if(Channels.TryGetValue(channelNumber, out var channel))
             }

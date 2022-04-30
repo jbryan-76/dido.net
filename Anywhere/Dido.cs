@@ -284,8 +284,7 @@ namespace DidoNet
             if (configuration.MediatorUri != null && runnerUri == null)
             {
                 // open a connection to the mediator
-                var mediatorClient = new TcpClient(configuration.MediatorUri.Host, configuration.MediatorUri.Port);
-                using (var mediatorConnection = new Connection(mediatorClient, configuration.MediatorUri.Host, "dido"))
+                using (var mediatorConnection = new Connection(configuration.MediatorUri.Host, configuration.MediatorUri.Port))
                 {
                     // create the communications channel and request an available runner from the mediator
                     var applicationChannel = new MessageChannel(mediatorConnection, Constants.ApplicationChannelNumber);
@@ -309,8 +308,7 @@ namespace DidoNet
             }
 
             // create a secure connection to the remote runner
-            var runnerClient = new TcpClient(runnerUri!.Host, runnerUri.Port);
-            using (var runnerConnection = new Connection(runnerClient, runnerUri.Host, "dido"))
+            using (var runnerConnection = new Connection(runnerUri!.Host, runnerUri.Port))
             {
                 // TODO: refactor below into separate class to handle all the business logic
 

@@ -327,6 +327,92 @@ namespace DidoNet.Test.Runner
             Assert.Equal(two.Label, runner!.Label);
         }
 
-        // TODO: add all valid runners and try to get by priority
+        [Fact]
+        public void NextAvailableRunner_BySlotPriority()
+        {
+            var mediator = new MediatorServer();
+
+            // available: least open slots
+            var one = new MediatorServer.Runner()
+            {
+                Label = Guid.NewGuid().ToString(),
+                MaxTasks = 3,
+                ActiveTasks = 2,
+                State = RunnerStates.Ready
+            };
+            mediator.RunnerPool.Add(one);
+
+            // most available: most open slots
+            var two = new MediatorServer.Runner()
+            {
+                Label = Guid.NewGuid().ToString(),
+                MaxTasks = 4,
+                ActiveTasks = 1,
+                State = RunnerStates.Ready
+            };
+            mediator.RunnerPool.Add(two);
+
+            // available: some open slots
+            var three = new MediatorServer.Runner()
+            {
+                Label = Guid.NewGuid().ToString(),
+                MaxTasks = 4,
+                ActiveTasks = 2,
+                State = RunnerStates.Ready
+            };
+            mediator.RunnerPool.Add(three);
+
+            var runner = mediator.GetNextAvailableRunner(new RunnerRequestMessage());
+
+            Assert.NotNull(runner);
+            Assert.Equal(two.Label, runner!.Label);
+        }
+
+        [Fact]
+        public void NextAvailableRunner_ByQueuePriority()
+        {
+            var mediator = new MediatorServer();
+
+            // available: medium queue
+            var one = new MediatorServer.Runner()
+            {
+                Label = Guid.NewGuid().ToString(),
+                MaxTasks = 1,
+                ActiveTasks = 1,
+                MaxQueue = 10,
+                QueueLength = 5,
+                State = RunnerStates.Ready
+            };
+            mediator.RunnerPool.Add(one);
+
+            // most available: smallest queue
+            var two = new MediatorServer.Runner()
+            {
+                Label = Guid.NewGuid().ToString(),
+                MaxTasks = 1,
+                ActiveTasks = 1,
+                MaxQueue = -1,
+                QueueLength = 1,
+                State = RunnerStates.Ready
+            };
+            mediator.RunnerPool.Add(two);
+
+            // available: biggest queue
+            var three = new MediatorServer.Runner()
+            {
+                Label = Guid.NewGuid().ToString(),
+                MaxTasks = 1,
+                ActiveTasks = 1,
+                MaxQueue = 10,
+                QueueLength = 8,
+                State = RunnerStates.Ready
+            };
+            mediator.RunnerPool.Add(three);
+
+            var runner = mediator.GetNextAvailableRunner(new RunnerRequestMessage());
+
+            Assert.NotNull(runner);
+            Assert.Equal(two.Label, runner!.Label);
+        }
     }
 }
