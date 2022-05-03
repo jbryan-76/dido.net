@@ -220,8 +220,10 @@ namespace DidoNet.Test.Runner
             var runnerPort = GetNextAvailablePort();
             var runnerServer = new RunnerServer(new RunnerConfiguration
             {
-                Endpoint = new Uri($"https://localhost:{runnerPort}"),
-                MediatorUri = new Uri($"https://localhost:{mediatorPort}"),
+                //Endpoint = $"https://localhost:{runnerPort}",
+                Endpoint = new UriBuilder("https", "localhost", runnerPort).Uri.ToString(),
+                //MediatorUri = $"https://localhost:{mediatorPort}",
+                MediatorUri = new UriBuilder("https", "localhost", mediatorPort).Uri.ToString(),
             });
             runnerServer.Start(TestSelfSignedCert.ServerCertificate, runnerPort, IPAddress.Loopback);
 
@@ -235,7 +237,8 @@ namespace DidoNet.Test.Runner
             var configuration = new Configuration
             {
                 MaxTries = 1,
-                MediatorUri = new Uri($"https://localhost:{mediatorPort}"),
+                //MediatorUri = new Uri($"https://localhost:{mediatorPort}"),
+                MediatorUri = new UriBuilder("https", "localhost", mediatorPort).Uri,
                 ExecutionMode = ExecutionModes.Remote,
                 // use the unit test assembly resolver instead of the default implementation
                 ResolveLocalAssemblyAsync = (assemblyName) => TestFixture.AssemblyResolver.ResolveAssembly(TestFixture.Environment, assemblyName)

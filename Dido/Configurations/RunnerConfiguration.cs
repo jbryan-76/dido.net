@@ -41,7 +41,7 @@
         /// The uri for the mediator service used to monitor and manage runners.
         /// If null, the runner will operate in an independent/isolated mode.
         /// </summary>
-        public Uri? MediatorUri { get; set; } = null;
+        public string? MediatorUri { get; set; } = null;
 
         /// <summary>
         /// The uri for applications to use to connect to a runner.
@@ -50,6 +50,6 @@
         /// If not provided, will default to the endpoint (ip address + port) the 
         /// runner server starts on.
         /// </summary>
-        public Uri? Endpoint { get; set;} = null;
+        public string? Endpoint { get; set;} = null;
     }
 }

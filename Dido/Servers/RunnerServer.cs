@@ -10,6 +10,11 @@ namespace DidoNet
     public class RunnerServer : IDisposable
     {
         /// <summary>
+        /// The unique id of the server instance.
+        /// </summary>
+        public string Id { get; private set; } = Guid.NewGuid().ToString();
+
+        /// <summary>
         /// The current configuration of the runner.
         /// </summary>
         public RunnerConfiguration Configuration { get; private set; }
@@ -93,14 +98,13 @@ namespace DidoNet
             // if one was not provided
             if (Configuration.Endpoint == null)
             {
-                Configuration.Endpoint = new UriBuilder("https", ip.ToString(), port).Uri;
+                Configuration.Endpoint = new UriBuilder("https", ip.ToString(), port).Uri.ToString();
             }
 
             if (Configuration.MediatorUri != null)
             {
                 // create a secure connection to the optional mediator
-                var uri = Configuration.MediatorUri;
-                //var client = new TcpClient(uri!.Host, uri.Port);
+                var uri = new Uri(Configuration.MediatorUri);
                 MediatorConnection = new Connection(uri!.Host, uri.Port);
                 MediatorChannel = new MessageChannel(MediatorConnection, Constants.RunnerChannelNumber);
 
