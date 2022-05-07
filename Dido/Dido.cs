@@ -3,11 +3,18 @@ using System.Runtime.Loader;
 
 // TODO: best name? dido (distribute, disseminate, divide, spread, separate, put) vs alio (to another place)
 
-// generate self-signed certs automatically
+// generate self-signed certs automatically:
 // https://stackoverflow.com/questions/695802/using-ssl-and-sslstream-for-peer-to-peer-authentication
+// view installed certificates: certmgr.msc
+// install a cert programmatically:
+// https://docs.microsoft.com/en-us/troubleshoot/developer/dotnet/framework/general/install-pfx-file-using-x509certificate
+// install a cert manually:
+// https://community.spiceworks.com/how_to/1839-installing-self-signed-ca-certificate-in-windows
 
 // 1) generate a cert
 // openssl req -newkey rsa:2048 -new -nodes -keyout test.key -x509 -days 365 -out test.pem
+// NOTE: the "Common Name"/FQDN (fully qualified domain name) must match the "targetHost" parameter of the Connection
+// constructor specialized for connecting a client to a server.
 // 2) convert to a pkcs12 pfx
 // openssl pkcs12 -export -out cert.pfx -inkey test.key -in test.pem -password pass:1234
 
@@ -204,11 +211,18 @@ namespace DidoNet
         {
             var runnerUri = configuration.RunnerUri;
 
+            var connectionSettings = new ClientConnectionSettings
+            {
+                ValidaionPolicy = configuration.ServerValidationPolicy,
+                Thumbprint = configuration.ServerCertificateThumbprint
+            };
+
             // if there is a mediator configured but no runner, ask the mediator to choose a runner
             if (configuration.MediatorUri != null && runnerUri == null)
             {
                 // open a connection to the mediator
-                using (var mediatorConnection = new Connection(configuration.MediatorUri.Host, configuration.MediatorUri.Port))
+                using (var mediatorConnection =
+                    new Connection(configuration.MediatorUri.Host, configuration.MediatorUri.Port, null, connectionSettings))
                 {
                     // create the communications channel and request an available runner from the mediator
                     var applicationChannel = new MessageChannel(mediatorConnection, Constants.ApplicationChannelNumber);
@@ -232,7 +246,7 @@ namespace DidoNet
             }
 
             // create a secure connection to the remote runner
-            using (var runnerConnection = new Connection(runnerUri!.Host, runnerUri.Port))
+            using (var runnerConnection = new Connection(runnerUri!.Host, runnerUri.Port, null, connectionSettings))
             {
                 // TODO: refactor below into separate class to handle all the business logic
 

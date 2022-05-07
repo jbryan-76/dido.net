@@ -191,7 +191,8 @@ namespace DidoNet.Test.Common
                 var client = new TcpClient(localhost, port);
 
                 // return a secure connection to the server
-                var clientConnection = new Connection(client, localhost, "client");
+                var settings = new ClientConnectionSettings { ValidaionPolicy = ServerCertificateValidationPolicies._SKIP_ };
+                var clientConnection = new Connection(client, localhost, "client", settings);
                 return clientConnection;
             });
         }

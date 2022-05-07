@@ -103,9 +103,15 @@ namespace DidoNet
 
             if (Configuration.MediatorUri != null)
             {
+                var connectionSettings = new ClientConnectionSettings
+                {
+                    ValidaionPolicy = Configuration.ServerValidationPolicy,
+                    Thumbprint = Configuration.ServerCertificateThumbprint
+                };
+
                 // create a secure connection to the optional mediator
                 var uri = new Uri(Configuration.MediatorUri);
-                MediatorConnection = new Connection(uri!.Host, uri.Port);
+                MediatorConnection = new Connection(uri!.Host, uri.Port, null, connectionSettings);
                 MediatorChannel = new MessageChannel(MediatorConnection, Constants.RunnerChannelNumber);
 
                 // announce this runner to the mediator

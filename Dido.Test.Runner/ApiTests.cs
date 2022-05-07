@@ -59,7 +59,9 @@ namespace DidoNet.Test.Runner
                 RunnerUri = new Uri($"https://localhost:{port}"),
                 ExecutionMode = ExecutionModes.Remote,
                 // use the unit test assembly resolver instead of the default implementation
-                ResolveLocalAssemblyAsync = (assemblyName) => TestFixture.AssemblyResolver.ResolveAssembly(TestFixture.Environment, assemblyName)
+                ResolveLocalAssemblyAsync = (assemblyName) => TestFixture.AssemblyResolver.ResolveAssembly(TestFixture.Environment, assemblyName),
+                // bypass server cert validation since unit tests are using a base-64 self-signed cert
+                ServerValidationPolicy = ServerCertificateValidationPolicies._SKIP_
             };
 
             // execute the lambda expression using the remote runner server
@@ -98,7 +100,9 @@ namespace DidoNet.Test.Runner
                 RunnerUri = new Uri($"https://localhost:{port}"),
                 ExecutionMode = ExecutionModes.Remote,
                 // use the unit test assembly resolver instead of the default implementation
-                ResolveLocalAssemblyAsync = (assemblyName) => TestFixture.AssemblyResolver.ResolveAssembly(TestFixture.Environment, assemblyName)
+                ResolveLocalAssemblyAsync = (assemblyName) => TestFixture.AssemblyResolver.ResolveAssembly(TestFixture.Environment, assemblyName),
+                // bypass server cert validation since unit tests are using a base-64 self-signed cert
+                ServerValidationPolicy = ServerCertificateValidationPolicies._SKIP_
             };
 
             // execute the lambda expression using the remote runner server using the deferred handler
@@ -148,7 +152,9 @@ namespace DidoNet.Test.Runner
                 RunnerUri = new Uri($"https://localhost:{port}"),
                 ExecutionMode = ExecutionModes.Remote,
                 // use the unit test assembly resolver instead of the default implementation
-                ResolveLocalAssemblyAsync = (assemblyName) => TestFixture.AssemblyResolver.ResolveAssembly(TestFixture.Environment, assemblyName)
+                ResolveLocalAssemblyAsync = (assemblyName) => TestFixture.AssemblyResolver.ResolveAssembly(TestFixture.Environment, assemblyName),
+                // bypass server cert validation since unit tests are using a base-64 self-signed cert
+                ServerValidationPolicy = ServerCertificateValidationPolicies._SKIP_
             };
 
             // execute the busy loop using the remote runner and confirm it throws TimeoutException
@@ -176,7 +182,9 @@ namespace DidoNet.Test.Runner
                 RunnerUri = new Uri($"https://localhost:{port}"),
                 ExecutionMode = ExecutionModes.Remote,
                 // use the unit test assembly resolver instead of the default implementation
-                ResolveLocalAssemblyAsync = (assemblyName) => TestFixture.AssemblyResolver.ResolveAssembly(TestFixture.Environment, assemblyName)
+                ResolveLocalAssemblyAsync = (assemblyName) => TestFixture.AssemblyResolver.ResolveAssembly(TestFixture.Environment, assemblyName),
+                // bypass server cert validation since unit tests are using a base-64 self-signed cert
+                ServerValidationPolicy = ServerCertificateValidationPolicies._SKIP_
             };
 
             // create a cancellation source and timer to cancel the task after 1 second
@@ -224,6 +232,8 @@ namespace DidoNet.Test.Runner
                 Endpoint = new UriBuilder("https", "localhost", runnerPort).Uri.ToString(),
                 //MediatorUri = $"https://localhost:{mediatorPort}",
                 MediatorUri = new UriBuilder("https", "localhost", mediatorPort).Uri.ToString(),
+                // bypass server cert validation since unit tests are using a base-64 self-signed cert
+                ServerValidationPolicy = ServerCertificateValidationPolicies._SKIP_
             });
             runnerServer.Start(TestSelfSignedCert.ServerCertificate, runnerPort, IPAddress.Loopback);
 
@@ -241,7 +251,9 @@ namespace DidoNet.Test.Runner
                 MediatorUri = new UriBuilder("https", "localhost", mediatorPort).Uri,
                 ExecutionMode = ExecutionModes.Remote,
                 // use the unit test assembly resolver instead of the default implementation
-                ResolveLocalAssemblyAsync = (assemblyName) => TestFixture.AssemblyResolver.ResolveAssembly(TestFixture.Environment, assemblyName)
+                ResolveLocalAssemblyAsync = (assemblyName) => TestFixture.AssemblyResolver.ResolveAssembly(TestFixture.Environment, assemblyName),
+                // bypass server cert validation since unit tests are using a base-64 self-signed cert
+                ServerValidationPolicy = ServerCertificateValidationPolicies._SKIP_
             };
 
             // execute the lambda expression using the mediator to choose the runner

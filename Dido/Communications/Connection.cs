@@ -179,23 +179,34 @@ namespace DidoNet
             : this(new TcpClient(host, port), serverCertificate, name) { }
 
         /// <summary>
-        /// Create a new secure connection in a client role using the provided endpoint
-        /// (which is connected to the provided target host server).
+        /// Create a new secure connection in a client role using the provided endpoint,
+        /// which is connected to the provided target host server (for proper and secure encryption,
+        /// the target host server must match the server's certificate/credentials).
         /// </summary>
         /// <param name="endpoint">The TcpClient connected to the remote server endpoint.</param>
-        /// <param name="targetHost">The hostname of the remote server which is used to authenticate the connection.</param>
+        /// <param name="targetHost">The hostname of the remote server which is used as part of SSL to authenticate the connection.</param>
         /// <param name="name">The optional name for the connection.</param>
-        public Connection(TcpClient endpoint, string targetHost, string? name = null)
+        /// <param name="validateCertificate">Indicates whether to validate the server's certificate or not.
+        /// <para/>WARNING: this parameter is to support more efficient development and testing, but should never
+        /// be set to false in production.</param>
+        public Connection(TcpClient endpoint, string targetHost, string? name = null, ClientConnectionSettings? settings = null)
         {
             Name = name ?? "";
             EndPoint = endpoint;
+
+            settings = settings ?? new ClientConnectionSettings();
 
             Log("creating sslstream as client");
             // otherwise the connection is implied to be a client
             Stream = new SslStream(
                 EndPoint.GetStream(),
                 false,
-                new RemoteCertificateValidationCallback(ValidateServerCertificate),
+                settings.ValidaionPolicy == ServerCertificateValidationPolicies._SKIP_
+                    ? BypassRemoteServerCertificateValidation
+                    : settings.ValidaionPolicy == ServerCertificateValidationPolicies.RootCA
+                    ? ValidateRemoteServerCertificate
+                    : (sender, certificate, chain, sslPolicyErrors) =>
+                        ValidateRemoteServerCertificateThumbprint(sender, certificate, chain, sslPolicyErrors, settings.Thumbprint),
                 null
                 );
 
@@ -224,8 +235,11 @@ namespace DidoNet
         /// <param name="host"></param>
         /// <param name="port"></param>
         /// <param name="name"></param>
-        public Connection(string host, int port, string? name = null)
-            : this(new TcpClient(host, port), host, name) { }
+        /// <param name="validateCertificate">Indicates whether to validate the server's certificate or not.
+        /// <para/>WARNING: this parameter is to support more efficient development and testing, but should never
+        /// be set to false in production.</param>
+        public Connection(string host, int port, string? name = null, ClientConnectionSettings? settings = null)
+            : this(new TcpClient(host, port), host, name, settings) { }
 
         /// <summary>
         /// Cleans up and disposes all managed and unmanaged resources.
@@ -646,37 +660,91 @@ namespace DidoNet
         }
 
         /// <summary>
-        /// Invoked by the RemoteCertificateValidationDelegate to authenticate the server endpoint.
+        /// Invoked by the RemoteCertificateValidationDelegate to ALWAYS validate the server endpoint,
+        /// regardless of its authenticity or validity.
+        /// <para/>WARNING: should never be used in production: only for testing and local development.
         /// </summary>
         /// <param name="sender"></param>
         /// <param name="certificate"></param>
         /// <param name="chain"></param>
         /// <param name="sslPolicyErrors"></param>
         /// <returns></returns>
-        private static bool ValidateServerCertificate(
-              object sender,
+        private bool BypassRemoteServerCertificateValidation(
+              object sender, // SslStream
               X509Certificate? certificate,
               X509Chain? chain,
               SslPolicyErrors sslPolicyErrors)
         {
-            Console.WriteLine("Validating server certificate...");
+            Console.WriteLine("WARNING: BYPASSING SERVER CERTIFICATE VALIDATION");
+            // TODO: add logging
+            return true;
+        }
+
+        /// <summary>
+        /// Invoked by the RemoteCertificateValidationDelegate to authenticate the server endpoint using a common
+        /// shared certificate which must be used by the server and stored in the root CA on the client machine.
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="certificate"></param>
+        /// <param name="chain"></param>
+        /// <param name="sslPolicyErrors"></param>
+        /// <returns></returns>
+        private bool ValidateRemoteServerCertificate(
+              object sender, // SslStream
+              X509Certificate? certificate,
+              X509Chain? chain,
+              SslPolicyErrors sslPolicyErrors)
+        {
+            // TODO: verify chain/certificate against root CA on this machine?
+
+            // NOTE: if the Issuer/Subject of the server cert exactly matches the 'targetHost' parameter and the cert is
+            // stored in the client "Trusted Root Certificate Authorities", then sslPolicyErrors will be SslPolicyErrors.None
+
             if (sslPolicyErrors == SslPolicyErrors.None)
             {
-                Console.WriteLine("   No errors");
                 return true;
             }
 
+            // TODO: add logging
             Console.WriteLine("   Certificate error: {0}", sslPolicyErrors);
 
-#if DEBUG
-            // for self-signed, just return true
-            // TODO: make all this better for production use
-            Console.WriteLine("   OVERRIDE: ACCEPTING CERTIFICATE AS VALID ANYWAY");
-            return true;
-#else
             // Do not allow this client to communicate with unauthenticated servers.
             return false;
-#endif
+        }
+
+        /// <summary>
+        /// Invoked by the RemoteCertificateValidationDelegate to authenticate the server endpoint when the client
+        /// has configuired a-priori knowledge of the certificate thumbprint the server will use.
+        /// </summary>
+        /// <param name="sender"></param>
+        /// <param name="certificate"></param>
+        /// <param name="chain"></param>
+        /// <param name="sslPolicyErrors"></param>
+        /// <param name="thumbprint"></param>
+        /// <returns></returns>
+        private bool ValidateRemoteServerCertificateThumbprint(
+              object sender, // SslStream
+              X509Certificate? certificate,
+              X509Chain? chain,
+              SslPolicyErrors sslPolicyErrors,
+              string thumbprint)
+        {
+            var cert2 = new X509Certificate2(certificate);
+
+            if (sslPolicyErrors == SslPolicyErrors.None)
+            {
+                return true;
+            }
+            else if (thumbprint == cert2.Thumbprint)
+            {
+                return true;
+            }
+
+            // TODO: add logging
+            Console.WriteLine("   Certificate error: {0}", sslPolicyErrors);
+
+            // Do not allow this client to communicate with unauthenticated servers.
+            return false;
         }
     }
 }

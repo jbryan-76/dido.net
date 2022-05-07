@@ -10,11 +10,12 @@ namespace foo
     {
         public static async Task RunClient(string targetHost, int port)
         {
+            var settings = new ClientConnectionSettings { ValidaionPolicy = ServerCertificateValidationPolicies._SKIP_ };
             Console.WriteLine($"Connecting to {targetHost}...");
         
             // create a secure connection to the server. machineName is the host running the server application
             var client = new TcpClient(targetHost, port);
-            var connection = new Connection(client, targetHost);
+            var connection = new Connection(client, targetHost, null, settings);
             
             Console.WriteLine("Client connected.");
 

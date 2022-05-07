@@ -51,5 +51,15 @@
         /// runner server starts on.
         /// </summary>
         public string? Endpoint { get; set;} = null;
+
+        /// <summary>
+        /// The validation policy for authenticating the remote server certificate for SSL connections.
+        /// </summary>
+        public ServerCertificateValidationPolicies ServerValidationPolicy { get; set; } = ServerCertificateValidationPolicies.RootCA;
+
+        /// <summary>
+        /// For ServerCertificateValidationPolicies.Thumbprint, the specific certificate thumbprint to validate against.
+        /// </summary>
+        public string ServerCertificateThumbprint { get; set; } = "";
     }
 }
