@@ -1,13 +1,16 @@
 ﻿using Microsoft.Extensions.Configuration;
 using NLog;
 using System.Diagnostics.CodeAnalysis;
+using System.Net;
+using System.Runtime.InteropServices;
 using System.Security.Cryptography.X509Certificates;
 using Topshelf;
+using Topshelf.Runtime.DotNetCore;
 
 namespace DidoNet
 {
     /// <summary>
-    /// Implements a basic Dido.NET Runner service.
+    /// Implements a basic Dido.NET Runner service for windows.
     /// </summary>
     public class RunnerService : ServiceControl, IDisposable
     {
@@ -55,20 +58,27 @@ namespace DidoNet
         [ExcludeFromCodeCoverage]
         public static void EasyRun<T>(string description, string displayName, string serviceName, IdentityTypes type = IdentityTypes.LocalSystem) where T : class, ServiceControl, new()
         {
-            var rc = HostFactory.Run(x =>
+            var rc = HostFactory.Run(c =>
             {
-                x.Service<T>();
-                x.UseNLog();
+                // change the environment builder on non-windows systems
+                if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                {
+                    c.UseEnvironmentBuilder(
+                      target => new DotNetCoreEnvironmentBuilder(target)
+                    );
+                }
+                c.Service<T>();
+                c.UseNLog();
+                c.SetDescription(description);
+                c.SetDisplayName(displayName);
+                c.SetServiceName(serviceName);
                 switch (type)
                 {
-                    case IdentityTypes.Prompt: x.RunAsPrompt(); break;
-                    case IdentityTypes.Network: x.RunAsNetworkService(); break;
-                    case IdentityTypes.LocalSystem: x.RunAsLocalSystem(); break;
-                    case IdentityTypes.LocalService: x.RunAsLocalService(); break;
+                    case IdentityTypes.Prompt: c.RunAsPrompt(); break;
+                    case IdentityTypes.Network: c.RunAsNetworkService(); break;
+                    case IdentityTypes.LocalSystem: c.RunAsLocalSystem(); break;
+                    case IdentityTypes.LocalService: c.RunAsLocalService(); break;
                 }
-                x.SetDescription(description);
-                x.SetDisplayName(displayName);
-                x.SetServiceName(serviceName);
             });
 
             System.Environment.ExitCode = (int)Convert.ChangeType(rc, rc.GetTypeCode());
@@ -116,7 +126,7 @@ namespace DidoNet
             }
             logger.Info($"Starting with configuration from appsettings.json.");
 
-            X509Certificate2 cert;
+            X509Certificate2? cert;
             if (!string.IsNullOrEmpty(serverConfig.CertFile))
             {
                 cert = new X509Certificate2(serverConfig.CertFile, serverConfig.CertPass);
@@ -126,13 +136,40 @@ namespace DidoNet
             {
                 cert = new X509Certificate2(Convert.FromBase64String(serverConfig.CertBase64), serverConfig.CertPass);
             }
+            else if (!string.IsNullOrEmpty(serverConfig.FindBy))
+            {
+                if (string.IsNullOrEmpty(serverConfig.FindValue))
+                {
+                    throw new InvalidOperationException($"When '{nameof(ServerConfiguration.FindBy)}' is provided '{nameof(ServerConfiguration.FindValue)}' is also required.");
+                }
+
+                if (!Enum.TryParse<X509FindType>(serverConfig.FindBy, out var findType))
+                {
+                    throw new InvalidOperationException($"Value '{serverConfig.FindBy}' could not be parsed to a legal value for type '{nameof(X509FindType)}'. Legal values are: {string.Join(',', Enum.GetValues<X509FindType>())}");
+                }
+
+                // find the certificate from the machine root CA
+                var store = new X509Store(StoreName.Root, StoreLocation.CurrentUser);
+                store.Open(OpenFlags.ReadOnly);
+                var certs = store.Certificates.Find(findType, serverConfig.FindValue, false);
+                cert = certs.Cast<X509Certificate2>().FirstOrDefault();
+                if (cert == null)
+                {
+                    throw new InvalidOperationException($"No certificate corresponding to {serverConfig.FindBy}:{serverConfig.FindValue} could be found in the system root CA.");
+                }
+            }
             else
             {
                 throw new InvalidOperationException($"Missing X509 certificate configuration from appsettings");
             }
 
-            // TODO: serverConfig.IpAddress
-            Server.Start(cert, serverConfig.Port);
+            IPAddress? ipAddress = null;
+            if (!string.IsNullOrEmpty(serverConfig.IpAddress))
+            {
+                ipAddress = IPAddress.Parse(serverConfig.IpAddress);
+            }
+
+            Server.Start(cert, serverConfig.Port, ipAddress);
 
             return true;
         }
@@ -160,24 +197,20 @@ namespace DidoNet
         /// <summary>
         /// The configuration object to access service configuration.
         /// </summary>
-        public IConfiguration Configuration { get; private set; }
+        public IConfiguration? Configuration { get; private set; }
 
         private RunnerServer? Server = null;
 
-        protected RunnerConfiguration RunnerConfig;
+        protected RunnerConfiguration? RunnerConfig;
 
-        //private DateTimeOffset? cancelledTimestamp = null;
         private ILogger logger = NLog.LogManager.GetCurrentClassLogger();
-        //private Func<JobManagerClient> internalTestClient;
-        //private Timer timer;
-        //private int busy = 0;
     }
 
     class Program
     {
         public static void Main()
         {
-            RunnerService.EasyRun<RunnerService>("Dido.NET Runner Service", "My Runner", "MyRunner");
+            RunnerService.EasyRun<RunnerService>("Dido.NET Runner Service", "Dido.NET Runner", "Dido.NET.Runner.Win");
         }
     }
 }
