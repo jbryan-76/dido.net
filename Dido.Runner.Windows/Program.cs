@@ -7,7 +7,7 @@ using System.Security.Cryptography.X509Certificates;
 using Topshelf;
 using Topshelf.Runtime.DotNetCore;
 
-namespace DidoNet
+namespace DidoNet.Runner.Windows
 {
     /// <summary>
     /// Implements a basic Dido.NET Runner service for windows.
@@ -105,73 +105,89 @@ namespace DidoNet
         [ExcludeFromCodeCoverage]
         public bool Start(HostControl hostControl)
         {
-            var environment = System.Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
-
-            // get runner configuration
-            var builder = new ConfigurationBuilder()
-                            .SetBasePath(Directory.GetCurrentDirectory())
-                            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-                            .AddJsonFile($"appsettings.{environment}.json", optional: true, reloadOnChange: true)
-                            .AddEnvironmentVariables();
-
-            Configuration = builder.Build();
-            RunnerConfig = new RunnerConfiguration();
-            Configuration.Bind(RunnerConfig);
-            var serverConfig = new ServerConfiguration();
-            Configuration.Bind(serverConfig);
-
-            if (Server == null)
+            try
             {
-                Server = new RunnerServer(RunnerConfig);
-            }
-            logger.Info($"Starting with configuration from appsettings.json.");
-
-            X509Certificate2? cert;
-            if (!string.IsNullOrEmpty(serverConfig.CertFile))
-            {
-                cert = new X509Certificate2(serverConfig.CertFile, serverConfig.CertPass);
-
-            }
-            else if (!string.IsNullOrEmpty(serverConfig.CertBase64))
-            {
-                cert = new X509Certificate2(Convert.FromBase64String(serverConfig.CertBase64), serverConfig.CertPass);
-            }
-            else if (!string.IsNullOrEmpty(serverConfig.FindBy))
-            {
-                if (string.IsNullOrEmpty(serverConfig.FindValue))
+                // issue warning if nlog configuration is not found
+                if (!File.Exists(Path.Combine(System.Environment.CurrentDirectory, "nlog.config")))
                 {
-                    throw new InvalidOperationException($"When '{nameof(ServerConfiguration.FindBy)}' is provided '{nameof(ServerConfiguration.FindValue)}' is also required.");
+                    Console.WriteLine($"Warning: 'nlog.config' does not exist.");
                 }
 
-                if (!Enum.TryParse<X509FindType>(serverConfig.FindBy, out var findType))
+                var environment = System.Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+
+                // get runner configuration
+                var builder = new ConfigurationBuilder()
+                                .SetBasePath(Directory.GetCurrentDirectory())
+                                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+                                .AddJsonFile("appsettings.development.json", optional: true, reloadOnChange: true)
+                                .AddJsonFile($"appsettings.{environment}.json", optional: true, reloadOnChange: true)
+                                .AddEnvironmentVariables();
+
+                Configuration = builder.Build();
+                RunnerConfig = new RunnerConfiguration();
+                Configuration.Bind("Runner", RunnerConfig);
+                ServerConfig = new ServerConfiguration();
+                Configuration.Bind("Server", ServerConfig);
+
+                if (Server == null)
                 {
-                    throw new InvalidOperationException($"Value '{serverConfig.FindBy}' could not be parsed to a legal value for type '{nameof(X509FindType)}'. Legal values are: {string.Join(',', Enum.GetValues<X509FindType>())}");
+                    Server = new RunnerServer(RunnerConfig);
+                }
+                logger.Info($"Starting with configuration from appsettings.json.");
+
+                X509Certificate2? cert;
+                if (!string.IsNullOrEmpty(ServerConfig.CertFile))
+                {
+                    cert = new X509Certificate2(ServerConfig.CertFile, ServerConfig.CertPass);
+
+                }
+                else if (!string.IsNullOrEmpty(ServerConfig.CertBase64))
+                {
+                    cert = new X509Certificate2(Convert.FromBase64String(ServerConfig.CertBase64), ServerConfig.CertPass);
+                }
+                else if (!string.IsNullOrEmpty(ServerConfig.FindBy))
+                {
+                    if (string.IsNullOrEmpty(ServerConfig.FindValue))
+                    {
+                        throw new InvalidOperationException($"When '{nameof(ServerConfiguration.FindBy)}' is provided '{nameof(ServerConfiguration.FindValue)}' is also required.");
+                    }
+
+                    if (!Enum.TryParse<X509FindType>(ServerConfig.FindBy, out var findType))
+                    {
+                        throw new InvalidOperationException($"Value '{ServerConfig.FindBy}' could not be parsed to a legal value for type '{nameof(X509FindType)}'. Legal values are: {string.Join(',', Enum.GetValues<X509FindType>())}");
+                    }
+
+                    // find the certificate from the machine root CA
+                    var store = new X509Store(StoreName.Root, StoreLocation.CurrentUser);
+                    store.Open(OpenFlags.ReadOnly);
+                    var certs = store.Certificates.Find(findType, ServerConfig.FindValue, false);
+                    cert = certs.Cast<X509Certificate2>().FirstOrDefault();
+                    if (cert == null)
+                    {
+                        throw new InvalidOperationException($"No certificate corresponding to {ServerConfig.FindBy}:{ServerConfig.FindValue} could be found in the system root CA.");
+                    }
+                }
+                else
+                {
+                    throw new InvalidOperationException($"Missing X509 certificate configuration from appsettings");
                 }
 
-                // find the certificate from the machine root CA
-                var store = new X509Store(StoreName.Root, StoreLocation.CurrentUser);
-                store.Open(OpenFlags.ReadOnly);
-                var certs = store.Certificates.Find(findType, serverConfig.FindValue, false);
-                cert = certs.Cast<X509Certificate2>().FirstOrDefault();
-                if (cert == null)
+                IPAddress? ipAddress = null;
+                if (!string.IsNullOrEmpty(ServerConfig.IpAddress))
                 {
-                    throw new InvalidOperationException($"No certificate corresponding to {serverConfig.FindBy}:{serverConfig.FindValue} could be found in the system root CA.");
+                    ipAddress = IPAddress.Parse(ServerConfig.IpAddress);
                 }
+
+                Server.Start(cert, ServerConfig.Port, ipAddress);
+
+                return true;
             }
-            else
+            catch (Exception ex)
             {
-                throw new InvalidOperationException($"Missing X509 certificate configuration from appsettings");
+                logger.Error(ex);
+                Console.WriteLine($"Fatal error: {ex.ToString()}");
+                return false;
             }
-
-            IPAddress? ipAddress = null;
-            if (!string.IsNullOrEmpty(serverConfig.IpAddress))
-            {
-                ipAddress = IPAddress.Parse(serverConfig.IpAddress);
-            }
-
-            Server.Start(cert, serverConfig.Port, ipAddress);
-
-            return true;
         }
 
         /// <summary>
@@ -202,6 +218,8 @@ namespace DidoNet
         private RunnerServer? Server = null;
 
         protected RunnerConfiguration? RunnerConfig;
+
+        protected ServerConfiguration? ServerConfig;
 
         private ILogger logger = NLog.LogManager.GetCurrentClassLogger();
     }

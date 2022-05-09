@@ -7,7 +7,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Dido.Test", "Dido.Test\Dido
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Dido", "Dido\Dido.csproj", "{6893AB72-E188-4397-AF2C-864AE9AA1E20}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Dido.Runner", "Dido.Runner\Dido.Runner.csproj", "{86CAE419-10E9-4A2A-AC35-B393473513BF}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Dido.Runner.Windows", "Dido.Runner.Windows\Dido.Runner.Windows.csproj", "{86CAE419-10E9-4A2A-AC35-B393473513BF}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SslTestServer", "SslTestServer\SslTestServer.csproj", "{5411C451-5A1B-4AFD-847A-D2FCDBD8CC6D}"
 EndProject
@@ -25,6 +25,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 	ProjectSection(SolutionItems) = preProject
 		README.md = README.md
 	EndProjectSection
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SampleApp", "SampleApp\SampleApp.csproj", "{DA3FAF0C-2339-45EB-9C38-01A294C44668}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -68,6 +70,10 @@ Global
 		{2118BCB1-8AAB-4A60-8F6E-51FD17531B56}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{2118BCB1-8AAB-4A60-8F6E-51FD17531B56}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{2118BCB1-8AAB-4A60-8F6E-51FD17531B56}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DA3FAF0C-2339-45EB-9C38-01A294C44668}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DA3FAF0C-2339-45EB-9C38-01A294C44668}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DA3FAF0C-2339-45EB-9C38-01A294C44668}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DA3FAF0C-2339-45EB-9C38-01A294C44668}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

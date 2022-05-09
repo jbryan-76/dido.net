@@ -695,6 +695,8 @@ namespace DidoNet
               X509Chain? chain,
               SslPolicyErrors sslPolicyErrors)
         {
+            Console.WriteLine("INFO: Validating remote certificate using root CA");
+
             // TODO: verify chain/certificate against root CA on this machine?
 
             // NOTE: if the Issuer/Subject of the server cert exactly matches the 'targetHost' parameter and the cert is
@@ -729,13 +731,15 @@ namespace DidoNet
               SslPolicyErrors sslPolicyErrors,
               string thumbprint)
         {
+            Console.WriteLine("INFO: Validating remote certificate using thumbprint");
+
             var cert2 = new X509Certificate2(certificate);
 
             if (sslPolicyErrors == SslPolicyErrors.None)
             {
                 return true;
             }
-            else if (thumbprint == cert2.Thumbprint)
+            else if (String.Compare(thumbprint, cert2.Thumbprint, true) == 0)
             {
                 return true;
             }

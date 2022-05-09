@@ -46,7 +46,7 @@
         /// <summary>
         /// The uri for applications to use to connect to a runner.
         /// Setting this explicitly may be necessary for proper routing when
-        /// firewalls and load balancers and network translation services are in use.
+        /// load balancers and network translation services are in use.
         /// If not provided, will default to the endpoint (ip address + port) the 
         /// runner server starts on.
         /// </summary>

@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "SampleApp": {
+      "commandName": "Project",
+      "commandLineArgs": "https://localhost:4940"
+    }
+  }
+}
