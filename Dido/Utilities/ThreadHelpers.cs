@@ -19,6 +19,10 @@
             Thread.Sleep(Math.Max(milliseconds, 1));
         }
 
+        /// <summary>
+        /// Prints a debug message to the console including a timestamp and the current thread id.
+        /// </summary>
+        /// <param name="message"></param>
         public static void Debug(string message)
         {
             if (DebuggingEnabled)

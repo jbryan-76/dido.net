@@ -27,7 +27,7 @@
         public int TimeoutInMs { get; set; } = Timeout.Infinite;
 
         /// <summary>
-        /// The default mode that will be used for executing tasks.
+        /// The default mode that will be used for executing tasks when using Run() or RunAsync().
         /// </summary>
         public ExecutionModes ExecutionMode { get; set; }
             = ExecutionModes.Local;

@@ -23,6 +23,10 @@
 
         // TODO: set current try? maxtries?
 
+        // TODO: provide a generic MessageChannel that connects to something on the application side
+        public MessageChannel MessageChannel { get; internal set; }
+
+        // TODO: replace this with the IO layer
         internal Channel FilesChannel { get; set; }
     }
 }

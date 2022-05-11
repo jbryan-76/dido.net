@@ -59,11 +59,6 @@ namespace DidoNet
                 FilesChannel = FilesChannel,
                 Cancel = CancelSource.Token
             };
-
-            // TODO: cleanup once stable
-            TasksChannel.Channel.Name = "RUNNER";
-            FilesChannel.Name = "RUNNER";
-            AssembliesChannel.Channel.Name = "RUNNER";
         }
 
         /// <summary>

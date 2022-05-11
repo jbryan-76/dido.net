@@ -119,6 +119,8 @@
         /// <exception cref="InvalidOperationException"></exception>
         public IMessage ReceiveMessage()
         {
+            // TODO: add timeout
+
             // TODO: send message length too so can read+discard on error?
             ThreadHelpers.Debug($"{ChannelNumber} {Channel.Name} reading message type");
             var typeName = Channel.ReadString();
@@ -151,6 +153,8 @@
         /// <exception cref="InvalidOperationException"></exception>
         public T ReceiveMessage<T>() where T : class, IMessage
         {
+            // TODO: add timeout
+
             var message = ReceiveMessage();
             if (message is T)
             {

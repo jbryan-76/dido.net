@@ -43,6 +43,12 @@ namespace DidoNet
         public delegate void ExceptionHandler(Exception ex);
 
         /// <summary>
+        /// The optional global configuration. If an explicit configuration is not provided to a Run method,
+        /// the global configuration will be used.
+        /// </summary>
+        public static Configuration? GlobalConfiguration = null;
+
+        /// <summary>
         /// Execute the provided expression as a task and return its result.
         /// </summary>
         /// <typeparam name="Tprop"></typeparam>
@@ -52,14 +58,21 @@ namespace DidoNet
         /// <exception cref="InvalidOperationException"></exception>
         public static Task<Tprop> RunAsync<Tprop>(
             Expression<Func<ExecutionContext, Tprop>> expression,
-            Configuration? configuration = null, CancellationToken? cancellationToken = null)
+            Configuration? configuration = null,
+            CancellationToken? cancellationToken = null)
         {
-            configuration ??= new Configuration();
+            configuration ??= GlobalConfiguration ?? new Configuration();
 
             switch (configuration.ExecutionMode)
             {
                 case ExecutionModes.Local:
                     return RunLocalAsync<Tprop>(expression, configuration, cancellationToken);
+                case ExecutionModes.DebugLocal:
+#if DEBUG
+                    return RunLocalAsync<Tprop>(expression, configuration, cancellationToken);
+#else
+                    return RunRemoteAsync<Tprop>(expression, configuration, cancellationToken);
+#endif
                 case ExecutionModes.Remote:
                     return RunRemoteAsync<Tprop>(expression, configuration, cancellationToken);
                 default:
@@ -69,7 +82,6 @@ namespace DidoNet
 
         /// <summary>
         /// Execute the provided expression as a task and invoke the provided handler with the result.
-        /// Use this form when the expression is expected to take a long time to complete.
         /// <para/>NOTE the provided handler is run in a separate thread.
         /// </summary>
         /// <typeparam name="Tprop"></typeparam>
@@ -101,7 +113,7 @@ namespace DidoNet
 
         /// <summary>
         /// Execute the provided expression as a task locally (ie using the current application domain
-        /// and environment).
+        /// and environment), regardless of the value of configuration.ExecutionMode.
         /// </summary>
         /// <typeparam name="Tprop"></typeparam>
         /// <param name="expression"></param>
@@ -111,7 +123,7 @@ namespace DidoNet
             Configuration? configuration = null,
             CancellationToken? cancellationToken = null)
         {
-            configuration ??= new Configuration();
+            configuration ??= GlobalConfiguration ?? new Configuration();
 
             // create an (unused) cancellation token source if no cancellation token has been provided
             CancellationTokenSource? source = null;
@@ -142,7 +154,7 @@ namespace DidoNet
         // TODO: AddJobHandler(id,handler) => invoke handler when job is done (and have background thread poll)
 
         /// <summary>
-        /// Execute the provided expression as a task in a remote environment.
+        /// Execute the provided expression as a task in a remote environment, regardless of the value of configuration.ExecutionMode.
         /// </summary>
         /// <typeparam name="Tprop"></typeparam>
         /// <param name="expression"></param>
@@ -229,6 +241,7 @@ namespace DidoNet
                     applicationChannel.Send(new RunnerRequestMessage());
 
                     // receive and process the response
+                    // TODO: add timeout
                     var message = applicationChannel.ReceiveMessage();
                     switch (message)
                     {
@@ -254,11 +267,6 @@ namespace DidoNet
                 var tasksChannel = new MessageChannel(runnerConnection, Constants.TaskChannelNumber);
                 var assembliesChannel = new MessageChannel(runnerConnection, Constants.AssemblyChannelNumber);
                 var filesChannel = runnerConnection.GetChannel(Constants.FileChannelNumber);
-
-                // TODO: cleanup once stable
-                tasksChannel.Channel.Name = "DIDO";
-                assembliesChannel.Channel.Name = "DIDO";
-                filesChannel.Name = "DIDO";
 
                 // TODO: handle file messages
 
@@ -319,7 +327,7 @@ namespace DidoNet
                     }
                 }
 
-                // when the cancellation token is canceled, send the cancel message to the runner
+                // when the cancellation token is canceled, send a cancel message to the runner
                 cancellationToken.Register(() =>
                 {
                     ThreadHelpers.Debug($"dido: sending cancel message");
