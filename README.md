@@ -91,7 +91,7 @@ When a Dido API method is configured for Remote Execution with a single runner, 
 ### Clustered Runner Execution
 ![baseline execution](./documentation/images/cluster_execution.png)
 
-When a Dido API method is configured for Remote Execution with a mediator, the code is executed remotely using the best available runner that matches configured filter criteria. When paired with appropriate monitoring and auto-scaling solutions such as Kubernetes, the runner pool can dynamically adjust to load conditions from one or more applications, without no configuration or code changes required by the application.
+When a Dido API method is configured for Remote Execution with a mediator, the code is executed remotely using the best available runner that matches configured filter criteria. When paired with appropriate monitoring and auto-scaling solutions such as Kubernetes, the runner pool can dynamically adjust to load conditions from one or more applications, with no configuration nor code changes required by the application.
 
 ### Use Cases
 
