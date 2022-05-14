@@ -266,9 +266,10 @@ namespace DidoNet
                 // create communication channels to the runner for: task messages, assemblies, files
                 var tasksChannel = new MessageChannel(runnerConnection, Constants.TaskChannelNumber);
                 var assembliesChannel = new MessageChannel(runnerConnection, Constants.AssemblyChannelNumber);
-                var filesChannel = runnerConnection.GetChannel(Constants.FileChannelNumber);
+                var filesChannel = new MessageChannel(runnerConnection, Constants.FileChannelNumber);
 
-                // TODO: handle file messages
+                // handle file messages
+                filesChannel.OnMessageReceived = FileMessageHandler;
 
                 // handle assembly messages
                 assembliesChannel.OnMessageReceived = async (message, channel) =>
@@ -431,10 +432,20 @@ namespace DidoNet
             Configuration configuration,
             CancellationToken cancellationToken)
         {
+            // to adequately test end-to-end processing and the current configuration,
+            // use a degenerate loopback connection for file channel messages
+            var loopbackConnection = new Connection();
+            var filesChannel = new MessageChannel(loopbackConnection, Constants.FileChannelNumber);
+            filesChannel.OnMessageReceived = FileMessageHandler;
+
             var context = new ExecutionContext
             {
                 Cancel = cancellationToken,
                 ExecutionMode = ExecutionModes.Local,
+                // in debug local mode, use a loopback connection to ensure all IO works as expected
+                // when the expression is executed remotely
+                File = new IO.ProxyFile(filesChannel),
+                Directory = new IO.ProxyDirectory(filesChannel)
             };
 
             var env = new Environment
@@ -446,7 +457,7 @@ namespace DidoNet
 
             try
             {
-                // to adequately test the end-to-end processing and current configuration,
+                // to adequately test end-to-end processing and the current configuration,
                 // serialize and deserialize the expression
                 var data = await SerializeAsync(expression);
                 var func = await DeserializeAsync<Tprop>(data, env);
@@ -480,6 +491,9 @@ namespace DidoNet
             {
                 Cancel = cancellationToken,
                 ExecutionMode = ExecutionModes.Local,
+                // in release local mode, pass-through file and directory IO directly to the local filesystem
+                File = new IO.ProxyFile(null),
+                Directory = new IO.ProxyDirectory(null)
             };
 
             // when executing locally in release mode, simply compile and invoke the expression,
@@ -492,6 +506,14 @@ namespace DidoNet
                 .WaitAsync(TimeSpan.FromMilliseconds(configuration.TimeoutInMs));
             cancellationToken.ThrowIfCancellationRequested();
             return result;
+        }
+
+        internal static async void FileMessageHandler(IMessage message, MessageChannel channel)
+        {
+            switch (message)
+            {
+                // TODO: 
+            }
         }
     }
 }

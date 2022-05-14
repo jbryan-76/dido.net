@@ -1,4 +1,5 @@
-﻿using System.Collections.Concurrent;
+﻿using NLog;
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
@@ -54,7 +55,13 @@ namespace DidoNet
         /// <summary>
         /// The underlying secure socket stream.
         /// </summary>
-        private readonly SslStream Stream;
+        private readonly SslStream? SecureStream = null;
+
+        private readonly QueueBufferStream? LoopbackStream = null;
+
+        private readonly Stream ReadStream;
+
+        private readonly Stream WriteStream;
 
         /// <summary>
         /// A queue of frames to write to the underlying connection endpoint.
@@ -126,9 +133,14 @@ namespace DidoNet
         private int RemoteHeartbeatPeriodInSeconds = DefaultHeartbeatPeriodInSeconds;
 
         /// <summary>
-        /// A thread-safe collection of all Channels.
+        /// A thread-safe collection of all Channels using the connection.
         /// </summary>
         private ConcurrentDictionary<ushort, Channel> Channels = new ConcurrentDictionary<ushort, Channel>();
+
+        /// <summary>
+        /// The class logger instance.
+        /// </summary>
+        private ILogger Logger = LogManager.GetCurrentClassLogger();
 
         /// <summary>
         /// Create a new secure connection in a server role using the provided endpoint 
@@ -144,13 +156,13 @@ namespace DidoNet
 
             Log("creating sslstream as server");
             // if a certificate is supplied, the connection is implied to be a server
-            Stream = new SslStream(endpoint.GetStream(), false);
+            ReadStream = WriteStream = SecureStream = new SslStream(endpoint.GetStream(), false);
 
             try
             {
                 Log("stream created - authenticating");
                 // Authenticate the server but don't require the client to authenticate.
-                Stream.AuthenticateAsServer(serverCertificate, clientCertificateRequired: false, checkCertificateRevocation: true);
+                SecureStream.AuthenticateAsServer(serverCertificate, clientCertificateRequired: false, checkCertificateRevocation: true);
                 Log("authenticated");
 
                 FinishConnecting();
@@ -186,9 +198,7 @@ namespace DidoNet
         /// <param name="endpoint">The TcpClient connected to the remote server endpoint.</param>
         /// <param name="targetHost">The hostname of the remote server which is used as part of SSL to authenticate the connection.</param>
         /// <param name="name">The optional name for the connection.</param>
-        /// <param name="validateCertificate">Indicates whether to validate the server's certificate or not.
-        /// <para/>WARNING: this parameter is to support more efficient development and testing, but should never
-        /// be set to false in production.</param>
+        /// <param name="settings">The settings to use when configuring the connection.</param>
         public Connection(TcpClient endpoint, string targetHost, string? name = null, ClientConnectionSettings? settings = null)
         {
             Name = name ?? "";
@@ -198,7 +208,7 @@ namespace DidoNet
 
             Log("creating sslstream as client");
             // otherwise the connection is implied to be a client
-            Stream = new SslStream(
+            ReadStream = WriteStream = SecureStream = new SslStream(
                 EndPoint.GetStream(),
                 false,
                 settings.ValidaionPolicy == ServerCertificateValidationPolicies._SKIP_
@@ -213,7 +223,7 @@ namespace DidoNet
             try
             {
                 Log($"Authenticating to host {targetHost}.");
-                Stream.AuthenticateAsClient(targetHost);
+                SecureStream.AuthenticateAsClient(targetHost);
 
                 FinishConnecting();
             }
@@ -235,11 +245,22 @@ namespace DidoNet
         /// <param name="host"></param>
         /// <param name="port"></param>
         /// <param name="name"></param>
-        /// <param name="validateCertificate">Indicates whether to validate the server's certificate or not.
-        /// <para/>WARNING: this parameter is to support more efficient development and testing, but should never
-        /// be set to false in production.</param>
+        /// <param name="settings">The settings to use when configuring the connection.</param>
         public Connection(string host, int port, string? name = null, ClientConnectionSettings? settings = null)
             : this(new TcpClient(host, port), host, name, settings) { }
+
+        /// <summary>
+        /// Create a new loopback connection that does not use the network, but otherwise allows testing 
+        /// all communications and data processing.
+        /// </summary>
+        public Connection(string? name = null)
+        {
+            Name = name ?? "";
+
+            ReadStream = WriteStream = LoopbackStream = new QueueBufferStream();
+
+            FinishConnecting();
+        }
 
         /// <summary>
         /// Cleans up and disposes all managed and unmanaged resources.
@@ -266,7 +287,8 @@ namespace DidoNet
                     exceptions.Add(WriteThreadException);
                 }
 
-                Stream.Dispose();
+                SecureStream?.Dispose();
+                LoopbackStream?.Dispose();
                 ReadBuffer.Dispose();
                 HeartbeatTimer?.Dispose();
             }
@@ -418,18 +440,26 @@ namespace DidoNet
         {
             Interlocked.Exchange(ref Connected, 1);
 
-            var remote = (IPEndPoint)EndPoint.Client.RemoteEndPoint;
-            var local = (IPEndPoint)EndPoint.Client.LocalEndPoint;
-            Log($"connected. Local = {local.Address}:{local.Port}. Remote = {remote.Address}:{remote.Port}");
+            if (SecureStream != null)
+            {
+                // send a heartbeat frame periodically to keep the connection active
+                HeartbeatTimer = new Timer((arg) => SendHeartbeat(), null, 0, DefaultHeartbeatPeriodInSeconds * 1000);
+
+                var remote = (IPEndPoint)EndPoint.Client.RemoteEndPoint;
+                var local = (IPEndPoint)EndPoint.Client.LocalEndPoint;
+                Logger.Info($"Connection established from {local.Address}:{local.Port} to {remote.Address}:{remote.Port}");
+            }
+            else
+            {
+                // TODO: log loopback info
+                Logger.Info($"Loopback connection created.");
+            }
 
             // start separate threads to read and write data
             ReadThread = new Thread(() => ReadLoop());
             ReadThread.Start();
             WriteThread = new Thread(() => WriteLoop());
             WriteThread.Start();
-
-            // send a heartbeat frame periodically to keep the connection active
-            HeartbeatTimer = new Timer((arg) => SendHeartbeat(), null, 0, DefaultHeartbeatPeriodInSeconds * 1000);
 
             Interlocked.Exchange(ref IsDisconnecting, 0);
         }
@@ -477,12 +507,13 @@ namespace DidoNet
             // TODO: expore async read optimization strategies
             // https://devblogs.microsoft.com/pfxteam/awaiting-socket-operations/
 
-            // set a timeout so read methods do not block too long.
-            // this allows for periodically checking the Connected status to 
-            // exit the loop when either this object or the remote side disconnects.
-            Stream.ReadTimeout = 100;
             try
             {
+                // set a timeout on the stream so read methods do not block too long.
+                // this allows for periodically checking the Connected status to 
+                // exit the loop when either this object or the remote side disconnects.
+                ReadStream.ReadTimeout = 100;
+
                 // TODO: how big should this buffer be?
                 // empirically it appears that 32k is standard for the underlying network classes
                 byte[] data = new byte[32 * 1024];
@@ -491,7 +522,7 @@ namespace DidoNet
                     try
                     {
                         // read as much data as is available and append to the read buffer
-                        int read = Stream.Read(data, 0, data.Length);
+                        int read = ReadStream.Read(data, 0, data.Length);
                         if (read > 0)
                         {
                             ReadBuffer.Write(data, 0, read);
@@ -636,26 +667,25 @@ namespace DidoNet
         private void WriteFrame(Frame frame)
         {
             ThreadHelpers.Debug($"connection {Name} writing frame {frame}");
-            Stream.WriteByte(frame.Type);
-            Stream.WriteUInt16BE(frame.Channel);
-            Stream.WriteInt32BE(frame.Length);
+            WriteStream.WriteByte(frame.Type);
+            WriteStream.WriteUInt16BE(frame.Channel);
+            WriteStream.WriteInt32BE(frame.Length);
             if (frame.Length > 0)
             {
-                Stream.Write(frame.Payload, 0, frame.Payload.Length);
+                WriteStream.Write(frame.Payload, 0, frame.Payload.Length);
             }
-            Stream.Flush();
+            WriteStream.Flush();
         }
 
-        // TODO: add a configurable ILogger
         private void Log(string message)
         {
             if (!string.IsNullOrWhiteSpace(Name))
             {
-                Console.WriteLine($"[{DateTimeOffset.UtcNow.ToString("o")}] ({Name}) {message}");
+                Logger.Debug($"[{DateTimeOffset.UtcNow.ToString("o")}] ({Name}) {message}");
             }
             else
             {
-                Console.WriteLine($"[{DateTimeOffset.UtcNow.ToString("o")}] {message}");
+                Logger.Debug($"[{DateTimeOffset.UtcNow.ToString("o")}] {message}");
             }
         }
 
@@ -675,8 +705,7 @@ namespace DidoNet
               X509Chain? chain,
               SslPolicyErrors sslPolicyErrors)
         {
-            Console.WriteLine("WARNING: BYPASSING SERVER CERTIFICATE VALIDATION");
-            // TODO: add logging
+            Logger.Warn("BYPASSING SERVER CERTIFICATE VALIDATION");
             return true;
         }
 
@@ -695,7 +724,7 @@ namespace DidoNet
               X509Chain? chain,
               SslPolicyErrors sslPolicyErrors)
         {
-            Console.WriteLine("INFO: Validating remote certificate using root CA");
+            Logger.Info("Validating remote certificate using root CA");
 
             // TODO: verify chain/certificate against root CA on this machine?
 
@@ -707,8 +736,7 @@ namespace DidoNet
                 return true;
             }
 
-            // TODO: add logging
-            Console.WriteLine("   Certificate error: {0}", sslPolicyErrors);
+            Logger.Error("Certificate error: {0}", sslPolicyErrors);
 
             // Do not allow this client to communicate with unauthenticated servers.
             return false;
@@ -731,7 +759,7 @@ namespace DidoNet
               SslPolicyErrors sslPolicyErrors,
               string thumbprint)
         {
-            Console.WriteLine("INFO: Validating remote certificate using thumbprint");
+            Logger.Info("Validating remote certificate using thumbprint");
 
             var cert2 = new X509Certificate2(certificate);
 
@@ -744,8 +772,7 @@ namespace DidoNet
                 return true;
             }
 
-            // TODO: add logging
-            Console.WriteLine("   Certificate error: {0}", sslPolicyErrors);
+            Logger.Error("Certificate error: {0}", sslPolicyErrors);
 
             // Do not allow this client to communicate with unauthenticated servers.
             return false;

@@ -1,4 +1,5 @@
-﻿using System.Runtime.Loader;
+﻿using NLog;
+using System.Runtime.Loader;
 
 namespace DidoNet
 {
@@ -32,12 +33,17 @@ namespace DidoNet
 
         private MessageChannel AssembliesChannel { get; set; }
 
-        private Channel FilesChannel { get; set; }
+        private MessageChannel FilesChannel { get; set; }
 
         /// <summary>
         /// Used to indicate when the task thread is complete.
         /// </summary>
         private AutoResetEvent TaskComplete { get; set; } = new AutoResetEvent(false);
+
+        /// <summary>
+        /// The class logger instance.
+        /// </summary>
+        private ILogger Logger = LogManager.GetCurrentClassLogger();
 
         /// <summary>
         /// Create a new worker to process application task requests on the provided connection.
@@ -49,14 +55,16 @@ namespace DidoNet
 
             // create communication channels to the application for: task communication, assemblies, files
             TasksChannel = new MessageChannel(Connection, Constants.TaskChannelNumber);
-            FilesChannel = Connection.GetChannel(Constants.FileChannelNumber);
+            FilesChannel = new MessageChannel(Connection, Constants.FileChannelNumber);
             AssembliesChannel = new MessageChannel(Connection, Constants.AssemblyChannelNumber);
 
             // create the execution context that is available to the expression while it's running
             Context = new ExecutionContext
             {
                 ExecutionMode = ExecutionModes.Local,
-                FilesChannel = FilesChannel,
+                //FilesChannel = FilesChannel,
+                File = new IO.ProxyFile(FilesChannel),
+                Directory = new IO.ProxyDirectory(FilesChannel),
                 Cancel = CancelSource.Token
             };
         }
@@ -67,6 +75,7 @@ namespace DidoNet
         /// <param name="onComplete"></param>
         public void Start(Action<TaskWorker> onComplete)
         {
+            Logger.Info($"Worker task {Id} starting");
             OnComplete = onComplete;
             WorkThread = new Thread(() => DoWork());
             WorkThread.Start();
@@ -150,6 +159,7 @@ namespace DidoNet
             }
             finally
             {
+                Logger.Info($"Worker task {Id} finished");
                 OnComplete?.Invoke(this);
             }
         }

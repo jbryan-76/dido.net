@@ -67,6 +67,8 @@ namespace DidoNet.Runner.Windows
                       target => new DotNetCoreEnvironmentBuilder(target)
                     );
                 }
+
+                // now start the service
                 c.Service<T>();
                 c.UseNLog();
                 c.SetDescription(description);
@@ -83,19 +85,6 @@ namespace DidoNet.Runner.Windows
 
             System.Environment.ExitCode = (int)Convert.ChangeType(rc, rc.GetTypeCode());
         }
-
-        ///// <summary>
-        ///// This constructor is only used for internal testing
-        ///// </summary>
-        //internal void StartTest(Func<JobManagerClient> client, RunnerSettings config)
-        //{
-        //    internalTestClient = client;
-        //    timer = new Timer(
-        //        (cfg) => CheckForNextJob(cfg),
-        //        config,
-        //        TimeSpan.Zero,
-        //        TimeSpan.FromSeconds(config.JobCheckFrequencyInSeconds));
-        //}
 
         /// <summary>
         /// Used by TopShelf to start the service.
@@ -118,7 +107,7 @@ namespace DidoNet.Runner.Windows
                 // get runner configuration
                 var builder = new ConfigurationBuilder()
                                 .SetBasePath(Directory.GetCurrentDirectory())
-                                .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+                                .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
                                 .AddJsonFile("appsettings.development.json", optional: true, reloadOnChange: true)
                                 .AddJsonFile($"appsettings.{environment}.json", optional: true, reloadOnChange: true)
                                 .AddEnvironmentVariables();
@@ -129,12 +118,9 @@ namespace DidoNet.Runner.Windows
                 ServerConfig = new ServerConfiguration();
                 Configuration.Bind("Server", ServerConfig);
 
-                if (Server == null)
-                {
-                    Server = new RunnerServer(RunnerConfig);
-                }
-                logger.Info($"Starting with configuration from appsettings.json.");
+                Server = new RunnerServer(RunnerConfig);
 
+                // load the certificate to use for encrypting connections
                 X509Certificate2? cert;
                 if (!string.IsNullOrEmpty(ServerConfig.CertFile))
                 {
@@ -199,6 +185,8 @@ namespace DidoNet.Runner.Windows
         public bool Stop(HostControl hostControl)
         {
             Server?.Stop();
+            Server?.Dispose();
+            Server = null;
             return true;
         }
 
@@ -228,7 +216,7 @@ namespace DidoNet.Runner.Windows
     {
         public static void Main()
         {
-            RunnerService.EasyRun<RunnerService>("Dido.NET Runner Service", "Dido.NET Runner", "Dido.NET.Runner.Win");
+            RunnerService.EasyRun<RunnerService>("Dido.NET Runner Service", "Dido.NET Runner", "Dido.NET.Runner");
         }
     }
 }

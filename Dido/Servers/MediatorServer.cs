@@ -1,4 +1,5 @@
-﻿using System.Collections.Concurrent;
+﻿using NLog;
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
@@ -7,6 +8,11 @@ namespace DidoNet
 {
     public class MediatorServer
     {
+        /// <summary>
+        /// The unique id of the server instance.
+        /// </summary>
+        public string Id { get; private set; } = Guid.NewGuid().ToString();
+
         /// <summary>
         /// The current configuration of the mediator.
         /// </summary>
@@ -43,6 +49,11 @@ namespace DidoNet
         private ConcurrentQueue<ConnectedClient> CompletedClients = new ConcurrentQueue<ConnectedClient>();
 
         /// <summary>
+        /// The class logger instance.
+        /// </summary>
+        private ILogger Logger = LogManager.GetCurrentClassLogger();
+
+        /// <summary>
         /// Create a new mediator server with the given configuration.
         /// </summary>
         /// <param name="configuration"></param>
@@ -71,6 +82,8 @@ namespace DidoNet
         {
             ip = ip ?? IPAddress.Any;
 
+            Logger.Info($"Starting mediator {Id} listening at {ip}:{port}");
+
             // listen for incoming connections
             var listener = new TcpListener(ip, port);
             listener.Start();
@@ -86,6 +99,8 @@ namespace DidoNet
         /// </summary>
         public void Stop()
         {
+            Logger.Info($"Stopping mediator {Id}...");
+
             // signal the work thread to stop
             Interlocked.Exchange(ref IsRunning, 0);
 
@@ -96,6 +111,8 @@ namespace DidoNet
             // cleanup all clients
             DisconnectAndCleanupActiveClients();
             CleanupCompletedClients();
+
+            Logger.Info($"  Mediator {Id} stopped");
         }
 
         /// <summary>
@@ -315,16 +332,26 @@ namespace DidoNet
             }
         }
 
+        /// <summary>
+        /// Tracks a connection from an application or runner, including its local processing thread.
+        /// </summary>
         private class ConnectedClient
         {
+            /// <summary>
+            /// The proecssing thread for the client.
+            /// </summary>
             public Thread Thread { get; private set; }
 
+            /// <summary>
+            /// The communications connection for the client.
+            /// </summary>
             public Connection Connection { get; private set; }
 
-            private Action<ConnectedClient>? OnComplete { get; set; }
-
-            private long IsRunning = 0;
-
+            /// <summary>
+            /// Create a new connected client instance.
+            /// </summary>
+            /// <param name="thread"></param>
+            /// <param name="connection"></param>
             public ConnectedClient(Thread thread, Connection connection)
             {
                 Thread = thread;
@@ -332,6 +359,9 @@ namespace DidoNet
             }
         }
 
+        /// <summary>
+        /// Tracks the state and status of a connected runner.
+        /// </summary>
         internal class Runner : IRunnerDetail, IRunnerStatus
         {
             /// <summary>
@@ -395,6 +425,10 @@ namespace DidoNet
             /// </summary>
             public int QueueLength { get; set; } = 0;
 
+            /// <summary>
+            /// Initialize the runner metadata from the provided message.
+            /// </summary>
+            /// <param name="message"></param>
             public void Init(RunnerStartMessage message)
             {
                 Platform = message.Platform;
@@ -407,6 +441,10 @@ namespace DidoNet
                 State = RunnerStates.Starting;
             }
 
+            /// <summary>
+            /// Update the runner status from the provided message.
+            /// </summary>
+            /// <param name="message"></param>
             public void Update(RunnerStatusMessage message)
             {
                 State = message.State;

@@ -1,4 +1,5 @@
-﻿using System.Collections.Concurrent;
+﻿using NLog;
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
@@ -62,6 +63,11 @@ namespace DidoNet
         private ConcurrentQueue<TaskWorker> QueuedWorkers = new ConcurrentQueue<TaskWorker>();
 
         /// <summary>
+        /// The class logger instance.
+        /// </summary>
+        private ILogger Logger = LogManager.GetCurrentClassLogger();
+
+        /// <summary>
         /// Create a new runner server with the given configuration.
         /// </summary>
         /// <param name="configuration"></param>
@@ -96,12 +102,16 @@ namespace DidoNet
         {
             ip ??= IPAddress.Any;
 
+            Logger.Info($"Starting runner {Id} listening at {ip}:{port}");
+
             // update the configured endpoint applications should use to connect,
             // if one was not provided
             if (Configuration.Endpoint == null)
             {
                 Configuration.Endpoint = new UriBuilder("https", ip.ToString(), port).Uri.ToString();
             }
+
+            Logger.Info($"  Endpoint = {Configuration.Endpoint}");
 
             if (Configuration.MediatorUri != null)
             {
@@ -122,6 +132,7 @@ namespace DidoNet
                 MediatorChannel.Send(new RunnerStatusMessage(RunnerStates.Starting, 0, 0));
 
                 // TODO: start an infrequent (eg 60s) heartbeat to mediator to update status and environment stats (eg cpu, ram)?
+                Logger.Info($"Runner {Id} using mediator = {Configuration.MediatorUri}");
             }
 
             // listen for incoming connections
@@ -142,6 +153,8 @@ namespace DidoNet
         /// </summary>
         public void Stop()
         {
+            Logger.Info($"Stopping runner {Id}...");
+
             // inform the mediator that this runner is stopping
             MediatorChannel?.Send(new RunnerStatusMessage(RunnerStates.Stopping, 0, 0));
 
@@ -151,6 +164,8 @@ namespace DidoNet
             // wait for it to finish
             WorkLoopThread?.Join();
             WorkLoopThread = null;
+
+            Logger.Info($"  Runner {Id} stopped");
         }
 
         /// <summary>

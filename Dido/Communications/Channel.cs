@@ -24,10 +24,7 @@ namespace DidoNet
         /// will not be available until the channel is disposed, where it will be wrapped
         /// in an AggregateException.
         /// </summary>
-        //public event ChannelDataAvailableHandler? OnDataAvailable = null;
         public ChannelDataAvailableHandler? OnDataAvailable = null;
-
-        //public AutoResetEvent OnDataAvailable { get; private set; } = new AutoResetEvent(false);
 
         public string Name { get; set; }
 
@@ -37,7 +34,7 @@ namespace DidoNet
         public ushort ChannelNumber { get; private set; }
 
         /// <summary>
-        /// The Connection the channel 
+        /// The Connection the channel is using for data tranmission.
         /// </summary>
         public Connection Connection { get; private set; }
 
@@ -81,7 +78,14 @@ namespace DidoNet
         /// </summary>
         private ConcurrentQueue<byte[]> ReadBuffer = new ConcurrentQueue<byte[]>();
 
+        /// <summary>
+        /// A thread responsible for reading and buffering data from the underlying connection.
+        /// </summary>
         private Thread? ReadThread = null;
+
+        /// <summary>
+        /// Any exception thrown by the ReadThread, to be held and re-thrown when the thread joins.
+        /// </summary>
         private Exception? ReadThreadException = null;
 
         /// <summary>
@@ -333,6 +337,9 @@ namespace DidoNet
             }
         }
 
+        /// <summary>
+        /// Continuously monitors for new channel data to trigger its consumption.
+        /// </summary>
         private void ReadLoop()
         {
             try

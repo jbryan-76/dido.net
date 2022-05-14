@@ -3,8 +3,9 @@
     /// <summary>
     /// A variable-length, thread-safe FIFO buffer that acts like a byte queue with Stream semantics:
     /// Data writes are always appended to the end of the buffer, but reads are random-access
-    /// using the Stream Position/Seek API. Once data has been consumed, either automatically after
-    /// read or explicitly using Truncate(), the buffer size must be reduced to avoid unbounded growth.
+    /// using the Stream Position/Seek API. Once data has been consumed the buffer size must be reduced 
+    /// to avoid unbounded growth, either automatically after reading via the AutoTruncate property,
+    /// or explicitly using Truncate().
     /// </summary>
     internal class QueueBufferStream : Stream
     {
@@ -223,7 +224,7 @@
                 }
                 else if (newPosition < 0 || newPosition > Length)
                 {
-                    throw new IndexOutOfRangeException($"Position {Position} is outside the bounds of the buffer.");
+                    throw new IndexOutOfRangeException($"Position {newPosition} is outside the bounds of the buffer.");
                 }
 
                 // update the tracking fields
