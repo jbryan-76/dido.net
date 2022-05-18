@@ -101,11 +101,30 @@ namespace DidoNet.Test.Common
         }
 
         /// <summary>
+        /// Block and wait for all in-flight data to finish transmitting, 
+        /// and all channels to empty of pending data.
+        /// </summary>
+        public void WaitForAllClear()
+        {
+            while (ServerRecievedFrames.Count < ClientTransmittedFrames.Count
+                || ClientRecievedFrames.Count < ServerTransmittedFrames.Count
+                || ClientConnection.InUse()
+                || ServerConnection.InUse()
+                )
+            {
+                ThreadHelpers.Yield();
+            }
+        }
+
+        /// <summary>
         /// Close the connections.
         /// </summary>
         /// <returns></returns>
         public void Close()
         {
+            // before closing, wait for all in-flight data to finish transmitting
+            WaitForAllClear();
+
             var exceptions = new List<Exception>();
             try
             {

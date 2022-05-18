@@ -7,8 +7,15 @@
     /// to avoid unbounded growth, either automatically after reading via the AutoTruncate property,
     /// or explicitly using Truncate().
     /// </summary>
-    internal class QueueBufferStream : Stream
+    public class QueueBufferStream : Stream
     {
+        public enum ReadStrategies
+        {
+            Block,
+            Partial,
+            Full
+        }
+
         /// <summary>
         /// Indicates the position where the next Read() will start.
         /// Writes are always appended to the end of the stream.
@@ -46,6 +53,8 @@
         /// <para/>Default value is 'true'.
         /// </summary>
         public bool AutoTruncate { get; set; } = true;
+
+        public ReadStrategies ReadStrategy { get; set; } = ReadStrategies.Full;
 
         /// <summary>
         /// Indicates whether there is any data to read.
@@ -144,51 +153,122 @@
         /// <exception cref="EndOfStreamException"></exception>
         public override int Read(byte[] buffer, int offset, int count)
         {
-            lock (Segments)
+            if (ReadStrategy == ReadStrategies.Full)
             {
-                // if there is not enough data to read, return 0
-                if (Length - CurrentReadPosition < count || Segments.Count == 0)
+                lock (Segments)
                 {
-                    return 0;
-                }
-
-                // iteratively copy from the current position
-                int read = 0;
-                var remaining = count;
-                while (remaining > 0)
-                {
-                    // the current segment
-                    var segment = Segments[CurrentSegmentIndex];
-                    // how many bytes are left to read in the current segment?
-                    int remainingInSegment = segment.Length - CurrentSegmentOffset;
-                    // how many bytes can be copied in this loop iteration?
-                    int size = Math.Min(remaining, remainingInSegment);
-                    // copy the bytes from the segment to the buffer
-                    Buffer.BlockCopy(segment, CurrentSegmentOffset, buffer, offset, size);
-                    // update counters
-                    offset += size;
-                    read += size;
-                    remaining -= size;
-                    remainingInSegment -= size;
-                    CurrentSegmentOffset += size;
-                    CurrentReadPosition += size;
-                    // if the entire segment has been read, advance to the next one
-                    if (remainingInSegment == 0)
+                    // if the entire requested amount is not available to read, return 0
+                    if (Length - CurrentReadPosition < count || Segments.Count == 0)
                     {
-                        if (remaining > 0 && CurrentSegmentIndex + 1 >= Segments.Count)
-                        {
-                            // this should be impossible, but keep it to be robust
-                            throw new EndOfStreamException();
-                        }
+                        return 0;
+                    }
 
-                        // update to the next segment and discard read data, if necessary
-                        CurrentSegmentIndex++;
-                        CurrentSegmentOffset = 0;
-                        if (AutoTruncate)
+                    // iteratively copy from the current position
+                    int read = 0;
+                    var remaining = count;
+                    while (remaining > 0)
+                    {
+                        // the current segment
+                        var segment = Segments[CurrentSegmentIndex];
+                        // how many bytes are left to read in the current segment?
+                        int remainingInSegment = segment.Length - CurrentSegmentOffset;
+                        // how many bytes can be copied in this loop iteration?
+                        int size = Math.Min(remaining, remainingInSegment);
+                        // copy the bytes from the segment to the buffer
+                        Buffer.BlockCopy(segment, CurrentSegmentOffset, buffer, offset, size);
+                        // update counters
+                        offset += size;
+                        read += size;
+                        remaining -= size;
+                        remainingInSegment -= size;
+                        CurrentSegmentOffset += size;
+                        CurrentReadPosition += size;
+                        // if the entire segment has been read, advance to the next one
+                        if (remainingInSegment == 0)
                         {
-                            TruncateImplementation();
+                            if (remaining > 0 && CurrentSegmentIndex + 1 >= Segments.Count)
+                            {
+                                // this should be impossible, but keep it to be robust
+                                throw new EndOfStreamException();
+                            }
+
+                            // update to the next segment and discard read data, if necessary
+                            CurrentSegmentIndex++;
+                            CurrentSegmentOffset = 0;
+                            if (AutoTruncate)
+                            {
+                                TruncateImplementation();
+                            }
                         }
                     }
+                    return read;
+                }
+            }
+            else
+            {
+                // iteratively copy data from the current position
+                int read = 0;
+                var remaining = count;
+
+                while (remaining > 0)
+                {
+                    lock (Segments)
+                    {
+                        if (ReadStrategy == ReadStrategies.Partial)
+                        {
+                            // for a PARTIAL strategy, if there is no data to read, return 0
+                            if (CurrentReadPosition == Length || Segments.Count == 0)
+                            {
+                                return 0;
+                            }
+                        }
+                        // otherwise start trying to read as much data as possible:
+
+                        if (CurrentSegmentIndex < Segments.Count)
+                        {
+                            // the current segment
+                            var segment = Segments[CurrentSegmentIndex];
+                            // how many bytes are left to read in the current segment?
+                            int remainingInSegment = segment.Length - CurrentSegmentOffset;
+                            // how many bytes can be copied in this loop iteration?
+                            int size = Math.Min(remaining, remainingInSegment);
+                            // copy the bytes from the segment to the buffer
+                            Buffer.BlockCopy(segment, CurrentSegmentOffset, buffer, offset, size);
+                            // update counters
+                            offset += size;
+                            read += size;
+                            remaining -= size;
+                            remainingInSegment -= size;
+                            CurrentSegmentOffset += size;
+                            CurrentReadPosition += size;
+
+                            // if the entire segment has been read, advance to the next one
+                            if (remainingInSegment == 0)
+                            {
+                                //if (remaining > 0 && CurrentSegmentIndex + 1 >= Segments.Count)
+                                //{
+                                //    throw new EndOfStreamException();
+                                //}
+
+                                // update to the next segment and discard read data, if necessary
+                                CurrentSegmentIndex++;
+                                CurrentSegmentOffset = 0;
+                                if (AutoTruncate)
+                                {
+                                    TruncateImplementation();
+                                }
+                            }
+                        }
+                    }
+
+                    // for a PARTIAL or BLOCKING strategy, if at least SOME data was read, break and return
+                    if (read > 0)
+                    {
+                        break;
+                    }
+
+                    // otherwise just keep looping
+                    ThreadHelpers.Yield();
                 }
                 return read;
             }

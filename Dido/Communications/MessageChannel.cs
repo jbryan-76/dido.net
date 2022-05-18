@@ -10,7 +10,7 @@
     /// <para/>NOTE While this class is thread-safe and reading and writing can be done on separate threads,
     /// never use more than 1 thread per direction (read or write), as it may result in data interleaving.
     /// </summary>
-    public class MessageChannel
+    public class MessageChannel : IDisposable
     {
         /// <summary>
         /// Signature for a method that handles when a new message is received on a channel.
@@ -65,6 +65,11 @@
         /// <param name="channelNumber"></param>
         public MessageChannel(Connection connection, ushort channelNumber)
             : this(connection.GetChannel(channelNumber)) { }
+
+        public void Dispose()
+        {
+            Channel.Dispose();
+        }
 
         /// <summary>
         /// Write the given message to the underlying channel.
@@ -177,5 +182,4 @@
             ThreadHelpers.Debug($"{ChannelNumber} {Channel.Name} invoked message receiver");
         }
     }
-
 }

@@ -97,7 +97,7 @@ namespace DidoNet
                     }
                     break;
                 default:
-                    throw new InvalidOperationException($"Only Property and Field members are serializable.");
+                    throw new NotSerializableException($"Only Property and Field members are serializable.");
             }
             return true;
         }
@@ -111,7 +111,7 @@ namespace DidoNet
             var errors = new List<string>();
             if (!type.IsSerializable(errors))
             {
-                throw new AggregateException(errors.Select(e => new InvalidOperationException(e)));
+                throw new AggregateException(errors.Select(e => new NotSerializableException(e)));
             }
         }
 

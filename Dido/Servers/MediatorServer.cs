@@ -231,8 +231,8 @@ namespace DidoNet
             // NOTE: by design, exactly one of these channels will receive data
             // depending on whether an application or a runner connected.
             // however, until one of the channels receives data, it's impossible to know which.
-            var applicationChannel = new MessageChannel(connection, Constants.ApplicationChannelNumber);
-            var runnerChannel = new MessageChannel(connection, Constants.RunnerChannelNumber);
+            var applicationChannel = new MessageChannel(connection, Constants.MediatorApp_ChannelId);
+            var runnerChannel = new MessageChannel(connection, Constants.MediatorRunner_ChannelId);
 
             Runner? runner = null;
             try
@@ -243,11 +243,12 @@ namespace DidoNet
                 {
                     // this connection is to an application.
                     // close the runner channel so as not to tie up a thread
-                    if (runnerChannel != null)
-                    {
-                        connection.CloseChannel(runnerChannel.Channel);
-                        runnerChannel = null;
-                    }
+                    runnerChannel?.Dispose();
+                    //if (runnerChannel != null)
+                    //{
+                    //    connection.CloseChannel(runnerChannel.Channel);
+                    //    runnerChannel = null;
+                    //}
 
                     // process the message
                     switch (message)
@@ -271,11 +272,12 @@ namespace DidoNet
                 {
                     // this connection is to a runner.
                     // close the application channel so as not to tie up a thread
-                    if (applicationChannel != null)
-                    {
-                        connection.CloseChannel(applicationChannel.Channel);
-                        applicationChannel = null;
-                    }
+                    applicationChannel?.Dispose();
+                    //if (applicationChannel != null)
+                    //{
+                    //    connection.CloseChannel(applicationChannel.Channel);
+                    //    applicationChannel = null;
+                    //}
 
                     // add the runner to the pool, if necessary
                     if (runner == null)

@@ -124,7 +124,7 @@ namespace DidoNet
                 // create a secure connection to the optional mediator
                 var uri = new Uri(Configuration.MediatorUri);
                 MediatorConnection = new Connection(uri!.Host, uri.Port, null, connectionSettings);
-                MediatorChannel = new MessageChannel(MediatorConnection, Constants.RunnerChannelNumber);
+                MediatorChannel = new MessageChannel(MediatorConnection, Constants.MediatorRunner_ChannelId);
 
                 // announce this runner to the mediator
                 MediatorChannel.Send(new RunnerStartMessage(Configuration.Endpoint.ToString(),
@@ -218,7 +218,7 @@ namespace DidoNet
                         && Configuration.MaxQueue >= 0
                         && QueuedWorkers.Count >= Configuration.MaxQueue)
                     {
-                        var tasksChannel = new MessageChannel(connection, Constants.TaskChannelNumber);
+                        var tasksChannel = new MessageChannel(connection, Constants.AppRunner_TaskChannelId);
                         tasksChannel.Send(new RunnerBusyMessage());
                         connection.Dispose();
                     }
@@ -252,7 +252,7 @@ namespace DidoNet
             // then cancel and cleanup all workers
             foreach (var worker in QueuedWorkers.ToArray())
             {
-                var tasksChannel = new MessageChannel(worker.Connection, Constants.TaskChannelNumber);
+                var tasksChannel = new MessageChannel(worker.Connection, Constants.AppRunner_TaskChannelId);
                 tasksChannel.Send(new TaskCancelMessage());
                 worker.Dispose();
             }

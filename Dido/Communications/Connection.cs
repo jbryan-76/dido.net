@@ -13,6 +13,24 @@ namespace DidoNet
     /// </summary>
     public class Connection : IDisposable
     {
+        public class LoopbackProxy : IDisposable
+        {
+            public enum Role
+            {
+                Client,
+                Server
+            }
+
+            internal QueueBufferStream In = new QueueBufferStream { ReadStrategy = QueueBufferStream.ReadStrategies.Block };
+            internal QueueBufferStream Out = new QueueBufferStream { ReadStrategy = QueueBufferStream.ReadStrategies.Block };
+
+            public void Dispose()
+            {
+                In.Dispose();
+                Out.Dispose();
+            }
+        }
+
         /// <summary>
         /// Signature for a method that is invoked when a frame is transmitted or received. 
         /// </summary>
@@ -57,7 +75,7 @@ namespace DidoNet
         /// </summary>
         private readonly SslStream? SecureStream = null;
 
-        private readonly QueueBufferStream? LoopbackStream = null;
+        //private readonly QueueBufferStream? LoopbackStream = null;
 
         private readonly Stream ReadStream;
 
@@ -97,7 +115,7 @@ namespace DidoNet
         /// A queue of data received by the connection that is held until it can be
         /// read and processed as a complete Frame.
         /// </summary>
-        private QueueBufferStream ReadBuffer = new QueueBufferStream(false);
+        private QueueBufferStream ReadBuffer = new QueueBufferStream(false) { ReadStrategy = QueueBufferStream.ReadStrategies.Full };
 
         /// <summary>
         /// Contains the timestamp of the last data received from the remote connection.
@@ -250,14 +268,17 @@ namespace DidoNet
             : this(new TcpClient(host, port), host, name, settings) { }
 
         /// <summary>
-        /// Create a new loopback connection that does not use the network, but otherwise allows testing 
-        /// all communications and data processing.
+        /// Create a new loopback connection that uses the provided queue buffer streams instead of the network,
+        /// but otherwise allows testing all communications and data processing.
         /// </summary>
-        public Connection(string? name = null)
+        public Connection(LoopbackProxy proxy, LoopbackProxy.Role role, string? name = null)
         {
             Name = name ?? "";
 
-            ReadStream = WriteStream = LoopbackStream = new QueueBufferStream();
+            //ReadStream = WriteStream = LoopbackStream = new QueueBufferStream();
+
+            ReadStream = role == LoopbackProxy.Role.Client ? proxy.In : proxy.Out;
+            WriteStream = role == LoopbackProxy.Role.Client ? proxy.Out : proxy.In;
 
             FinishConnecting();
         }
@@ -271,6 +292,13 @@ namespace DidoNet
             if (Interlocked.Read(ref Connected) == 1)
             {
                 Disconnect();
+            }
+
+            // TODO: dispose all channels
+            foreach (var channel in Channels)
+            {
+                //CloseChannel(channel.Value);
+                channel.Value.Dispose();
             }
 
             var exceptions = new List<Exception>();
@@ -288,7 +316,7 @@ namespace DidoNet
                 }
 
                 SecureStream?.Dispose();
-                LoopbackStream?.Dispose();
+                //LoopbackStream?.Dispose();
                 ReadBuffer.Dispose();
                 HeartbeatTimer?.Dispose();
             }
@@ -299,6 +327,16 @@ namespace DidoNet
             {
                 throw new AggregateException(exceptions);
             }
+        }
+
+        /// <summary>
+        /// Indicates whether any channel on the connection has any pending or in-flight data (true)
+        /// or is effectively empty (false).
+        /// </summary>
+        /// <returns></returns>
+        public bool InUse()
+        {
+            return Channels.Any(c => c.Value.InUse);
         }
 
         /// <summary>
@@ -366,28 +404,29 @@ namespace DidoNet
             if (Interlocked.Read(ref Connected) != 1
                 || Interlocked.Read(ref IsDisconnecting) == 1)
             {
-                throw new InvalidOperationException("Can't create channel: not connected.");
+                throw new NotConnectedException("Can't create channel: not connected.");
             }
-            lock (Channels)
-            {
-                //if(Channels.TryGetValue(channelNumber, out var channel))
-            }
-            //Channels.TryAdd(channelNumber, new Channel(this, channelNumber));
             return Channels.GetOrAdd(channelNumber, (num) => new Channel(this, num));
-            //return Channels[channelNumber];
         }
 
         /// <summary>
-        /// Disposes the given channel, freeing its resources.
+        /// Removes but DOES NOT DISPOSE the given channel.
         /// </summary>
         /// <param name="channel"></param>
-        internal void CloseChannel(Channel channel)
+        internal void RemoveChannel(Channel channel)
         {
-            if (Channels.TryRemove(channel.ChannelNumber, out var c))
-            {
-                c.Dispose();
-            }
+            Channels.TryRemove(channel.ChannelNumber, out _);
         }
+
+        ///// <summary>
+        ///// Disposes the given channel, freeing its resources.
+        ///// </summary>
+        ///// <param name="channel"></param>
+        //internal void CloseChannel(Channel channel)
+        //{
+        //    RemoveChannel(channel);
+        //    channel.Dispose();
+        //}
 
         /// <summary>
         /// Enqueue the given frame for transmission to the remote endpoint.
@@ -512,7 +551,10 @@ namespace DidoNet
                 // set a timeout on the stream so read methods do not block too long.
                 // this allows for periodically checking the Connected status to 
                 // exit the loop when either this object or the remote side disconnects.
-                ReadStream.ReadTimeout = 100;
+                if (ReadStream.CanTimeout)
+                {
+                    ReadStream.ReadTimeout = 100;
+                }
 
                 // TODO: how big should this buffer be?
                 // empirically it appears that 32k is standard for the underlying network classes
@@ -605,14 +647,14 @@ namespace DidoNet
             }
             catch (IOException e)
             {
-                Log($"Exception ({e.GetType()}): {e.Message}");
+                Log($"Exception ({e.GetType()}): {e.ToString()}");
                 Log("Client disconnected - closing the connection...");
                 // force all thread termination on any error
                 Interlocked.Exchange(ref Connected, 0);
             }
             catch (Exception e)
             {
-                Log($"ReadLoop terminated: Unhandled Exception: {e.GetType()} {e.Message}");
+                Log($"ReadLoop terminated: Unhandled Exception: {e.GetType()} {e.ToString()}");
                 ReadThreadException = e;
                 // force all thread termination on any error
                 Interlocked.Exchange(ref Connected, 0);
@@ -655,6 +697,7 @@ namespace DidoNet
             {
                 // a new frame is not yet available.
                 // restore the buffer position and return null
+                //ThreadHelpers.Debug($"connection {Name} no data {ReadBuffer.Position} -> {position} [{ReadBuffer.Length}]");
                 ReadBuffer.Position = position;
                 return null;
             }
@@ -675,16 +718,19 @@ namespace DidoNet
                 WriteStream.Write(frame.Payload, 0, frame.Payload.Length);
             }
             WriteStream.Flush();
+            ThreadHelpers.Debug($"connection {Name} wrote frame {frame}");
         }
 
         private void Log(string message)
         {
             if (!string.IsNullOrWhiteSpace(Name))
             {
+                Console.WriteLine($"[{DateTimeOffset.UtcNow.ToString("o")}] ({Name}) {message}");
                 Logger.Debug($"[{DateTimeOffset.UtcNow.ToString("o")}] ({Name}) {message}");
             }
             else
             {
+                Console.WriteLine($"[{DateTimeOffset.UtcNow.ToString("o")}] {message}");
                 Logger.Debug($"[{DateTimeOffset.UtcNow.ToString("o")}] {message}");
             }
         }

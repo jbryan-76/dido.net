@@ -44,6 +44,12 @@ namespace DidoNet
         public bool IsDataAvailable { get { return !ReadBuffer.IsEmpty; } }
 
         /// <summary>
+        /// Indicates whether the channel has any pending or in-flight data (true)
+        /// or is effectively empty (false).
+        /// </summary>
+        public bool InUse { get { return WriteBuffer.Length != 0 || IsDataAvailable; } }
+
+        /// <summary>
         /// Indicates whether the underlying Connection exists and is connected.
         /// </summary>
         public bool IsConnected { get { return Connection != null && Connection.IsConnected; } }
@@ -320,6 +326,8 @@ namespace DidoNet
                 WriteBuffer.Dispose();
             }
             GC.SuppressFinalize(this);
+
+            Connection.RemoveChannel(this);
 
             // propagate any exceptions
             var exceptions = new List<Exception>();

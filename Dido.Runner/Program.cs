@@ -135,12 +135,12 @@ namespace DidoNet.Runner.Windows
                 {
                     if (string.IsNullOrEmpty(ServerConfig.FindValue))
                     {
-                        throw new InvalidOperationException($"When '{nameof(ServerConfiguration.FindBy)}' is provided '{nameof(ServerConfiguration.FindValue)}' is also required.");
+                        throw new InvalidConfigurationException($"When '{nameof(ServerConfiguration.FindBy)}' is provided '{nameof(ServerConfiguration.FindValue)}' is also required.");
                     }
 
                     if (!Enum.TryParse<X509FindType>(ServerConfig.FindBy, out var findType))
                     {
-                        throw new InvalidOperationException($"Value '{ServerConfig.FindBy}' could not be parsed to a legal value for type '{nameof(X509FindType)}'. Legal values are: {string.Join(',', Enum.GetValues<X509FindType>())}");
+                        throw new InvalidConfigurationException($"Value '{ServerConfig.FindBy}' could not be parsed to a legal value for type '{nameof(X509FindType)}'. Legal values are: {string.Join(',', Enum.GetValues<X509FindType>())}");
                     }
 
                     // find the certificate from the machine root CA
@@ -150,12 +150,12 @@ namespace DidoNet.Runner.Windows
                     cert = certs.Cast<X509Certificate2>().FirstOrDefault();
                     if (cert == null)
                     {
-                        throw new InvalidOperationException($"No certificate corresponding to {ServerConfig.FindBy}:{ServerConfig.FindValue} could be found in the system root CA.");
+                        throw new InvalidConfigurationException($"No certificate corresponding to {ServerConfig.FindBy}:{ServerConfig.FindValue} could be found in the system root CA.");
                     }
                 }
                 else
                 {
-                    throw new InvalidOperationException($"Missing X509 certificate configuration from appsettings");
+                    throw new InvalidConfigurationException($"Missing X509 certificate configuration from appsettings");
                 }
 
                 IPAddress? ipAddress = null;

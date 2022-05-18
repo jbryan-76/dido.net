@@ -27,8 +27,9 @@ namespace DidoNet.Test
 
         public ConnectionAndChannelTests(ITestOutputHelper output)
         {
-            var converter = new OutputConverter(output);//, "OUTPUT.txt");
-            Console.SetOut(converter);
+            //var converter = new OutputConverter(output);
+            //var converter = new OutputConverter(output, "OUTPUT.txt");
+            //Console.SetOut(converter);
         }
 
         [Fact]
@@ -41,6 +42,7 @@ namespace DidoNet.Test
                 var testFrame = new DebugFrame("hello world");
                 testFrame.Channel = 123;
                 clientServerConnection.SendClientToServer(testFrame);
+                clientServerConnection.WaitForAllClear();
 
                 // verify the communication
                 Assert.True(clientServerConnection.ClientTransmittedFrames.TryDequeue(out var actualTransmittedFrame));
@@ -58,6 +60,7 @@ namespace DidoNet.Test
                 testFrame = new DebugFrame("goodbye cruel world");
                 testFrame.Channel = 456;
                 clientServerConnection.SendServerToClient(testFrame);
+                clientServerConnection.WaitForAllClear();
 
                 // verify the communication
                 Assert.True(clientServerConnection.ServerTransmittedFrames.TryDequeue(out actualTransmittedFrame));
@@ -70,9 +73,6 @@ namespace DidoNet.Test
                 Assert.Equal(testFrame.FrameType, actualReceivedFrame.FrameType);
                 Assert.Equal(testFrame.Message, Encoding.UTF8.GetString(actualTransmittedFrame.Payload));
                 Assert.Equal(testFrame.Message, Encoding.UTF8.GetString(actualReceivedFrame.Payload));
-
-                // cleanup
-                clientServerConnection.Close();
             }
         }
 
@@ -191,6 +191,8 @@ namespace DidoNet.Test
                 // read the data
                 channelServerSide.BlockingReads = true;
                 var resultData = channelServerSide.ReadBytes(data.Length);
+
+                clientServerConnection.WaitForAllClear();
 
                 // verify the communication
                 Assert.Equal(3, clientServerConnection.ClientTransmittedFrames.Count);
@@ -355,8 +357,8 @@ namespace DidoNet.Test
                     {
                         Thread.Sleep(rand.Next(5, 50));
                         var message = new TestMessage { MyIntValue = rand.Next(), MyStringValue = Guid.NewGuid().ToString() };
-                        queue.Enqueue(new Tuple<TestMessage, int>(message, channel.ChannelNumber));
                         channel.Send(message);
+                        queue.Enqueue(new Tuple<TestMessage, int>(message, channel.ChannelNumber));
                     }
                 };
 
@@ -373,15 +375,13 @@ namespace DidoNet.Test
                 Task.WaitAll(producerTasks);
 
                 // wait for all consumers to finish receiving all messages
-                while (serverReceivedMessages.Count != clientSentMessages.Count &&
-                    clientReceivedMessages.Count != serverSentMessages.Count)
+                var totalClientSentMessages = channel1ClientNumMessages + channel2ClientNumMessages;
+                var totalServerSentMessages = channel1ServerNumMessages + channel2ServerNumMessages;
+                while (serverReceivedMessages.Count < totalClientSentMessages &&
+                    clientReceivedMessages.Count < totalServerSentMessages)
                 {
                     Thread.Sleep(1);
                 }
-
-                // wait a bit longer: there is some kind of weird bug where very rarely ConcurrentQueue.Count
-                // does not immediately match the actual number of items in the queue
-                Thread.Sleep(10);
             }
 
             // confirm total message counts
@@ -415,6 +415,48 @@ namespace DidoNet.Test
                 serverSentMessages.Where(x => x.Item2 == 2).Select(x => x.Item1).ToList(), // channel2ServerSent
                 clientReceivedMessages.Where(x => x.Item2 == 2).Select(x => x.Item1).ToList() // channel2ClientReceived
             );
+        }
+
+        [Fact]
+        public void LoopbackConnection()
+        {
+            using (var loopback = new Connection.LoopbackProxy())
+            using (var clientLoopbackConnection = new Connection(loopback, Connection.LoopbackProxy.Role.Client, "client"))
+            using (var serverLoopbackConnection = new Connection(loopback, Connection.LoopbackProxy.Role.Server, "server"))
+            {
+                var clientChannel = clientLoopbackConnection.GetChannel(1);
+                var serverChannel = serverLoopbackConnection.GetChannel(1);
+
+                // indicate the channel should block reads until data is available
+                serverChannel.BlockingReads = true;
+
+                // write and read data over the loopback connection
+                var rand = new System.Random();
+                var data = Enumerable.Range(0, 64).Select(x => (byte)rand.Next(256)).ToArray();
+                clientChannel.WriteBytes(data);
+                var result = serverChannel.ReadBytes(data.Length);
+
+                Assert.True(Enumerable.SequenceEqual(data, result));
+            }
+        }
+
+        [Fact]
+        public void LoopbackConnectionWithMessages()
+        {
+            using (var loopback = new Connection.LoopbackProxy())
+            using (var clientLoopbackConnection = new Connection(loopback, Connection.LoopbackProxy.Role.Client, "client"))
+            using (var serverLoopbackConnection = new Connection(loopback, Connection.LoopbackProxy.Role.Server, "server"))
+            {
+                var clientChannel = new MessageChannel(clientLoopbackConnection, 1);
+                var serverChannel = new MessageChannel(serverLoopbackConnection, 1);
+
+                var testMessage = new TestMessage { MyIntValue = 123, MyStringValue = "hello world" };
+                clientChannel.Send(testMessage);
+                var receivedMessage = serverChannel.ReceiveMessage<TestMessage>();
+
+                Assert.Equal(testMessage.MyIntValue, receivedMessage.MyIntValue);
+                Assert.Equal(testMessage.MyStringValue, receivedMessage.MyStringValue);
+            }
         }
 
         class TestMessage : IMessage

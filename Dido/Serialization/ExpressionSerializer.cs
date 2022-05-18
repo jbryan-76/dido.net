@@ -250,7 +250,7 @@ namespace DidoNet
             }
             else
             {
-                throw new InvalidOperationException($"Cannot handle missing assembly from exception {e.GetType()}", e);
+                throw new MissingAssemblyException($"Cannot handle missing assembly from exception {e.GetType()}. See inner exception for details.", e);
             }
 
             // TODO: first try to load the assembly from a disk cache using Environment.AssemblyCachePath
@@ -262,7 +262,7 @@ namespace DidoNet
             // TODO: better understand whether this can ever happen, and how to handle it when it does
             if (env.LoadedAssemblies.ContainsKey(assemblyName))
             {
-                throw new InvalidOperationException($"Could not resolve assembly '{assemblyName}'", e);
+                throw new MissingAssemblyException($"Could not resolve assembly '{assemblyName}'. See inner exception for details.", e);
             }
 
             // check if the assembly is already loaded into the default context
@@ -278,7 +278,7 @@ namespace DidoNet
             var stream = await env.ResolveRemoteAssemblyAsync(env, assemblyName);
             if (stream == null)
             {
-                throw new InvalidOperationException($"Could not resolve assembly '{assemblyName}'", e);
+                throw new MissingAssemblyException($"Could not resolve assembly '{assemblyName}'", e);
             }
 
             // load the assembly into the environment context and cache its reference

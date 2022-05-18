@@ -21,7 +21,7 @@ namespace DidoNet.Test
         [Fact]
         public void ReadAndWrite()
         {
-            using (var stream = new QueueBufferStream(false))
+            using (var stream = new QueueBufferStream(false) { ReadStrategy = QueueBufferStream.ReadStrategies.Full })
             {
                 var data = GenerateRandomData(1024);
                 var buffer = new byte[256];
@@ -104,7 +104,7 @@ namespace DidoNet.Test
         [Fact]
         public void AutoTruncate()
         {
-            using (var stream = new QueueBufferStream(true))
+            using (var stream = new QueueBufferStream(true) { ReadStrategy = QueueBufferStream.ReadStrategies.Full })
             {
                 var data = GenerateRandomData(1024);
                 var buffer = new byte[256];
@@ -147,7 +147,7 @@ namespace DidoNet.Test
         {
             var dataToWrite = GenerateRandomData(16 * 1024);
             var dataToRead = new byte[dataToWrite.Length];
-            using (var stream = new QueueBufferStream(autoTruncate))
+            using (var stream = new QueueBufferStream(autoTruncate) { ReadStrategy = QueueBufferStream.ReadStrategies.Full })
             {
                 var writeThread = new Thread(() =>
                 {

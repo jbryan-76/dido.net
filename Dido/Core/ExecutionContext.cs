@@ -1,4 +1,6 @@
-﻿namespace DidoNet
+﻿using DidoNet.IO;
+
+namespace DidoNet
 {
     /// <summary>
     /// Provides configuration and utilities for remote execution of tasks.
@@ -21,16 +23,11 @@
 
         // TODO: set current try? maxtries?
 
-        // TODO: provide a generic MessageChannel that connects to something on the application side
-        public MessageChannel MessageChannel { get; internal set; }
+        // TODO: provide an api to create custom MessageChannels so the application can optionally support interprocess communication
+        //public MessageChannel MessageChannel { get; internal set; }
 
-        // TODO: add methods to access files, explicitly load assemblies, etc?
+        public RunnerFileProxy File { get; internal set; }
 
-        public DidoNet.IO.ProxyFile File;
-
-        public DidoNet.IO.ProxyDirectory Directory;
-
-        // TODO: replace this with the IO layer
-        //internal Channel FilesChannel { get; set; }
+        public RunnerDirectoryProxy Directory { get; internal set; }
     }
 }

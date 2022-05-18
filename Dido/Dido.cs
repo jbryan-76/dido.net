@@ -1,4 +1,6 @@
-﻿using System.Linq.Expressions;
+﻿using DidoNet.IO;
+using System.Collections.Concurrent;
+using System.Linq.Expressions;
 using System.Runtime.Loader;
 
 // TODO: best name? dido (distribute, disseminate, divide, spread, separate, put) vs alio (to another place)
@@ -167,7 +169,7 @@ namespace DidoNet
         {
             if (configuration.MediatorUri == null && configuration.RunnerUri == null)
             {
-                throw new InvalidOperationException($"Configuration error: At least one of {nameof(Configuration.MediatorUri)} or {nameof(Configuration.RunnerUri)} must be set to a valid value.");
+                throw new InvalidConfigurationException($"Configuration error: At least one of {nameof(Configuration.MediatorUri)} or {nameof(Configuration.RunnerUri)} must be set to a valid value.");
             }
 
             // create an (unused) cancellation token source if no cancellation token has been provided
@@ -237,7 +239,7 @@ namespace DidoNet
                     new Connection(configuration.MediatorUri.Host, configuration.MediatorUri.Port, null, connectionSettings))
                 {
                     // create the communications channel and request an available runner from the mediator
-                    var applicationChannel = new MessageChannel(mediatorConnection, Constants.ApplicationChannelNumber);
+                    var applicationChannel = new MessageChannel(mediatorConnection, Constants.MediatorApp_ChannelId);
                     applicationChannel.Send(new RunnerRequestMessage());
 
                     // receive and process the response
@@ -261,15 +263,42 @@ namespace DidoNet
             // create a secure connection to the remote runner
             using (var runnerConnection = new Connection(runnerUri!.Host, runnerUri.Port, null, connectionSettings))
             {
-                // TODO: refactor below into separate class to handle all the business logic
+                // TODO: refactor below channel+handler into separate classes to handle all the business logic
 
-                // create communication channels to the runner for: task messages, assemblies, files
-                var tasksChannel = new MessageChannel(runnerConnection, Constants.TaskChannelNumber);
-                var assembliesChannel = new MessageChannel(runnerConnection, Constants.AssemblyChannelNumber);
-                var filesChannel = new MessageChannel(runnerConnection, Constants.FileChannelNumber);
+                // create communication channels to the runner for: task messages, assemblies
+                var tasksChannel = new MessageChannel(runnerConnection, Constants.AppRunner_TaskChannelId);
+                var assembliesChannel = new MessageChannel(runnerConnection, Constants.AppRunner_AssemblyChannelId);
 
-                // handle file messages
-                filesChannel.OnMessageReceived = FileMessageHandler;
+                //var filesChannel = new MessageChannel(runnerConnection, Constants.AppRunner_FileChannelId);
+                //var files = new ConcurrentDictionary<string, ApplicationFileProxy>();
+                
+                // create a proxy to handle filesystem IO requests from the expression executing on the runner
+                var ioProxy = new ApplicationIOProxy(runnerConnection);
+
+                //// handle file messages
+                //filesChannel.OnMessageReceived = async (message, channel) =>
+                //{
+                //    switch (message)
+                //    {
+                //        case FileOpenMessage open:
+                //            try
+                //            {
+                //                var file = new ApplicationFileProxy(runnerConnection, open, file => files.TryRemove(open.Filename, out _));
+                //                files.TryAdd(open.Filename, file);
+                //            }
+                //            catch (Exception ex)
+                //            {
+                //                channel.Send(new FileAckMessage(open.Filename, ex));
+                //            }
+
+                //            break;
+                //        default:
+                //            throw new InvalidOperationException($"Unknown message type '{message.GetType()}'");
+                //    }
+                //};
+
+                // create a proxy to handle file IO requests from the remotely executing expression
+                //var ioProxy = new ApplicationIOProxy(runnerConnection, Constants.AppRunner_FileChannelId);
 
                 // handle assembly messages
                 assembliesChannel.OnMessageReceived = async (message, channel) =>
@@ -303,6 +332,8 @@ namespace DidoNet
                                 ThreadHelpers.Debug($"dido: AssemblyRequestMessage WROTE");
                             }
                             break;
+                        default:
+                            throw new InvalidOperationException($"Unknown message type '{message.GetType()}'");
                     }
                 };
 
@@ -434,9 +465,7 @@ namespace DidoNet
         {
             // to adequately test end-to-end processing and the current configuration,
             // use a degenerate loopback connection for file channel messages
-            var loopbackConnection = new Connection();
-            var filesChannel = new MessageChannel(loopbackConnection, Constants.FileChannelNumber);
-            filesChannel.OnMessageReceived = FileMessageHandler;
+            //var loopbackConnection = new Connection();
 
             var context = new ExecutionContext
             {
@@ -444,8 +473,8 @@ namespace DidoNet
                 ExecutionMode = ExecutionModes.Local,
                 // in debug local mode, use a loopback connection to ensure all IO works as expected
                 // when the expression is executed remotely
-                File = new IO.ProxyFile(filesChannel),
-                Directory = new IO.ProxyDirectory(filesChannel)
+                //File = new IO.RunnerFileProxy(loopbackConnection),
+                //Directory = new IO.RunnerDirectoryProxy(loopbackConnection)
             };
 
             var env = new Environment
@@ -492,8 +521,8 @@ namespace DidoNet
                 Cancel = cancellationToken,
                 ExecutionMode = ExecutionModes.Local,
                 // in release local mode, pass-through file and directory IO directly to the local filesystem
-                File = new IO.ProxyFile(null),
-                Directory = new IO.ProxyDirectory(null)
+                File = new IO.RunnerFileProxy(null),
+                Directory = new IO.RunnerDirectoryProxy(null)
             };
 
             // when executing locally in release mode, simply compile and invoke the expression,
@@ -506,14 +535,6 @@ namespace DidoNet
                 .WaitAsync(TimeSpan.FromMilliseconds(configuration.TimeoutInMs));
             cancellationToken.ThrowIfCancellationRequested();
             return result;
-        }
-
-        internal static async void FileMessageHandler(IMessage message, MessageChannel channel)
-        {
-            switch (message)
-            {
-                // TODO: 
-            }
         }
     }
 }

@@ -22,7 +22,7 @@
                 var errors = new List<string>();
                 if (!type.IsSerializable(errors))
                 {
-                    throw new InvalidSchemaException($"Type {type.Name} is not serializable. {string.Join("; ", errors)}");
+                    throw new NotSerializableException($"Type {type.Name} is not serializable. {string.Join("; ", errors)}");
                 }
             }
         }

@@ -33,7 +33,7 @@ namespace DidoNet
 
         private MessageChannel AssembliesChannel { get; set; }
 
-        private MessageChannel FilesChannel { get; set; }
+        //private MessageChannel FilesChannel { get; set; }
 
         /// <summary>
         /// Used to indicate when the task thread is complete.
@@ -54,17 +54,17 @@ namespace DidoNet
             Connection = connection;
 
             // create communication channels to the application for: task communication, assemblies, files
-            TasksChannel = new MessageChannel(Connection, Constants.TaskChannelNumber);
-            FilesChannel = new MessageChannel(Connection, Constants.FileChannelNumber);
-            AssembliesChannel = new MessageChannel(Connection, Constants.AssemblyChannelNumber);
+            TasksChannel = new MessageChannel(Connection, Constants.AppRunner_TaskChannelId);
+            //FilesChannel = new MessageChannel(Connection, Constants.AppRunner_FileChannelStart);
+            AssembliesChannel = new MessageChannel(Connection, Constants.AppRunner_AssemblyChannelId);
 
             // create the execution context that is available to the expression while it's running
             Context = new ExecutionContext
             {
                 ExecutionMode = ExecutionModes.Local,
                 //FilesChannel = FilesChannel,
-                File = new IO.ProxyFile(FilesChannel),
-                Directory = new IO.ProxyDirectory(FilesChannel),
+                File = new IO.RunnerFileProxy(Connection),
+                Directory = new IO.RunnerDirectoryProxy(Connection),
                 Cancel = CancelSource.Token
             };
         }
