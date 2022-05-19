@@ -135,17 +135,17 @@ namespace DidoNet
         }
 
         /// <summary>
-        /// Indicates the stream can read. Always returns true.
+        /// Indicates the stream can read. Always true.
         /// </summary>
         public override bool CanRead => true;
 
         /// <summary>
-        /// Indicates the stream can read. Always returns false.
+        /// Indicates the stream can read. Always false.
         /// </summary>
         public override bool CanSeek => false;
 
         /// <summary>
-        /// Indicates the stream can write. Always returns true.
+        /// Indicates the stream can write. Always true.
         /// </summary>
         public override bool CanWrite => true;
 

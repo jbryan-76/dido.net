@@ -13,15 +13,32 @@ namespace DidoNet
     /// </summary>
     public class Connection : IDisposable
     {
+        /// <summary>
+        /// Represents a single bi-directional loopback data stream that can be used to simulate network
+        /// connections for testing purposes. The same instance should be used to construct a pair of
+        /// Connections, with one designated as a Client and one as a Server.
+        /// </summary>
         public class LoopbackProxy : IDisposable
         {
+            /// <summary>
+            /// Role options when creating a pair of Connections from a single loopback proxy.
+            /// <para/>Note: the designation is effectively arbitrary, but used to ensure each
+            /// Connection uses the right "end" of the stream for reading and writing.
+            /// </summary>
             public enum Role
             {
                 Client,
                 Server
             }
 
+            /// <summary>
+            /// Provides a unidirectional data stream from a "server" connection to a "client" connection.
+            /// </summary>
             internal QueueBufferStream In = new QueueBufferStream { ReadStrategy = QueueBufferStream.ReadStrategies.Block };
+
+            /// <summary>
+            /// Provides a unidirectional data stream from a "client" connection to a "server" connection.
+            /// </summary>
             internal QueueBufferStream Out = new QueueBufferStream { ReadStrategy = QueueBufferStream.ReadStrategies.Block };
 
             public void Dispose()
@@ -45,7 +62,7 @@ namespace DidoNet
         /// <summary>
         /// The optional name for the connection.
         /// </summary>
-        public string Name { get; private set; } = "";
+        public string Name { get; private set; } = String.Empty;
 
         /// <summary>
         /// Indicates whether the connection is connected to the remote endpoint.
@@ -68,17 +85,21 @@ namespace DidoNet
         /// <summary>
         /// The underlying connection endpoint.
         /// </summary>
-        private readonly TcpClient EndPoint;
+        private readonly TcpClient? EndPoint = null;
 
         /// <summary>
         /// The underlying secure socket stream.
         /// </summary>
         private readonly SslStream? SecureStream = null;
 
-        //private readonly QueueBufferStream? LoopbackStream = null;
-
+        /// <summary>
+        /// The stream used for reading data from the connection.
+        /// </summary>
         private readonly Stream ReadStream;
 
+        /// <summary>
+        /// The stream used for writing data to the connection.
+        /// </summary>
         private readonly Stream WriteStream;
 
         /// <summary>
@@ -172,27 +193,19 @@ namespace DidoNet
             Name = name ?? "";
             EndPoint = endpoint;
 
-            Log("creating sslstream as server");
             // if a certificate is supplied, the connection is implied to be a server
             ReadStream = WriteStream = SecureStream = new SslStream(endpoint.GetStream(), false);
 
             try
             {
-                Log("stream created - authenticating");
                 // Authenticate the server but don't require the client to authenticate.
                 SecureStream.AuthenticateAsServer(serverCertificate, clientCertificateRequired: false, checkCertificateRevocation: true);
-                Log("authenticated");
-
                 FinishConnecting();
             }
             catch (AuthenticationException e)
             {
-                Log($"Exception: {e.Message}");
-                if (e.InnerException != null)
-                {
-                    Log($"  Inner exception: {e.InnerException.Message}");
-                }
-                Log("Authentication failed");
+                Logger.Info("Authentication failed");
+                Logger.Error(e);
                 throw;
             }
         }
@@ -224,7 +237,6 @@ namespace DidoNet
 
             settings = settings ?? new ClientConnectionSettings();
 
-            Log("creating sslstream as client");
             // otherwise the connection is implied to be a client
             ReadStream = WriteStream = SecureStream = new SslStream(
                 EndPoint.GetStream(),
@@ -240,19 +252,13 @@ namespace DidoNet
 
             try
             {
-                Log($"Authenticating to host {targetHost}.");
                 SecureStream.AuthenticateAsClient(targetHost);
-
                 FinishConnecting();
             }
             catch (AuthenticationException e)
             {
-                Log($"Exception: {e.Message}");
-                if (e.InnerException != null)
-                {
-                    Log($"  Inner exception: {e.InnerException.Message}");
-                }
-                Log("Authentication failed");
+                Logger.Info("Authentication failed");
+                Logger.Error(e);
                 throw;
             }
         }
@@ -268,14 +274,12 @@ namespace DidoNet
             : this(new TcpClient(host, port), host, name, settings) { }
 
         /// <summary>
-        /// Create a new loopback connection that uses the provided queue buffer streams instead of the network,
+        /// Create a new loopback connection that uses the provided proxy instead of a network TcpClient
         /// but otherwise allows testing all communications and data processing.
         /// </summary>
         public Connection(LoopbackProxy proxy, LoopbackProxy.Role role, string? name = null)
         {
             Name = name ?? "";
-
-            //ReadStream = WriteStream = LoopbackStream = new QueueBufferStream();
 
             ReadStream = role == LoopbackProxy.Role.Client ? proxy.In : proxy.Out;
             WriteStream = role == LoopbackProxy.Role.Client ? proxy.Out : proxy.In;
@@ -294,10 +298,9 @@ namespace DidoNet
                 Disconnect();
             }
 
-            // TODO: dispose all channels
+            // dispose all channels
             foreach (var channel in Channels)
             {
-                //CloseChannel(channel.Value);
                 channel.Value.Dispose();
             }
 
@@ -316,7 +319,6 @@ namespace DidoNet
                 }
 
                 SecureStream?.Dispose();
-                //LoopbackStream?.Dispose();
                 ReadBuffer.Dispose();
                 HeartbeatTimer?.Dispose();
             }
@@ -337,6 +339,19 @@ namespace DidoNet
         public bool InUse()
         {
             return Channels.Any(c => c.Value.InUse);
+        }
+
+        /// <summary>
+        /// Block and wait for all in-flight data to finish transmitting, 
+        /// and all channels to empty of pending data.
+        /// <para/>This is useful to call in testing before disposing the connection.
+        /// </summary>
+        public void WaitWhileInUse()
+        {
+            while (InUse())
+            {
+                ThreadHelpers.Yield();
+            }
         }
 
         /// <summary>
@@ -394,8 +409,8 @@ namespace DidoNet
 
         /// <summary>
         /// Gets or creates a reference to the indicated channel.
-        /// <para/>Note: DO NOT Dispose() the channel. Since the channel is owned by the Connection,
-        /// Connection.Dispose() will dispose it implicitly.
+        /// <para/>Note: Created channels are disposed implicitly when the owning connection is
+        /// disposed, so calling Dispose() on a channel is effectively optional.
         /// </summary>
         /// <param name="channelNumber"></param>
         /// <returns></returns>
@@ -417,16 +432,6 @@ namespace DidoNet
         {
             Channels.TryRemove(channel.ChannelNumber, out _);
         }
-
-        ///// <summary>
-        ///// Disposes the given channel, freeing its resources.
-        ///// </summary>
-        ///// <param name="channel"></param>
-        //internal void CloseChannel(Channel channel)
-        //{
-        //    RemoveChannel(channel);
-        //    channel.Dispose();
-        //}
 
         /// <summary>
         /// Enqueue the given frame for transmission to the remote endpoint.
@@ -484,13 +489,13 @@ namespace DidoNet
                 // send a heartbeat frame periodically to keep the connection active
                 HeartbeatTimer = new Timer((arg) => SendHeartbeat(), null, 0, DefaultHeartbeatPeriodInSeconds * 1000);
 
-                var remote = (IPEndPoint)EndPoint.Client.RemoteEndPoint;
-                var local = (IPEndPoint)EndPoint.Client.LocalEndPoint;
+                var remote = (IPEndPoint)EndPoint!.Client.RemoteEndPoint!;
+                var local = (IPEndPoint)EndPoint!.Client.LocalEndPoint!;
                 Logger.Info($"Connection established from {local.Address}:{local.Port} to {remote.Address}:{remote.Port}");
             }
             else
             {
-                // TODO: log loopback info
+                // log loopback info
                 Logger.Info($"Loopback connection created.");
             }
 
@@ -599,7 +604,7 @@ namespace DidoNet
                     {
                         // signal all threads to terminate
                         Interlocked.Exchange(ref Connected, 0);
-                        Log($"Forcing disconnect: remote connection was idle for more than {2 * RemoteHeartbeatPeriodInSeconds} seconds");
+                        Logger.Info($"Forcing disconnect: remote connection was idle for more than {2 * RemoteHeartbeatPeriodInSeconds} seconds");
                         break;
                     }
 
@@ -628,7 +633,7 @@ namespace DidoNet
                     }
                     else if (frame is DebugFrame)
                     {
-                        Log($"DEBUG: {(frame as DebugFrame)!.Message}");
+                        Logger.Debug($"DEBUG: {(frame as DebugFrame)!.Message}");
                         // TODO: add a configurable handler to process the received debug message
                         UnitTestReceiveFrameMonitor?.Invoke(frame);
                     }
@@ -645,16 +650,15 @@ namespace DidoNet
                     }
                 }
             }
-            catch (IOException e)
+            catch (IOException)
             {
-                Log($"Exception ({e.GetType()}): {e.ToString()}");
-                Log("Client disconnected - closing the connection...");
+                Logger.Info("Client disconnected - closing the connection.");
                 // force all thread termination on any error
                 Interlocked.Exchange(ref Connected, 0);
             }
             catch (Exception e)
             {
-                Log($"ReadLoop terminated: Unhandled Exception: {e.GetType()} {e.ToString()}");
+                Logger.Error(e, $"ReadLoop terminated: Unhandled Exception");
                 ReadThreadException = e;
                 // force all thread termination on any error
                 Interlocked.Exchange(ref Connected, 0);
@@ -719,20 +723,6 @@ namespace DidoNet
             }
             WriteStream.Flush();
             ThreadHelpers.Debug($"connection {Name} wrote frame {frame}");
-        }
-
-        private void Log(string message)
-        {
-            if (!string.IsNullOrWhiteSpace(Name))
-            {
-                Console.WriteLine($"[{DateTimeOffset.UtcNow.ToString("o")}] ({Name}) {message}");
-                Logger.Debug($"[{DateTimeOffset.UtcNow.ToString("o")}] ({Name}) {message}");
-            }
-            else
-            {
-                Console.WriteLine($"[{DateTimeOffset.UtcNow.ToString("o")}] {message}");
-                Logger.Debug($"[{DateTimeOffset.UtcNow.ToString("o")}] {message}");
-            }
         }
 
         /// <summary>

@@ -2,7 +2,9 @@
 {
     internal class FileMessageBase : IMessage
     {
-        public string Filename { get; set; }
+        public string Filename { get; set; } = String.Empty;
+
+        public FileMessageBase() { }
 
         public FileMessageBase(string filename)
         {

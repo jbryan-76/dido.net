@@ -2,7 +2,7 @@
 {
     internal class TaskCancelMessage : IMessage
     {
-        public string Message { get; set; } = "";
+        public string Message { get; set; } = String.Empty;
 
         public TaskCancelMessage()
         //: this("The task was cancelled.")

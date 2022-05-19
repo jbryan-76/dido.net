@@ -9,10 +9,30 @@
     /// </summary>
     public class QueueBufferStream : Stream
     {
+        /// <summary>
+        /// Fulfillment strategies used to read data from the stream.
+        /// </summary>
         public enum ReadStrategies
         {
+            /// <summary>
+            /// A call to Read() will block until at least some data is available
+            /// (which may be less than the amount requested), and return the 
+            /// number of bytes read (which will be non-zero).
+            /// </summary>
             Block,
+
+            /// <summary>
+            /// A call to Read() will never block, and will return regardless of
+            /// how much data was read (including zero).
+            /// </summary>
             Partial,
+
+            /// <summary>
+            /// A call to Read() will never block, and will either return zero 
+            /// (if the entire requested amount of data could not be read),
+            /// otherwise the number of bytes read (which will always match
+            /// the amount requested).
+            /// </summary>
             Full
         }
 
@@ -33,17 +53,17 @@
         public override long Length { get { return TotalLength; } }
 
         /// <summary>
-        /// Indicates the stream can read. Always returns true.
+        /// Indicates the stream can read. Always true.
         /// </summary>
         public override bool CanRead => true;
 
         /// <summary>
-        /// Indicates the stream can seek. Always returns true.
+        /// Indicates the stream can seek. Always true.
         /// </summary>
         public override bool CanSeek => true;
 
         /// <summary>
-        /// Indicates the stream can write. Always returns true.
+        /// Indicates the stream can write. Always true.
         /// </summary>
         public override bool CanWrite => true;
 
@@ -54,6 +74,9 @@
         /// </summary>
         public bool AutoTruncate { get; set; } = true;
 
+        /// <summary>
+        /// The implementation strategy used to read data from the stream via Read().
+        /// </summary>
         public ReadStrategies ReadStrategy { get; set; } = ReadStrategies.Full;
 
         /// <summary>
@@ -140,8 +163,13 @@
         /// <summary>
         /// Reads from and advances the current Position.
         /// Returns the number of bytes read.
-        /// <para/>Note: if there is not enough data in the buffer to complete the read,
-        /// this method returns 0 and does not change the Position.
+        /// <para/>Note: The behavior of this method depends on the value of ReadStrategy:
+        /// <para/>- Block = will block until at least some data is available
+        /// and return the number of bytes read (which will be non-zero).
+        /// <para/>- Partial = will never block and will return the number of bytes read
+        /// (which may be zero).
+        /// <para/>- Full = will never block and will return either exactly zero or 
+        /// exactly the number of requested bytes.
         /// <para/>Note: if AutoConsume is true, the internal buffer is released as needed after
         /// data is read, otherwise Truncate() must be called periodically when appropriate
         /// to prevent the buffer from growing without bound.
@@ -209,7 +237,6 @@
                 // iteratively copy data from the current position
                 int read = 0;
                 var remaining = count;
-
                 while (remaining > 0)
                 {
                     lock (Segments)
@@ -245,11 +272,6 @@
                             // if the entire segment has been read, advance to the next one
                             if (remainingInSegment == 0)
                             {
-                                //if (remaining > 0 && CurrentSegmentIndex + 1 >= Segments.Count)
-                                //{
-                                //    throw new EndOfStreamException();
-                                //}
-
                                 // update to the next segment and discard read data, if necessary
                                 CurrentSegmentIndex++;
                                 CurrentSegmentOffset = 0;

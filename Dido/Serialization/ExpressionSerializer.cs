@@ -239,7 +239,7 @@ namespace DidoNet
 
         internal static async Task HandleMissingAssemblyException(Exception e, Environment env)
         {
-            string assemblyName = "";
+            string assemblyName = String.Empty;
             if (e is FileNotFoundException)
             {
                 assemblyName = (e as FileNotFoundException).FileName;

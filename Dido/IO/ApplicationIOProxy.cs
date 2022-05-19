@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using System.Collections.ObjectModel;
 
 namespace DidoNet.IO
 {
@@ -8,9 +9,18 @@ namespace DidoNet.IO
     /// </summary>
     internal class ApplicationIOProxy : MessageChannel
     {
-        private ConcurrentDictionary<string, ApplicationFileProxy> Files = new ConcurrentDictionary<string, ApplicationFileProxy>();
+        /// <summary>
+        /// The readonly set of currently open files managed by this instance, keyed to the file path.
+        /// </summary>
+        public ReadOnlyDictionary<string, ApplicationFileStreamProxy> Files
+        {
+            get { return new ReadOnlyDictionary<string, ApplicationFileStreamProxy>(files); }
+        }
 
-        private Connection Connection;
+        /// <summary>
+        /// The set of currently open files managed by this instance, keyed to the file path.
+        /// </summary>
+        private ConcurrentDictionary<string, ApplicationFileStreamProxy> files = new ConcurrentDictionary<string, ApplicationFileStreamProxy>();
 
         /// <summary>
         /// Create a new io proxy to process file and directory IO requests.
@@ -19,19 +29,26 @@ namespace DidoNet.IO
         public ApplicationIOProxy(Connection connection)
             : base(connection, Constants.AppRunner_FileChannelId)
         {
-            Connection = connection;
             OnMessageReceived = FileMessageHandler;
         }
 
-        internal async void FileMessageHandler(IMessage message, MessageChannel channel)
+        /// <summary>
+        /// Processes received messages to perform file and directory IO operations for the remotely
+        /// executing expression.
+        /// </summary>
+        /// <param name="message"></param>
+        /// <param name="channel"></param>
+        /// <exception cref="InvalidOperationException"></exception>
+        void FileMessageHandler(IMessage message, MessageChannel channel)
         {
             switch (message)
             {
                 case FileOpenMessage open:
                     try
                     {
-                        var file = new ApplicationFileProxy(Connection, open, file => Files.TryRemove(open.Filename, out _));
-                        Files.TryAdd(open.Filename, file);
+                        var newFile = new ApplicationFileStreamProxy(open, Channel.Connection);
+                        files.TryAdd(open.Filename, newFile);
+                        channel.Send(new FileAckMessage(open.Filename, newFile.Stream.Position, newFile.Stream.Length));
                     }
                     catch (Exception ex)
                     {
@@ -39,6 +56,16 @@ namespace DidoNet.IO
                     }
 
                     break;
+
+                case FileCloseMessage close:
+                    // dispose the file before removing it
+                    if (files.TryGetValue(close.Filename, out var file))
+                    {
+                        file.Dispose();
+                        files.TryRemove(close.Filename, out _);
+                    }
+                    break;
+
                 default:
                     throw new InvalidOperationException($"Unknown message type '{message.GetType()}'");
             }

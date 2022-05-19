@@ -14,6 +14,8 @@
 
         public FileShare Share { get; set; }
 
+        public FileOpenMessage() { }
+
         public FileOpenMessage(ushort channelNumber, string filename, FileMode mode, FileAccess access, FileShare share)
             : base(filename)
         {

@@ -2,7 +2,7 @@
 {
     internal class AssemblyErrorMessage : IMessage
     {
-        public string Error { get; private set; } = "";
+        public string Error { get; private set; } = String.Empty;
 
         public AssemblyErrorMessage() { }
 

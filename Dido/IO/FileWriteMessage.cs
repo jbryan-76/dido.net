@@ -6,6 +6,8 @@
 
         public byte[] Bytes { get; private set; } = new byte[0];
 
+        public FileWriteMessage() { }
+
         public FileWriteMessage(string filename, long position, byte[] bytes)
             : base(filename)
         {

@@ -4,8 +4,10 @@
     {
         public byte[] Bytes { get; private set; } = new byte[0];
 
-        public FileReadResponseMessage(string filename, byte[] bytes)
-            : base(filename, null)
+        public FileReadResponseMessage() { }
+
+        public FileReadResponseMessage(string filename, long position, long length, byte[] bytes)
+            : base(filename, position, length)
         {
             Bytes = bytes;
         }

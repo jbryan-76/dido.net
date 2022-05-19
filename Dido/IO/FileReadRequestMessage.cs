@@ -6,6 +6,8 @@
 
         public int Count { get; set; }
 
+        public FileReadRequestMessage() { }
+
         public FileReadRequestMessage(string filename, long position, int count)
             : base(filename)
         {

@@ -13,6 +13,6 @@
         /// For ServerCertificateValidationPolicies.Thumbprint, the specific certificate thumbprint to 
         /// validate against.
         /// </summary>
-        public string Thumbprint { get; set; } = "";
+        public string Thumbprint { get; set; } = String.Empty;
     }
 }

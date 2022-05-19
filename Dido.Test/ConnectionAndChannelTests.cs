@@ -2,7 +2,6 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -12,7 +11,7 @@ using Xunit.Abstractions;
 
 namespace DidoNet.Test
 {
-    public class ConnectionAndChannelTests
+    public partial class ConnectionAndChannelTests
     {
         static long NextPort = 8000;
 
@@ -441,7 +440,7 @@ namespace DidoNet.Test
         }
 
         [Fact]
-        public void LoopbackConnectionWithMessages()
+        public void LoopbackConnectionWithMessage()
         {
             using (var loopback = new Connection.LoopbackProxy())
             using (var clientLoopbackConnection = new Connection(loopback, Connection.LoopbackProxy.Role.Client, "client"))
@@ -450,31 +449,53 @@ namespace DidoNet.Test
                 var clientChannel = new MessageChannel(clientLoopbackConnection, 1);
                 var serverChannel = new MessageChannel(serverLoopbackConnection, 1);
 
+                // test client sending to server
                 var testMessage = new TestMessage { MyIntValue = 123, MyStringValue = "hello world" };
                 clientChannel.Send(testMessage);
                 var receivedMessage = serverChannel.ReceiveMessage<TestMessage>();
 
                 Assert.Equal(testMessage.MyIntValue, receivedMessage.MyIntValue);
                 Assert.Equal(testMessage.MyStringValue, receivedMessage.MyStringValue);
+
+                // test server sending back to client
+                testMessage.MyIntValue = -456;
+                testMessage.MyStringValue = "goodbye cruel world";
+                serverChannel.Send(testMessage);
+                receivedMessage = clientChannel.ReceiveMessage<TestMessage>();
+
+                Assert.Equal(testMessage.MyIntValue, receivedMessage.MyIntValue);
+                Assert.Equal(testMessage.MyStringValue, receivedMessage.MyStringValue);
             }
         }
 
-        class TestMessage : IMessage
+        [Fact]
+        public void LoopbackConnectionWithMessageHandler()
         {
-            public int MyIntValue { get; set; }
-
-            public string MyStringValue { get; set; }
-
-            public void Read(Stream stream)
+            using (var loopback = new Connection.LoopbackProxy())
+            using (var clientLoopbackConnection = new Connection(loopback, Connection.LoopbackProxy.Role.Client, "client"))
+            using (var serverLoopbackConnection = new Connection(loopback, Connection.LoopbackProxy.Role.Server, "server"))
             {
-                MyIntValue = stream.ReadInt32BE();
-                MyStringValue = stream.ReadString();
-            }
+                var clientChannel = new MessageChannel(clientLoopbackConnection, 1);
+                var serverChannel = new MessageChannel(serverLoopbackConnection, 1);
 
-            public void Write(Stream stream)
-            {
-                stream.WriteInt32BE(MyIntValue);
-                stream.WriteString(MyStringValue);
+                // use a reset event to wait until the server receives the message
+                var reset = new AutoResetEvent(false);
+                TestMessage? receivedMessage = null;
+                serverChannel.OnMessageReceived = (message, channel) =>
+                {
+                    receivedMessage = message as TestMessage;
+                    reset.Set();
+                };
+
+                // send the message
+                var testMessage = new TestMessage { MyIntValue = 123, MyStringValue = "hello world" };
+                clientChannel.Send(testMessage);
+
+                // block until the message is received
+                reset.WaitOne();
+
+                Assert.Equal(testMessage.MyIntValue, receivedMessage!.MyIntValue);
+                Assert.Equal(testMessage.MyStringValue, receivedMessage.MyStringValue);
             }
         }
     }

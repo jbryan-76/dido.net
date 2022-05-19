@@ -8,79 +8,91 @@ namespace DidoNet.Test
 {
     public class ProxyFileTests
     {
-        //[Fact]
+        [Fact]
         public void OpenNewRemoteFile()
         {
             using (var loopback = new Connection.LoopbackProxy())
             using (var appLoopbackConnection = new Connection(loopback, Connection.LoopbackProxy.Role.Client))
             using (var runnerLoopbackConnection = new Connection(loopback, Connection.LoopbackProxy.Role.Server))
-            using (var ioProxy = new ApplicationIOProxy(appLoopbackConnection))
+            using (var tempFile = new TemporaryFile())
             {
-                NewFile(runnerLoopbackConnection);
+                var ioProxy = new ApplicationIOProxy(appLoopbackConnection);
+                NewFile(tempFile.Filename, runnerLoopbackConnection);
+                // ensure all files are closed before deleting the temp file
+                while (ioProxy.Files.Any())
+                {
+                    ThreadHelpers.Yield();
+                }
             }
         }
 
         [Fact]
         public void OpenNewLocalFile()
         {
-            NewFile(null);
+            using (var tempFile = new TemporaryFile())
+            {
+                NewFile(tempFile.Filename, null);
+            }
         }
 
-        //[Fact]
+        [Fact]
         public void OpenExistingRemoteFile()
         {
             using (var loopback = new Connection.LoopbackProxy())
             using (var appLoopbackConnection = new Connection(loopback, Connection.LoopbackProxy.Role.Client))
             using (var runnerLoopbackConnection = new Connection(loopback, Connection.LoopbackProxy.Role.Server))
-            using (var ioProxy = new ApplicationIOProxy(appLoopbackConnection))
+            using (var tempFile = new TemporaryFile())
             {
-                ExistingFile(runnerLoopbackConnection);
+                var ioProxy = new ApplicationIOProxy(appLoopbackConnection);
+                ExistingFile(tempFile.Filename, runnerLoopbackConnection);
+                // ensure all files are closed before deleting the temp file
+                while (ioProxy.Files.Any())
+                {
+                    ThreadHelpers.Yield();
+                }
             }
         }
 
         [Fact]
         public void OpenExistingLocalFile()
         {
-            ExistingFile(null);
-        }
-
-        public void NewFile(Connection? connection = null)
-        {
             using (var tempFile = new TemporaryFile())
             {
-                var proxy = new RunnerFileProxy(connection);
-                byte[] data;
-                using (var stream = proxy.Open(tempFile.Filename, FileMode.Create))
-                {
-                    data = WriteRandomData(stream);
-                }
-                using (var stream = proxy.Open(tempFile.Filename, FileMode.Open))
-                {
-                    var target = ReadAllBytes(stream);
-                    Assert.True(Enumerable.SequenceEqual(data, target));
-                }
+                ExistingFile(tempFile.Filename, null);
             }
         }
 
-        public void ExistingFile(Connection? connection = null)
+        void NewFile(string filename, Connection? connection)
         {
-            using (var tempFile = new TemporaryFile())
+            var proxy = new RunnerFileProxy(connection);
+            byte[] data;
+            using (var stream = proxy.Open(filename, FileMode.Create))
             {
-                byte[] data;
-                using (var file = File.Create(tempFile.Filename))
-                {
-                    data = WriteRandomData(file);
-                }
-                var proxy = new RunnerFileProxy(connection);
-                using (var stream = proxy.Open(tempFile.Filename, FileMode.Open))
-                {
-                    var target = ReadAllBytes(stream);
-                    Assert.True(Enumerable.SequenceEqual(data, target));
-                }
+                data = WriteRandomData(stream);
+            }
+            using (var stream = proxy.Open(filename, FileMode.Open))
+            {
+                var target = ReadAllBytes(stream);
+                Assert.True(Enumerable.SequenceEqual(data, target));
             }
         }
 
-        internal byte[] WriteRandomData(Stream stream)
+        void ExistingFile(string filename, Connection? connection)
+        {
+            byte[] data;
+            using (var file = File.Create(filename))
+            {
+                data = WriteRandomData(file);
+            }
+            var proxy = new RunnerFileProxy(connection);
+            using (var stream = proxy.Open(filename, FileMode.Open))
+            {
+                var target = ReadAllBytes(stream);
+                Assert.True(Enumerable.SequenceEqual(data, target));
+            }
+        }
+
+        byte[] WriteRandomData(Stream stream)
         {
             var rand = new System.Random();
             var data = Enumerable.Range(0, 64).Select(x => (byte)rand.Next(256)).ToArray();
@@ -88,7 +100,7 @@ namespace DidoNet.Test
             return data;
         }
 
-        internal byte[] ReadAllBytes(Stream stream)
+        byte[] ReadAllBytes(Stream stream)
         {
             var data = new byte[stream.Length];
             int count = stream.Read(data);

@@ -32,6 +32,8 @@
     {
         public long Length { get; set; }
 
+        public FileSetLengthMessage() { }
+
         public FileSetLengthMessage(string filename, long length)
             : base(filename)
         {

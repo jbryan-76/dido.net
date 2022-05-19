@@ -9,7 +9,7 @@
         /// The optional label for the runner. 
         /// When submitting a task request this can be used to select a specific runner.
         /// </summary>
-        public string Label { get; set; } = "";
+        public string Label { get; set; } = String.Empty;
 
         /// <summary>
         /// The set of optional tags for the runner.
@@ -60,6 +60,6 @@
         /// <summary>
         /// For ServerCertificateValidationPolicies.Thumbprint, the specific certificate thumbprint to validate against.
         /// </summary>
-        public string ServerCertificateThumbprint { get; set; } = "";
+        public string ServerCertificateThumbprint { get; set; } = String.Empty;
     }
 }
