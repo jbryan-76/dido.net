@@ -9,6 +9,34 @@ namespace DidoNet.Test
     public class ProxyFileTests
     {
         [Fact]
+        public void CreateRemoteFile()
+        {
+            using (var loopback = new Connection.LoopbackProxy())
+            using (var appLoopbackConnection = new Connection(loopback, Connection.LoopbackProxy.Role.Client))
+            using (var runnerLoopbackConnection = new Connection(loopback, Connection.LoopbackProxy.Role.Server))
+            using (var tempFile = new TemporaryFile())
+            {
+                var ioProxy = new ApplicationIOProxy(appLoopbackConnection);
+                CreateFile(tempFile.Filename, runnerLoopbackConnection);
+                // ensure all files are closed before deleting the temp file
+                while (ioProxy.Files.Any())
+                {
+                    ThreadHelpers.Yield();
+                }
+            }
+        }
+
+        [Fact]
+        public void CreateLocalFile()
+        {
+            using (var tempFile = new TemporaryFile())
+            {
+                CreateFile(tempFile.Filename, null);
+            }
+        }
+
+
+        [Fact]
         public void OpenNewRemoteFile()
         {
             using (var loopback = new Connection.LoopbackProxy())
@@ -17,7 +45,7 @@ namespace DidoNet.Test
             using (var tempFile = new TemporaryFile())
             {
                 var ioProxy = new ApplicationIOProxy(appLoopbackConnection);
-                NewFile(tempFile.Filename, runnerLoopbackConnection);
+                OpenNewFile(tempFile.Filename, runnerLoopbackConnection);
                 // ensure all files are closed before deleting the temp file
                 while (ioProxy.Files.Any())
                 {
@@ -31,7 +59,7 @@ namespace DidoNet.Test
         {
             using (var tempFile = new TemporaryFile())
             {
-                NewFile(tempFile.Filename, null);
+                OpenNewFile(tempFile.Filename, null);
             }
         }
 
@@ -44,7 +72,7 @@ namespace DidoNet.Test
             using (var tempFile = new TemporaryFile())
             {
                 var ioProxy = new ApplicationIOProxy(appLoopbackConnection);
-                ExistingFile(tempFile.Filename, runnerLoopbackConnection);
+                OpenExistingFile(tempFile.Filename, runnerLoopbackConnection);
                 // ensure all files are closed before deleting the temp file
                 while (ioProxy.Files.Any())
                 {
@@ -58,11 +86,26 @@ namespace DidoNet.Test
         {
             using (var tempFile = new TemporaryFile())
             {
-                ExistingFile(tempFile.Filename, null);
+                OpenExistingFile(tempFile.Filename, null);
             }
         }
 
-        void NewFile(string filename, Connection? connection)
+        void CreateFile(string filename, Connection? connection)
+        {
+            var proxy = new RunnerFileProxy(connection);
+            byte[] data;
+            using (var stream = proxy.Create(filename))
+            {
+                data = WriteRandomData(stream);
+            }
+            using (var stream = proxy.Open(filename, FileMode.Open))
+            {
+                var target = ReadAllBytes(stream);
+                Assert.True(Enumerable.SequenceEqual(data, target));
+            }
+        }
+
+        void OpenNewFile(string filename, Connection? connection)
         {
             var proxy = new RunnerFileProxy(connection);
             byte[] data;
@@ -77,7 +120,7 @@ namespace DidoNet.Test
             }
         }
 
-        void ExistingFile(string filename, Connection? connection)
+        void OpenExistingFile(string filename, Connection? connection)
         {
             byte[] data;
             using (var file = File.Create(filename))

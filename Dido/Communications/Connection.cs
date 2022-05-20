@@ -293,17 +293,16 @@ namespace DidoNet
         /// <exception cref="AggregateException"></exception>
         public void Dispose()
         {
-            if (Interlocked.Read(ref Connected) == 1)
-            {
-                Disconnect();
-            }
+            // cleanly shutdown all channels and processing threads
+            Disconnect();
 
-            // dispose all channels
+            // dispose any remaining channels
             foreach (var channel in Channels)
             {
                 channel.Value.Dispose();
             }
 
+            // cleanup and track any exceptions from threads
             var exceptions = new List<Exception>();
             if (!IsDisposed)
             {
@@ -359,33 +358,32 @@ namespace DidoNet
         /// </summary>
         public void Disconnect()
         {
-            if (Interlocked.Read(ref Connected) == 1)
-            {
-                // prevent any new channels from being created while disconnecting
-                Interlocked.Exchange(ref IsDisconnecting, 1);
+            // ensure no new channels will be created by the public API while disconnecting
+            Interlocked.Exchange(ref IsDisconnecting, 1);
 
-                // remove and dispose all channels to force them to flush any remaining data
-                ushort[] keys;
-                while ((keys = Channels.Keys.ToArray()).Length > 0)
+            // remove and dispose all channels to force them to flush any remaining data
+            ushort[] keys;
+            while ((keys = Channels.Keys.ToArray()).Length > 0)
+            {
+                foreach (var key in keys)
                 {
-                    foreach (var key in keys)
+                    if (Channels.TryRemove(key, out var channel))
                     {
-                        if (Channels.TryRemove(key, out var channel))
-                        {
-                            channel.Dispose();
-                        }
+                        channel.Dispose();
                     }
                 }
-
-                Flush();
-
-                // signal all threads to stop
-                Interlocked.Exchange(ref Connected, 0);
-
-                // wait for the threads to finish
-                ReadThread!.Join(1000);
-                WriteThread!.Join(1000);
             }
+
+            // wait for any remaining flushed channel data to be sent
+            Flush();
+
+            // signal all threads to stop
+            Interlocked.Exchange(ref Connected, 0);
+
+            // wait for the threads to finish
+            ReadThread!.Join(1000);
+            WriteThread!.Join(1000);
+
             try
             {
                 // gracefully attempt to shut down the other side of the connection by sending a disconnect frame
@@ -413,6 +411,7 @@ namespace DidoNet
         /// disposed, so calling Dispose() on a channel is effectively optional.
         /// </summary>
         /// <param name="channelNumber"></param>
+        /// <exception cref="NotConnectedException"></exception>
         /// <returns></returns>
         public Channel GetChannel(ushort channelNumber)
         {
@@ -421,7 +420,7 @@ namespace DidoNet
             {
                 throw new NotConnectedException("Can't create channel: not connected.");
             }
-            return Channels.GetOrAdd(channelNumber, (num) => new Channel(this, num));
+            return GetChannelInternal(channelNumber);
         }
 
         /// <summary>
@@ -639,7 +638,7 @@ namespace DidoNet
                     }
                     else if (frame is ChannelDataFrame)
                     {
-                        var channel = GetChannel(frame.Channel);
+                        var channel = GetChannelInternal(frame.Channel);
                         channel.Receive(frame.Payload);
                         UnitTestReceiveFrameMonitor?.Invoke(frame);
                     }
@@ -663,6 +662,16 @@ namespace DidoNet
                 // force all thread termination on any error
                 Interlocked.Exchange(ref Connected, 0);
             }
+        }
+
+        /// <summary>
+        /// Gets or creates a reference to the indicated channel.
+        /// </summary>
+        /// <param name="channelNumber"></param>
+        /// <returns></returns>
+        private Channel GetChannelInternal(ushort channelNumber)
+        {
+            return Channels.GetOrAdd(channelNumber, (num) => new Channel(this, num));
         }
 
         /// <summary>

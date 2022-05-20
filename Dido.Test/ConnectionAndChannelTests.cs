@@ -376,7 +376,7 @@ namespace DidoNet.Test
                 // wait for all consumers to finish receiving all messages
                 var totalClientSentMessages = channel1ClientNumMessages + channel2ClientNumMessages;
                 var totalServerSentMessages = channel1ServerNumMessages + channel2ServerNumMessages;
-                while (serverReceivedMessages.Count < totalClientSentMessages &&
+                while (serverReceivedMessages.Count < totalClientSentMessages ||
                     clientReceivedMessages.Count < totalServerSentMessages)
                 {
                     Thread.Sleep(1);

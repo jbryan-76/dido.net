@@ -302,13 +302,10 @@ namespace DidoNet
             Dispose(false);
         }
 
-        /// <summary>
-        /// Override of Stream.Dispose.
-        /// </summary>
-        /// <param name="disposing"></param>
         protected override void Dispose(bool disposing)
         {
             base.Dispose(disposing);
+
             if (Interlocked.Read(ref IsDisposed) == 0)
             {
                 // make sure all pending data is sent before stopping the write thread
@@ -320,28 +317,30 @@ namespace DidoNet
                 WriteThread!.Join();
                 ReadThread!.Join();
             }
-            if (disposing)
-            {
-                // dispose any managed objects
-                WriteBuffer.Dispose();
-            }
+
             GC.SuppressFinalize(this);
 
             Connection.RemoveChannel(this);
 
-            // propagate any exceptions
-            var exceptions = new List<Exception>();
-            if (ReadThreadException != null)
+            if (disposing)
             {
-                exceptions.Add(ReadThreadException);
-            }
-            if (WriteThreadException != null)
-            {
-                exceptions.Add(WriteThreadException);
-            }
-            if (exceptions.Count > 0)
-            {
-                throw new AggregateException(exceptions);
+                // dispose any managed objects
+                WriteBuffer.Dispose();
+
+                // propagate any exceptions
+                var exceptions = new List<Exception>();
+                if (ReadThreadException != null)
+                {
+                    exceptions.Add(ReadThreadException);
+                }
+                if (WriteThreadException != null)
+                {
+                    exceptions.Add(WriteThreadException);
+                }
+                if (exceptions.Count > 0)
+                {
+                    throw new AggregateException(exceptions);
+                }
             }
         }
 

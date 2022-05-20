@@ -8,11 +8,15 @@ namespace DidoNet.IO
     /// </summary>
     public class RunnerFileProxy
     {
-        System.IO.File;
+        //System.IO.File;
         // TRANSIENT, ATOMIC-LIKE OPS:
         // append; copy; delete; exists; get info; move; open; read; set info; write;
-        // CREATES A STREAM RESOURCE:
-        // create; open; openread; openwrite; 
+
+        /// <summary>
+        /// The dedicated message channel marshalling file IO requests by the executing expression on a
+        /// Runner to the remote application.
+        /// </summary>
+        internal MessageChannel? Channel { get; set; }
 
         /// <summary>
         /// The set of currently open files managed by this instance, keyed to the file path.
@@ -31,12 +35,6 @@ namespace DidoNet.IO
         private SortedSet<ushort> UsedChannels = new SortedSet<ushort>();
 
         /// <summary>
-        /// The dedicated message channel marshalling file IO requests by the executing expression on a
-        /// Runner to the remote application.
-        /// </summary>
-        internal MessageChannel? Channel { get; set; }
-
-        /// <summary>
         /// Create a new instance to proxy file IO over a connection.
         /// If a connection is not provided, the class instance API will pass-through to the local filesystem.
         /// </summary>
@@ -52,16 +50,119 @@ namespace DidoNet.IO
             }
         }
 
+        // void AppendAllLines(string path, IEnumerable<string> contents)
+        // void AppendAllLines(string path, IEnumerable<string> contents, Encoding encoding)
+        // void AppendAllText(string path, string? contents)
+        // void AppendAllText(string path, string? contents, Encoding encoding)
+        // StreamWriter AppendText(string path)
+
+        // void Copy(string sourceFileName, string destFileName)
+        // void Copy(string sourceFileName, string destFileName, bool overwrite)
+        // void Delete(string path)
+        // bool Exists([NotNullWhen(true)] string? path)
+
+        // FileAttributes GetAttributes(string path)
+        // DateTime GetCreationTime(string path)
+        // DateTime GetCreationTimeUtc(string path)
+        // DateTime GetLastAccessTime(string path)
+        // DateTime GetLastAccessTimeUtc(string path)
+        // DateTime GetLastWriteTime(string path)
+        // DateTime GetLastWriteTimeUtc(string path)
+
+        // void Move(string sourceFileName, string destFileName)
+        // void Move(string sourceFileName, string destFileName, bool overwrite)
+
+        // byte[] ReadAllBytes(string path)
+        // string[] ReadAllLines(string path)
+        // string[] ReadAllLines(string path, Encoding encoding)
+        // string ReadAllText(string path)
+        // string ReadAllText(string path, Encoding encoding)
+        // IEnumerable<string> ReadLines(string path)
+        // IEnumerable<string> ReadLines(string path, Encoding encoding)
+
+        // void SetAttributes(string path, FileAttributes fileAttributes)
+        // void SetCreationTime(string path, DateTime creationTime)
+        // void SetCreationTimeUtc(string path, DateTime creationTimeUtc)
+        // void SetLastAccessTime(string path, DateTime lastAccessTime)
+        // void SetLastAccessTimeUtc(string path, DateTime lastAccessTimeUtc)
+        // void SetLastWriteTime(string path, DateTime lastWriteTime)
+        // void SetLastWriteTimeUtc(string path, DateTime lastWriteTimeUtc)
+
+        // void WriteAllBytes(string path, byte[] bytes)
+        // void WriteAllLines(string path, IEnumerable<string> contents)
+        // void WriteAllLines(string path, IEnumerable<string> contents, Encoding encoding)
+        // void WriteAllLines(string path, string[] contents)
+        // void WriteAllLines(string path, string[] contents, Encoding encoding)
+        // void WriteAllText(string path, string? contents)
+        // void WriteAllText(string path, string? contents, Encoding encoding)
+
+        /// <summary>
+        /// Creates or overwrites a file in the specified path.
+        /// </summary>
+        /// <param name="path"></param>
+        /// <returns></returns>
+        public Stream Create(string path)
+        {
+            return Open(path, FileMode.Create, FileAccess.ReadWrite, FileShare.None);
+        }
+
+        /// <summary>
+        /// Creates or overwrites a file in the specified path.
+        /// <para/>NOTE: bufferSize is not used due to the underlying proxied IO over a network connection.
+        /// </summary>
+        /// <param name="path"></param>
+        /// <param name="bufferSize"></param>
+        /// <returns></returns>
+        public Stream Create(string path, int bufferSize)
+        {
+            return Open(path, FileMode.Create, FileAccess.ReadWrite, FileShare.None);
+        }
+
+        /// <summary>
+        /// Creates or opens a file for writing UTF-8 encoded text. If the file already exists,
+        /// its contents are overwritten.
+        /// </summary>
+        /// <param name="path"></param>
+        /// <returns></returns>
+        public StreamWriter CreateText(string path)
+        {
+            return new StreamWriter(Create(path));
+        }
+
+        /// <summary>
+        /// Opens a file stream on the specified path with read/write access with no sharing.
+        /// </summary>
+        /// <param name="path"></param>
+        /// <param name="mode"></param>
+        /// <returns></returns>
         public Stream Open(string path, FileMode mode)
         {
             return Open(path, mode, FileAccess.ReadWrite, FileShare.None);
         }
 
+        /// <summary>
+        /// Opens a file stream on the specified path, with the specified mode and
+        /// access with no sharing.
+        /// </summary>
+        /// <param name="path"></param>
+        /// <param name="mode"></param>
+        /// <param name="access"></param>
+        /// <returns></returns>
         public Stream Open(string path, FileMode mode, FileAccess access)
         {
             return Open(path, mode, access, FileShare.None);
         }
 
+        /// <summary>
+        /// Opens a file stream on the specified path, having the specified mode
+        /// with read, write, or read/write access and the specified sharing option.
+        /// </summary>
+        /// <param name="path"></param>
+        /// <param name="mode"></param>
+        /// <param name="access"></param>
+        /// <param name="share"></param>
+        /// <returns></returns>
+        /// <exception cref="ConcurrencyException"></exception>
         public Stream Open(string path, FileMode mode, FileAccess access, FileShare share)
         {
             if (Channel != null)
@@ -108,21 +209,52 @@ namespace DidoNet.IO
             }
         }
 
+        /// <summary>
+        /// Opens a file stream on the specified path and with the specified options.
+        /// <para/>NOTE: Only options Mode, Access, and Share are honored.
+        /// </summary>
+        /// <param name="path"></param>
+        /// <param name="options"></param>
+        /// <returns></returns>
+        public Stream Open(string path, FileStreamOptions options)
+        {
+            return Open(path, options.Mode, options.Access, options.Share);
+        }
+
+        /// <summary>
+        /// Opens an existing file for reading.
+        /// </summary>
+        /// <param name="path"></param>
+        /// <returns></returns>
         public Stream OpenRead(string path)
         {
             return Open(path, FileMode.Open, FileAccess.Read, FileShare.None);
         }
 
+        /// <summary>
+        /// Opens an existing UTF-8 encoded text file for reading.
+        /// </summary>
+        /// <param name="path"></param>
+        /// <returns></returns>
         public StreamReader OpenText(string path)
         {
             return new StreamReader(OpenRead(path));
         }
 
+        /// <summary>
+        /// Opens an existing file or creates a new file for writing.
+        /// </summary>
+        /// <param name="path"></param>
+        /// <returns></returns>
         public Stream OpenWrite(string path)
         {
             return Open(path, FileMode.Open, FileAccess.Read, FileShare.None);
         }
 
+        /// <summary>
+        /// Closes the indicated file.
+        /// </summary>
+        /// <param name="path"></param>
         private void Close(string path)
         {
             if (Files.TryRemove(path, out var stream))
@@ -141,7 +273,7 @@ namespace DidoNet.IO
                 // opening a file: create a dedicated channel
                 if (AvailableChannels.Count == 0)
                 {
-                    throw new ResourceNotAvailableException("No more File channels are available on the underlying connection.");
+                    throw new ResourceNotAvailableException("No more communication channels are available on the underlying connection.");
                 }
 
                 var channelNumber = AvailableChannels.First();

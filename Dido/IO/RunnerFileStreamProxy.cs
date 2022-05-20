@@ -47,6 +47,7 @@
 
         public override int Read(byte[] buffer, int offset, int count)
         {
+            // TODO: break up and loop send based on a max message size
             Channel.Send(new FileReadRequestMessage(Name, Position, count));
             var response = Channel.ReceiveMessage<FileReadResponseMessage>();
             response.ThrowOnError();
@@ -91,6 +92,7 @@
 
         public override void Write(byte[] buffer, int offset, int count)
         {
+            // TODO: break up and loop send based on a max message size
             var data = new byte[count];
             Buffer.BlockCopy(buffer, offset, data, 0, count);
             Channel.Send(new FileWriteMessage(Name, Position, data));

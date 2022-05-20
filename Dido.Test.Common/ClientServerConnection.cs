@@ -55,7 +55,7 @@ namespace DidoNet.Test.Common
             {
                 ThreadHelpers.Yield();
             } while (ServerRecievedFrames.Count != currentServerReceived + 1
-                && ClientTransmittedFrames.Count != currentClientSent + 1);
+                || ClientTransmittedFrames.Count != currentClientSent + 1);
 
             // NOTE a sleep here is also necessary due to some kind of concurrent state issue:
             // without it, there are situations where ConcurrentQueue.Count is != 0 but ConcurrentQueue.TryDequeue fails.
@@ -81,7 +81,7 @@ namespace DidoNet.Test.Common
             {
                 ThreadHelpers.Yield();
             } while (ServerTransmittedFrames.Count != currentServerSent + 1
-                && ClientRecievedFrames.Count != currentClientReceived + 1);
+                || ClientRecievedFrames.Count != currentClientReceived + 1);
 
             // NOTE a sleep here is also necessary due to some kind of concurrent state issue:
             // without it, there are situations where ConcurrentQueue.Count is != 0 but ConcurrentQueue.TryDequeue fails.
