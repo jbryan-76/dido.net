@@ -722,6 +722,7 @@ namespace DidoNet
         /// <param name="frame"></param>
         private void WriteFrame(Frame frame)
         {
+            // TODO: use a BufferedStream to increase performance?
             ThreadHelpers.Debug($"connection {Name} writing frame {frame}");
             WriteStream.WriteByte(frame.Type);
             WriteStream.WriteUInt16BE(frame.Channel);

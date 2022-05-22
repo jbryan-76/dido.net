@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using System.Text;
 
 namespace DidoNet.IO
 {
@@ -9,8 +10,6 @@ namespace DidoNet.IO
     public class RunnerFileProxy
     {
         //System.IO.File;
-        // TRANSIENT, ATOMIC-LIKE OPS:
-        // append; copy; delete; exists; get info; move; open; read; set info; write;
 
         /// <summary>
         /// The dedicated message channel marshalling file IO requests by the executing expression on a
@@ -22,6 +21,8 @@ namespace DidoNet.IO
         /// The set of currently open files managed by this instance, keyed to the file path.
         /// </summary>
         private ConcurrentDictionary<string, RunnerFileStreamProxy> Files = new ConcurrentDictionary<string, RunnerFileStreamProxy>();
+
+        // TODO: use a <ushort,bool> dictionary for channels instead? with the value indicating whether it is used?
 
         /// <summary>
         /// The set of available channel numbers that can be used to create dedicated message channels
@@ -50,51 +51,93 @@ namespace DidoNet.IO
             }
         }
 
-        // void AppendAllLines(string path, IEnumerable<string> contents)
-        // void AppendAllLines(string path, IEnumerable<string> contents, Encoding encoding)
-        // void AppendAllText(string path, string? contents)
-        // void AppendAllText(string path, string? contents, Encoding encoding)
-        // StreamWriter AppendText(string path)
+        /// <summary>
+        /// Appends lines to a file, and then closes the file. If the specified file does
+        /// not exist, this method creates a file, writes the specified lines to the file,
+        /// and then closes the file.
+        /// </summary>
+        /// <param name="path"></param>
+        /// <param name="contents"></param>
+        public void AppendAllLines(string path, IEnumerable<string> contents)
+        {
+            AppendAllLines(path, contents, new UTF8Encoding(false));
+        }
+
+        /// <summary>
+        /// Appends lines to a file by using a specified encoding, and then closes the file.
+        /// If the specified file does not exist, this method creates a file, writes the
+        /// specified lines to the file, and then closes the file.
+        /// </summary>
+        /// <param name="path"></param>
+        /// <param name="contents"></param>
+        /// <param name="encoding"></param>
+        public void AppendAllLines(string path, IEnumerable<string> contents, Encoding encoding)
+        {
+            if (Channel != null)
+            {
+                Channel.Send(new FileAtomicWriteMessage(path, contents, append: true, encoding));
+                var ack = Channel.ReceiveMessage<FileAckMessage>();
+                ack.ThrowOnError();
+            }
+            else
+            {
+                File.AppendAllLines(path, contents, encoding);
+            }
+        }
+
+        /// <summary>
+        /// Opens a file, appends the specified string to the file, and then closes the file.
+        /// If the file does not exist, this method creates a file, writes the specified
+        /// string to the file, then closes the file.
+        /// </summary>
+        /// <param name="path"></param>
+        /// <param name="contents"></param>
+        public void AppendAllText(string path, string contents)
+        {
+            AppendAllText(path, contents, new UTF8Encoding(false));
+        }
+
+        /// <summary>
+        /// Appends the specified string to the file using the specified encoding, creating
+        /// the file if it does not already exist.
+        /// </summary>
+        /// <param name="path"></param>
+        /// <param name="contents"></param>
+        /// <param name="encoding"></param>
+        public void AppendAllText(string path, string contents, Encoding encoding)
+        {
+            if (Channel != null)
+            {
+                Channel.Send(new FileAtomicWriteMessage(path, contents, append: true, encoding));
+                var ack = Channel.ReceiveMessage<FileAckMessage>();
+                ack.ThrowOnError();
+            }
+            else
+            {
+                File.AppendAllText(path, contents, encoding);
+            }
+        }
+
+        /// <summary>
+        /// Creates a System.IO.StreamWriter that appends UTF-8 encoded text to an existing
+        /// file, or to a new file if the specified file does not exist.
+        /// </summary>
+        /// <param name="path"></param>
+        /// <returns></returns>
+        public StreamWriter AppendText(string path)
+        {
+            if (Channel != null)
+            {
+                return new StreamWriter(Open(path, FileMode.Append), new UTF8Encoding(false));
+            }
+            else
+            {
+                return File.AppendText(path);
+            }
+        }
 
         // void Copy(string sourceFileName, string destFileName)
         // void Copy(string sourceFileName, string destFileName, bool overwrite)
-        // void Delete(string path)
-        // bool Exists([NotNullWhen(true)] string? path)
-
-        // FileAttributes GetAttributes(string path)
-        // DateTime GetCreationTime(string path)
-        // DateTime GetCreationTimeUtc(string path)
-        // DateTime GetLastAccessTime(string path)
-        // DateTime GetLastAccessTimeUtc(string path)
-        // DateTime GetLastWriteTime(string path)
-        // DateTime GetLastWriteTimeUtc(string path)
-
-        // void Move(string sourceFileName, string destFileName)
-        // void Move(string sourceFileName, string destFileName, bool overwrite)
-
-        // byte[] ReadAllBytes(string path)
-        // string[] ReadAllLines(string path)
-        // string[] ReadAllLines(string path, Encoding encoding)
-        // string ReadAllText(string path)
-        // string ReadAllText(string path, Encoding encoding)
-        // IEnumerable<string> ReadLines(string path)
-        // IEnumerable<string> ReadLines(string path, Encoding encoding)
-
-        // void SetAttributes(string path, FileAttributes fileAttributes)
-        // void SetCreationTime(string path, DateTime creationTime)
-        // void SetCreationTimeUtc(string path, DateTime creationTimeUtc)
-        // void SetLastAccessTime(string path, DateTime lastAccessTime)
-        // void SetLastAccessTimeUtc(string path, DateTime lastAccessTimeUtc)
-        // void SetLastWriteTime(string path, DateTime lastWriteTime)
-        // void SetLastWriteTimeUtc(string path, DateTime lastWriteTimeUtc)
-
-        // void WriteAllBytes(string path, byte[] bytes)
-        // void WriteAllLines(string path, IEnumerable<string> contents)
-        // void WriteAllLines(string path, IEnumerable<string> contents, Encoding encoding)
-        // void WriteAllLines(string path, string[] contents)
-        // void WriteAllLines(string path, string[] contents, Encoding encoding)
-        // void WriteAllText(string path, string? contents)
-        // void WriteAllText(string path, string? contents, Encoding encoding)
 
         /// <summary>
         /// Creates or overwrites a file in the specified path.
@@ -118,6 +161,8 @@ namespace DidoNet.IO
             return Open(path, FileMode.Create, FileAccess.ReadWrite, FileShare.None);
         }
 
+        //Stream Create(string path, int bufferSize, FileOptions options)
+
         /// <summary>
         /// Creates or opens a file for writing UTF-8 encoded text. If the file already exists,
         /// its contents are overwritten.
@@ -129,6 +174,20 @@ namespace DidoNet.IO
             return new StreamWriter(Create(path));
         }
 
+        // void Delete(string path)
+        // bool Exists([NotNullWhen(true)] string? path)
+
+        // FileAttributes GetAttributes(string path)
+        // DateTime GetCreationTime(string path)
+        // DateTime GetCreationTimeUtc(string path)
+        // DateTime GetLastAccessTime(string path)
+        // DateTime GetLastAccessTimeUtc(string path)
+        // DateTime GetLastWriteTime(string path)
+        // DateTime GetLastWriteTimeUtc(string path)
+
+        // void Move(string sourceFileName, string destFileName)
+        // void Move(string sourceFileName, string destFileName, bool overwrite)
+
         /// <summary>
         /// Opens a file stream on the specified path with read/write access with no sharing.
         /// </summary>
@@ -137,7 +196,7 @@ namespace DidoNet.IO
         /// <returns></returns>
         public Stream Open(string path, FileMode mode)
         {
-            return Open(path, mode, FileAccess.ReadWrite, FileShare.None);
+            return Open(path, mode, (mode == FileMode.Append ? FileAccess.Write : FileAccess.ReadWrite), FileShare.None);
         }
 
         /// <summary>
@@ -228,7 +287,7 @@ namespace DidoNet.IO
         /// <returns></returns>
         public Stream OpenRead(string path)
         {
-            return Open(path, FileMode.Open, FileAccess.Read, FileShare.None);
+            return Open(path, FileMode.Open, FileAccess.Read, FileShare.Read);
         }
 
         /// <summary>
@@ -249,6 +308,229 @@ namespace DidoNet.IO
         public Stream OpenWrite(string path)
         {
             return Open(path, FileMode.Open, FileAccess.Read, FileShare.None);
+        }
+
+        /// <summary>
+        /// Opens a binary file, reads the contents of the file into a byte array, and then closes the file.
+        /// </summary>
+        /// <param name="path"></param>
+        /// <returns></returns>
+        /// <exception cref="IOException"></exception>
+        public byte[] ReadAllBytes(string path)
+        {
+            using (var stream = OpenRead(path))
+            {
+                if (stream.Length > Int32.MaxValue)
+                {
+                    throw new IOException("File length is greater than the 2GB limit.");
+                }
+                return stream.ReadBytes((int)stream.Length);
+            }
+        }
+
+        /// <summary>
+        /// Opens a text file, reads all lines of the file, and then closes the file.
+        /// </summary>
+        /// <param name="path"></param>
+        /// <returns></returns>
+        public string[] ReadAllLines(string path)
+        {
+            return ReadAllLines(path, Encoding.UTF8);
+        }
+
+        /// <summary>
+        /// Opens a file, reads all lines of the file with the specified encoding, and then closes the file.
+        /// </summary>
+        /// <param name="path"></param>
+        /// <param name="encoding"></param>
+        /// <returns></returns>
+        public string[] ReadAllLines(string path, Encoding encoding)
+        {
+            using (var reader = new StreamReader(new BufferedStream(OpenRead(path)), encoding))
+            {
+                // implementation copied from .NET mscorlib
+                string? line;
+                var lines = new List<string>();
+                while ((line = reader.ReadLine()) != null)
+                {
+                    lines.Add(line);
+                }
+                return lines.ToArray();
+            }
+        }
+
+        /// <summary>
+        /// Opens a text file, reads all the text in the file, and then closes the file.
+        /// </summary>
+        /// <param name="path"></param>
+        /// <returns></returns>
+        public string ReadAllText(string path)
+        {
+            return ReadAllText(path, Encoding.UTF8);
+        }
+
+        /// <summary>
+        /// Opens a file, reads all text in the file with the specified encoding, and then closes the file.
+        /// </summary>
+        /// <param name="path"></param>
+        /// <param name="encoding"></param>
+        /// <returns></returns>
+        public string ReadAllText(string path, Encoding encoding)
+        {
+            using (var reader = new StreamReader(OpenRead(path), encoding))
+            {
+                return reader.ReadToEnd();
+            }
+        }
+
+        /// <summary>
+        /// Reads the lines of a file.
+        /// </summary>
+        /// <param name="path"></param>
+        /// <returns></returns>
+        public IEnumerable<string> ReadLines(string path)
+        {
+            return ReadLines(path, Encoding.UTF8);
+        }
+
+        /// <summary>
+        /// Read the lines of a file that has a specified encoding.
+        /// </summary>
+        /// <param name="path"></param>
+        /// <param name="encoding"></param>
+        /// <returns></returns>
+        public IEnumerable<string> ReadLines(string path, Encoding encoding)
+        {
+            using (var reader = new StreamReader(new BufferedStream(OpenRead(path)), encoding))
+            {
+                for (var line = reader.ReadLine(); line != null; line = reader.ReadLine())
+                {
+                    yield return line;
+                }
+            }
+        }
+
+        // void SetAttributes(string path, FileAttributes fileAttributes)
+        // void SetCreationTime(string path, DateTime creationTime)
+        // void SetCreationTimeUtc(string path, DateTime creationTimeUtc)
+        // void SetLastAccessTime(string path, DateTime lastAccessTime)
+        // void SetLastAccessTimeUtc(string path, DateTime lastAccessTimeUtc)
+        // void SetLastWriteTime(string path, DateTime lastWriteTime)
+        // void SetLastWriteTimeUtc(string path, DateTime lastWriteTimeUtc)
+
+        /// <summary>
+        /// Creates a new file, writes the specified byte array to the file, and then closes
+        /// the file. If the target file already exists, it is overwritten.
+        /// </summary>
+        /// <param name="path"></param>
+        /// <param name="bytes"></param>
+        public void WriteAllBytes(string path, byte[] bytes)
+        {
+            if (Channel != null)
+            {
+                Channel.Send(new FileAtomicWriteMessage(path, bytes, append: true));
+                var ack = Channel.ReceiveMessage<FileAckMessage>();
+                ack.ThrowOnError();
+            }
+            else
+            {
+                File.WriteAllBytes(path, bytes);
+            }
+        }
+
+        /// <summary>
+        /// Creates a new file, writes a collection of strings to the file, and then closes the file.
+        /// </summary>
+        /// <param name="path"></param>
+        /// <param name="contents"></param>
+        public void WriteAllLines(string path, IEnumerable<string> contents)
+        {
+            WriteAllLines(path, contents, new UTF8Encoding(false));
+        }
+
+        /// <summary>
+        /// Creates a new file by using the specified encoding, writes a collection of strings
+        /// to the file, and then closes the file.
+        /// </summary>
+        /// <param name="path"></param>
+        /// <param name="contents"></param>
+        /// <param name="encoding"></param>
+        public void WriteAllLines(string path, IEnumerable<string> contents, Encoding encoding)
+        {
+            if (Channel != null)
+            {
+                Channel.Send(new FileAtomicWriteMessage(path, contents, append: false, encoding));
+                var ack = Channel.ReceiveMessage<FileAckMessage>();
+                ack.ThrowOnError();
+            }
+            else
+            {
+                File.WriteAllLines(path, contents, encoding);
+            }
+        }
+
+        /// <summary>
+        /// Creates a new file, write the specified string array to the file, and then closes the file.
+        /// </summary>
+        /// <param name="path"></param>
+        /// <param name="contents"></param>
+        public void WriteAllLines(string path, string[] contents)
+        {
+            WriteAllLines(path, contents, new UTF8Encoding(false));
+        }
+
+        /// <summary>
+        /// Creates a new file, writes the specified string array to the file by using the
+        /// specified encoding, and then closes the file.
+        /// </summary>
+        /// <param name="path"></param>
+        /// <param name="contents"></param>
+        /// <param name="encoding"></param>
+        public void WriteAllLines(string path, string[] contents, Encoding encoding)
+        {
+            if (Channel != null)
+            {
+                Channel.Send(new FileAtomicWriteMessage(path, contents, append: false, encoding));
+                var ack = Channel.ReceiveMessage<FileAckMessage>();
+                ack.ThrowOnError();
+            }
+            else
+            {
+                File.WriteAllLines(path, contents, encoding);
+            }
+        }
+
+        /// <summary>
+        /// Creates a new file, writes the specified string to the file, and then closes
+        /// the file. If the target file already exists, it is overwritten.
+        /// </summary>
+        /// <param name="path"></param>
+        /// <param name="contents"></param>
+        public void WriteAllText(string path, string contents)
+        {
+            WriteAllText(path, contents, new UTF8Encoding(false));
+        }
+
+        /// <summary>
+        /// Creates a new file, writes the specified string to the file using the specified
+        /// encoding, and then closes the file. If the target file already exists, it is
+        /// overwritten.
+        /// </summary>
+        /// <param name="path"></param>
+        /// <param name="contents"></param>
+        /// <param name="encoding"></param>
+        public void WriteAllText(string path, string contents, Encoding encoding)
+        {
+            if (Channel != null)
+            {
+                Channel.Send(new FileAtomicWriteMessage(path, contents, append: false, encoding));
+                var ack = Channel.ReceiveMessage<FileAckMessage>();
+                ack.ThrowOnError();
+            }
+            else
+            {
+                File.WriteAllText(path, contents, encoding);
+            }
         }
 
         /// <summary>

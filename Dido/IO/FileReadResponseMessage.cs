@@ -6,8 +6,8 @@
 
         public FileReadResponseMessage() { }
 
-        public FileReadResponseMessage(string filename, long position, long length, byte[] bytes)
-            : base(filename, position, length)
+        public FileReadResponseMessage(string filename, long filePosition, long fileLength, byte[] bytes)
+            : base(filename, filePosition, fileLength)
         {
             Bytes = bytes;
         }
@@ -25,7 +25,7 @@
         public override void Write(Stream stream)
         {
             base.Write(stream);
-            stream.WriteInt32BE(Bytes?.Length ?? 0);
+            stream.WriteInt32BE(Bytes.Length);
             stream.Write(Bytes);
         }
     }

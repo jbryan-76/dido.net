@@ -51,6 +51,13 @@
                     {
                         var data = new byte[read.Count];
                         var count = Stream.Read(data, 0, data.Length);
+                        if (count < data.Length)
+                        {
+                            // truncate data if necessary
+                            var trunc = new byte[count];
+                            Buffer.BlockCopy(data, 0, trunc, 0, count);
+                            data = trunc;
+                        }
                         Channel!.Send(new FileReadResponseMessage(read.Filename, Stream.Position, Stream.Length, data));
                     }
                     catch (Exception ex)

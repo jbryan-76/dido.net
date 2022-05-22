@@ -46,9 +46,9 @@ namespace DidoNet.IO
                 case FileOpenMessage open:
                     try
                     {
-                        var newFile = new ApplicationFileStreamProxy(open, Channel.Connection);
-                        files.TryAdd(open.Filename, newFile);
-                        channel.Send(new FileAckMessage(open.Filename, newFile.Stream.Position, newFile.Stream.Length));
+                        var openFile = new ApplicationFileStreamProxy(open, Channel.Connection);
+                        files.TryAdd(open.Filename, openFile);
+                        channel.Send(new FileAckMessage(open.Filename, openFile.Stream.Position, openFile.Stream.Length));
                     }
                     catch (Exception ex)
                     {
@@ -58,11 +58,26 @@ namespace DidoNet.IO
                     break;
 
                 case FileCloseMessage close:
-                    // dispose the file before removing it
-                    if (files.TryGetValue(close.Filename, out var file))
+                    if (files.TryGetValue(close.Filename, out var closeFile))
                     {
-                        file.Dispose();
+                        // dispose the file before removing it
+                        closeFile.Dispose();
                         files.TryRemove(close.Filename, out _);
+                    }
+                    break;
+
+                case FileAtomicWriteMessage write:
+                    try
+                    {
+                        using (var file = File.Open(write.Filename, write.Append ? FileMode.Append : FileMode.Create))
+                        {
+                            file.Write(write.Bytes);
+                            channel.Send(new FileAckMessage(write.Filename, file.Position, file.Length));
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        channel.Send(new FileAckMessage(write.Filename, ex));
                     }
                     break;
 

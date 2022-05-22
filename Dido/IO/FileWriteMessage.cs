@@ -1,4 +1,6 @@
-﻿namespace DidoNet.IO
+﻿using System.Text;
+
+namespace DidoNet.IO
 {
     internal class FileWriteMessage : FileMessageBase
     {
