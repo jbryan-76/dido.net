@@ -21,12 +21,12 @@ class MyApp
   public async Task MyMain()
   {
     var config = new DidoNet.Configuration { /* ...configure... */ };
-    // do the work. depending on the configuration, the code will either run
-    // locally on in a generic remote runner service.
+    // depending on the configuration, the lambda expression below will
+    // either run locally or in a generic remote runner service.
     var result = await DidoNet.Dido.RunAsync(
        (context) => MyWork.DoSomethingLongAndExpensive(),
        config
-	);
+    );
   }
 }
 ```
@@ -54,10 +54,10 @@ This solution is similar to the legacy/deprecated .NET Remoting or general RPC p
 
 The Dido framework is implemented in .NET 6.0 and consists of:
 - A Library containing the API, configuration models, and key data structures and utilities.
-- A Mediator Service which serves as a pseudo load balancer and which coordinates access to a pool of generic runner instances.
-- Generic and identical Runner Service(s) that communicate with the host application (via the Library) and optional mediator instance to execute application code.
+- A Mediator Service which serves as a pseudo load balancer and which coordinates access to a pool of generic runner instances (available as a console app, OS service, or docker image).
+- Generic and identical Runner Service(s) that communicate with the host application (via the Library) and optional mediator instance to execute application code (available as a console app, OS service, or docker image).
 
-Without a mediator nor runner, the Dido API degenerates to local execution, which is no different than executing code without using the framework. Alternatively exactly one runner can be used without a mediator for simple scenarios with limited or more predictable remote computing needs. Finally, a mediator can be used with one or more runners for more advanced or demanding distributed computing scenarios.
+Without a mediator nor runner, the Dido API degenerates to local execution, which is no different than executing code without using the framework. Alternatively, exactly one runner can be used without a mediator for simple scenarios with limited or more predictable remote computing needs. Finally, a mediator can be used with one or more runners for more advanced or demanding distributed computing scenarios.
 
 Although a variety of different use cases are supported via appropriate configuration, the nominal functional operation is represented by the following sequence diagram:
 
@@ -67,11 +67,11 @@ Although a variety of different use cases are supported via appropriate configur
 2. The Mediator is contacted to find an available runner.
 3. The expression is serialized and transmitted to the runner.
 4. The runner deserializes the expression and attempts to instantiate and execute it.
-5. Inevitably, the expression requires application and dependency assemblies that do not yet exist in the runner domain (or whose version is different), so those assemblies are securely transmitted to the runner.
+5. Inevitably, the expression requires application and dependency assemblies that do not yet exist in the runner domain (or whose previously cached version is different), so those assemblies are securely transmitted to the runner.
 6. Once all assemblies are available and loaded, the expression is executed.
 7. The expression result is transmitted back to the application.
 
-## Configurable Execute Modes
+## Configurable Execution Modes
 
 ### Baseline Execution
 ![baseline execution](./documentation/images/baseline_execution.png)
@@ -80,7 +80,7 @@ Although a variety of different use cases are supported via appropriate configur
 myObj.DoWork();
 ```
 
-Without using Dido, the application nominally contains code performing some function. This code may simply utilize local resources such as CPU and memory, or may use the filesystem, a database, or other connected services.
+Without using Dido, the application nominally contains code performing some function. This code may simply utilize local resources such as CPU and memory, or may use the file-system, a database, or other connected services.
 
 
 ### Local Execution
@@ -103,7 +103,7 @@ config.RunnerUri = "https://localhost:4940";
 Dido.RunAsync((ctx) => myObj.DoWork(ctx), config);
 ```
 
-When a Dido API method is configured for Remote Execution with a single runner, the code is executed remotely. Depending on the runner environment, this may mean access to more (or at least dedicated) resources than is available in the host application environment. As long as the application code is parameterized with connection strings or other necessary credentials, and the runner environment properly configured to allow those network connections, the code can access databases and other services normally, with no special handling. However, filesystem access must use proxy IO instances exposed by the Dido runtime execution context which wrap underlying connections to properly marshal data between the runner and host application filesystem.
+When a Dido API method is configured for Remote Execution with a single runner, the code is executed remotely. Depending on the runner environment, this may mean access to more (or at least dedicated) resources than is available in the host application environment. As long as the application code is parameterized with connection strings or other necessary credentials, and the runner environment properly configured to allow those network connections, the code can access databases and other services normally, with no special handling. However, file-system access must use proxy IO instances exposed by the Dido runtime execution context which wrap underlying connections to properly marshal data between the runner and host application file-system.
 
 ### Clustered Runner Execution
 ![baseline execution](./documentation/images/cluster_execution.png)
@@ -114,18 +114,17 @@ config.MediatorUri = "https://localhost:4940";
 Dido.RunAsync((ctx) => myObj.DoWork(ctx), config);
 ```
 
-When a Dido API method is configured for Remote Execution with a mediator, the code is executed remotely using the best available runner that matches configured filter criteria, but otherwise identical to the dedicated runner use case described above. When paired with appropriate monitoring and auto-scaling solutions such as Kubernetes, the runner pool can dynamically adjust to load conditions from one or more applications, with no configuration nor code changes required by the application.
-
-### Use Cases
-
-- Immediate asynchronous remote execution: TODO
-- Deferred asynchronous remote execution with callback: TODO
-- Queued remote execution: TODO
-- Job management system with persisted results: TODO
-
+When a Dido API method is configured for Remote Execution with a mediator, the code is executed remotely using the best available runner that matches configured filter criteria, but otherwise identical to the dedicated runner scenario described above. When paired with appropriate monitoring and auto-scaling solutions such as Kubernetes, the runner pool can dynamically adjust to load conditions from one or more applications, with no configuration nor code changes required by the application.
 
 ### Security
 TODO
 
 ### Advanced
 TODO
+
+# Typical Use Cases
+
+- Immediate asynchronous remote execution: TODO
+- Deferred asynchronous remote execution with callback: TODO
+- Queued remote execution: TODO
+- Job management system with persisted results: TODO
