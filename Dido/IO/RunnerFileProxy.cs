@@ -5,7 +5,7 @@ namespace DidoNet.IO
 {
     /// <summary>
     /// Provides a limited replica API for System.IO.File which is implemented over a network
-    /// connection from a Runner to a remote application.
+    /// connection from the ExecutionContext of a Runner to a remote application.
     /// </summary>
     public class RunnerFileProxy
     {
@@ -548,11 +548,17 @@ namespace DidoNet.IO
             }
         }
 
+        /// <summary>
+        /// Acquires and returns the next available unique channel number to use to open and proxy file IO.
+        /// </summary>
+        /// <returns></returns>
+        /// <exception cref="ResourceNotAvailableException"></exception>
         private ushort AcquireChannel()
         {
+            // TODO: this is a dumb, brute-force implementation; explore more elegant solutions
+
             lock (AvailableChannels)
             {
-                // opening a file: create a dedicated channel
                 if (AvailableChannels.Count == 0)
                 {
                     throw new ResourceNotAvailableException("No more communication channels are available on the underlying connection.");
@@ -566,6 +572,10 @@ namespace DidoNet.IO
             }
         }
 
+        /// <summary>
+        /// Releases the provided channel number, making it available again to be reused.
+        /// </summary>
+        /// <param name="channelNumber"></param>
         private void ReleaseChannel(ushort channelNumber)
         {
             lock (AvailableChannels)

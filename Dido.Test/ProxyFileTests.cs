@@ -95,10 +95,10 @@ namespace DidoNet.Test
             using (var localFile = new TemporaryFile())
             using (var remoteFile = new TemporaryFile())
             {
-                OpenNew(localFile.Filename, null);
+                OpenNewInternal(localFile.Filename, null);
 
                 var ioProxy = new ApplicationIOProxy(appLoopbackConnection);
-                OpenNew(remoteFile.Filename, runnerLoopbackConnection);
+                OpenNewInternal(remoteFile.Filename, runnerLoopbackConnection);
                 WaitForProxyToFinish(ioProxy);
 
                 AssertFilesEqual(localFile.Filename, remoteFile.Filename);
@@ -144,48 +144,40 @@ namespace DidoNet.Test
         }
 
         [Fact]
-        public void WriteAllTextRemote()
+        public void WriteAllText()
         {
             using (var loopback = new Connection.LoopbackProxy())
             using (var appLoopbackConnection = new Connection(loopback, Connection.LoopbackProxy.Role.Client))
             using (var runnerLoopbackConnection = new Connection(loopback, Connection.LoopbackProxy.Role.Server))
-            using (var tempFile = new TemporaryFile())
+            using (var localFile = new TemporaryFile())
+            using (var remoteFile = new TemporaryFile())
             {
+                WriteAllTextInternal(localFile.Filename, null);
+
                 var ioProxy = new ApplicationIOProxy(appLoopbackConnection);
-                WriteAllText(tempFile.Filename, runnerLoopbackConnection);
+                WriteAllTextInternal(remoteFile.Filename, runnerLoopbackConnection);
                 WaitForProxyToFinish(ioProxy);
+
+                AssertFilesEqual(localFile.Filename, remoteFile.Filename);
             }
         }
 
         [Fact]
-        public void WriteAllTextLocal()
-        {
-            using (var tempFile = new TemporaryFile())
-            {
-                WriteAllText(tempFile.Filename, null);
-            }
-        }
-
-        [Fact]
-        public void WriteAllBytesRemote()
+        public void WriteAllBytes()
         {
             using (var loopback = new Connection.LoopbackProxy())
             using (var appLoopbackConnection = new Connection(loopback, Connection.LoopbackProxy.Role.Client))
             using (var runnerLoopbackConnection = new Connection(loopback, Connection.LoopbackProxy.Role.Server))
-            using (var tempFile = new TemporaryFile())
+            using (var localFile = new TemporaryFile())
+            using (var remoteFile = new TemporaryFile())
             {
-                var ioProxy = new ApplicationIOProxy(appLoopbackConnection);
-                WriteAllBytes(tempFile.Filename, runnerLoopbackConnection);
-                WaitForProxyToFinish(ioProxy);
-            }
-        }
+                WriteAllBytesInternal(localFile.Filename, null);
 
-        [Fact]
-        public void WriteAllBytesLocal()
-        {
-            using (var tempFile = new TemporaryFile())
-            {
-                WriteAllBytes(tempFile.Filename, null);
+                var ioProxy = new ApplicationIOProxy(appLoopbackConnection);
+                WriteAllBytesInternal(remoteFile.Filename, runnerLoopbackConnection);
+                WaitForProxyToFinish(ioProxy);
+
+                AssertFilesEqual(localFile.Filename, remoteFile.Filename);
             }
         }
 
@@ -256,7 +248,7 @@ namespace DidoNet.Test
             Assert.True(Enumerable.SequenceEqual(expected, actual));
         }
 
-        void OpenNew(string filename, Connection? connection)
+        void OpenNewInternal(string filename, Connection? connection)
         {
             var proxy = new RunnerFileProxy(connection);
             byte[] expected;
@@ -295,20 +287,19 @@ namespace DidoNet.Test
             Assert.True(Enumerable.SequenceEqual(expected, actual));
         }
 
-        void WriteAllText(string filename, Connection? connection)
+        void WriteAllTextInternal(string filename, Connection? connection)
         {
             var proxy = new RunnerFileProxy(connection);
-            var expected = Guid.NewGuid().ToString();
+            var expected = RandomString(32, 0);
             proxy.WriteAllText(filename, expected);
             var actual = proxy.ReadAllText(filename);
             Assert.Equal(expected, actual);
         }
 
-        void WriteAllBytes(string filename, Connection? connection)
+        void WriteAllBytesInternal(string filename, Connection? connection)
         {
             var proxy = new RunnerFileProxy(connection);
-            var rand = new System.Random();
-            var expected = Enumerable.Range(0, 64).Select(x => (byte)rand.Next(256)).ToArray();
+            var expected = RandomBytes(64, 0);
             proxy.WriteAllBytes(filename, expected);
             var actual = proxy.ReadAllBytes(filename);
             Assert.True(Enumerable.SequenceEqual(expected, actual));
@@ -318,7 +309,7 @@ namespace DidoNet.Test
         /// An application IO proxy is a threaded resource that processes file and directory 
         /// message requests from a remote runner.
         /// This method waits until the proxy has no files open, which is necessary for unit tests
-        /// in order to open or delete the file after when it is no longer in use.
+        /// in order to open or delete the file after it is no longer in use.
         /// </summary>
         /// <param name="proxy"></param>
         void WaitForProxyToFinish(ApplicationIOProxy proxy)
@@ -352,8 +343,6 @@ namespace DidoNet.Test
 
         void AssertFilesEqual(string file1, string file2)
         {
-            var b1 = File.ReadAllBytes(file1);
-            var b2 = File.ReadAllBytes(file2);
             Assert.True(Enumerable.SequenceEqual(File.ReadAllBytes(file1), File.ReadAllBytes(file2)));
         }
     }
