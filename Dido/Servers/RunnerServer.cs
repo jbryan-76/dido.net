@@ -78,6 +78,13 @@ namespace DidoNet
             {
                 Configuration.MaxTasks = Math.Max(System.Environment.ProcessorCount, 1);
             }
+
+            if (!string.IsNullOrEmpty(Configuration.Id))
+            {
+                Id = Configuration.Id;
+            }
+
+            InitCache();
         }
 
         public void Dispose()
@@ -169,6 +176,36 @@ namespace DidoNet
         }
 
         /// <summary>
+        /// Initialize and cleanup the local cache folder for the runner.
+        /// </summary>
+        private void InitCache()
+        {
+            if (string.IsNullOrEmpty(Configuration.CachePath))
+            {
+                return;
+            }
+
+            // ensure the cache folders exist and are accessible
+            var workingDirectory = Directory.GetCurrentDirectory();
+            Directory.CreateDirectory(Configuration.AssemblyCachePath = Path.Combine(Configuration.CachePath, Id, "assemblies"));
+            Directory.CreateDirectory(Configuration.FileCachePath = Path.Combine(Configuration.CachePath, Id, "files"));
+
+            // remove any expired assets
+            if (Configuration.CacheMaxAge > TimeSpan.Zero)
+            {
+                var now = DateTime.UtcNow;
+                foreach (var file in Directory.EnumerateFiles(Path.Combine(Configuration.CachePath, Id), "*", SearchOption.AllDirectories))
+                {
+                    var lastWrite = File.GetLastWriteTimeUtc(file);
+                    if (now - lastWrite > Configuration.CacheMaxAge)
+                    {
+                        File.Delete(file);
+                    }
+                }
+            }
+        }
+
+        /// <summary>
         /// The work loop for the main runner thread, responsible for accepting incoming connections 
         /// from applications that are requesting remote execution of tasks.
         /// </summary>
@@ -225,7 +262,7 @@ namespace DidoNet
                     else
                     {
                         // otherwise create a worker...
-                        var worker = new TaskWorker(connection);
+                        var worker = new TaskWorker(connection, Configuration);
 
                         if (ActiveWorkers.Count < Configuration.MaxTasks
                             && QueuedWorkers.Count == 0)

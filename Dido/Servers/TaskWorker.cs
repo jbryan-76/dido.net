@@ -23,17 +23,30 @@ namespace DidoNet
         /// </summary>
         private Thread? WorkThread { get; set; }
 
+        /// <summary>
+        /// The context available to the task while it's executing.
+        /// </summary>
         private ExecutionContext Context { get; set; }
 
+        /// <summary>
+        /// A cancellation token source to cancel an executing task.
+        /// </summary>
         private CancellationTokenSource CancelSource { get; set; } = new CancellationTokenSource();
 
+        /// <summary>
+        /// A delegate invoked when the task is complete. 
+        /// </summary>
         private Action<TaskWorker>? OnComplete { get; set; }
 
+        /// <summary>
+        /// The communications channel for task-related messages between the runner and host application.
+        /// </summary>
         private MessageChannel TasksChannel { get; set; }
 
+        /// <summary>
+        /// The communications channel for assembly-related messages between the runner and host application.
+        /// </summary>
         private MessageChannel AssembliesChannel { get; set; }
-
-        //private MessageChannel FilesChannel { get; set; }
 
         /// <summary>
         /// Used to indicate when the task thread is complete.
@@ -49,21 +62,19 @@ namespace DidoNet
         /// Create a new worker to process application task requests on the provided connection.
         /// </summary>
         /// <param name="connection"></param>
-        public TaskWorker(Connection connection)
+        public TaskWorker(Connection connection, RunnerConfiguration configuration)
         {
             Connection = connection;
 
             // create communication channels to the application for: task communication, assemblies, files
             TasksChannel = new MessageChannel(Connection, Constants.AppRunner_TaskChannelId);
-            //FilesChannel = new MessageChannel(Connection, Constants.AppRunner_FileChannelStart);
             AssembliesChannel = new MessageChannel(Connection, Constants.AppRunner_AssemblyChannelId);
 
             // create the execution context that is available to the expression while it's running
             Context = new ExecutionContext
             {
                 ExecutionMode = ExecutionModes.Local,
-                //FilesChannel = FilesChannel,
-                File = new IO.RunnerFileProxy(Connection),
+                File = new IO.RunnerFileProxy(Connection, configuration.FileCachePath),
                 Directory = new IO.RunnerDirectoryProxy(Connection),
                 Cancel = CancelSource.Token
             };

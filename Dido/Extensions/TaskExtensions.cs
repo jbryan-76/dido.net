@@ -1,4 +1,4 @@
-﻿namespace Dido
+﻿namespace DidoNet
 {
     public static class TaskExtensions
     {

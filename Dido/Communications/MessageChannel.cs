@@ -122,9 +122,32 @@
         /// </summary>
         /// <returns></returns>
         /// <exception cref="InvalidOperationException"></exception>
-        public IMessage ReceiveMessage()
+        /// <exception cref="TimeoutException"></exception>
+        public IMessage ReceiveMessage(int? timeoutInMs = null)
         {
             // TODO: add timeout
+            if (timeoutInMs != null)
+            {
+                var task = Task.Run(async () =>
+                {
+                    var typeName = Channel.ReadString();
+                    var messageType = Type.GetType(typeName);
+                    if (messageType == null)
+                    {
+                        throw new InvalidOperationException($"Unknown message type '{typeName}'");
+                    }
+                    var message = Activator.CreateInstance(messageType) as IMessage;
+                    if (message == null)
+                    {
+                        throw new InvalidOperationException($"Cannot create instance of message type '{typeName}'");
+                    }
+                    message.Read(Channel);
+                    return message;
+
+                });
+                var result = task.TimeoutAfter(TimeSpan.FromMilliseconds(timeoutInMs.Value)).GetAwaiter().GetResult();
+                return result;
+            }
 
             // TODO: send message length too so can read+discard on error?
             ThreadHelpers.Debug($"{ChannelNumber} {Channel.Name} reading message type");
@@ -156,11 +179,12 @@
         /// <typeparam name="T"></typeparam>
         /// <returns></returns>
         /// <exception cref="InvalidOperationException"></exception>
-        public T ReceiveMessage<T>() where T : class, IMessage
+        /// <exception cref="TimeoutException"></exception>
+        public T ReceiveMessage<T>(int? timeoutInMs = null) where T : class, IMessage
         {
             // TODO: add timeout
 
-            var message = ReceiveMessage();
+            var message = ReceiveMessage(timeoutInMs);
             if (message is T)
             {
                 return (message as T)!;

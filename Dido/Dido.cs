@@ -272,7 +272,7 @@ namespace DidoNet
                 //var filesChannel = new MessageChannel(runnerConnection, Constants.AppRunner_FileChannelId);
                 //var files = new ConcurrentDictionary<string, ApplicationFileProxy>();
                 
-                // create a proxy to handle filesystem IO requests from the expression executing on the runner
+                // create a proxy to handle file-system IO requests from the expression executing on the runner
                 var ioProxy = new ApplicationIOProxy(runnerConnection);
 
                 //// handle file messages
@@ -520,9 +520,9 @@ namespace DidoNet
             {
                 Cancel = cancellationToken,
                 ExecutionMode = ExecutionModes.Local,
-                // in release local mode, pass-through file and directory IO directly to the local filesystem
-                File = new IO.RunnerFileProxy(null),
-                Directory = new IO.RunnerDirectoryProxy(null)
+                // in release local mode, pass-through file and directory IO directly to the local file-system
+                File = new RunnerFileProxy(null),
+                Directory = new RunnerDirectoryProxy(null)
             };
 
             // when executing locally in release mode, simply compile and invoke the expression,

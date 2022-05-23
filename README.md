@@ -46,6 +46,8 @@ The Dido framework offers a solution that inverts the traditional approach by al
 
 This solution is similar to the legacy/deprecated .NET Remoting or general RPC pattern with a crucial difference: all code is specifically and intentionally only authored and contained in the host application - it does not need to be explicitly and proactively "split" into services or auxiliary applications or plugins, and does not require an intermediate compilation or code generation step. The code can be directly authored, tested, and executed in the application during development, and then implicitly and dynamically executed remotely in production.
 
+Note: while Dido can be a powerful and flexible solution for some common distributed computing use cases, it is not intended to be a panacea, nor replace dedicated and optimized solutions for specific problems.
+
 # TECHNICAL DISCUSSION
 
 ### Architecture

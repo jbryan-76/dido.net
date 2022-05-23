@@ -1,6 +1,4 @@
-﻿using System.IO;
-
-class Program
+﻿class Program
 {
     static void PrintUse()
     {

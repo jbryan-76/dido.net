@@ -14,8 +14,6 @@ namespace DidoNet
         /// <param name="value"></param>
         public static byte[] ReadBytes(this Stream stream, int length)
         {
-            //Thread.Sleep(new Random().Next(50));
-            //Console.WriteLine($"  trying to read {length} bytes");
             var bytes = new byte[length];
             var remaining = length;
             while (remaining > 0)
@@ -27,7 +25,6 @@ namespace DidoNet
                     throw new IOException("Unexpected end of stream reached; The stream may be closed.");
                 }
             }
-            //Console.WriteLine($"  got em! {length} bytes");
             return bytes;
         }
 

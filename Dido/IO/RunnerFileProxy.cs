@@ -11,11 +11,21 @@ namespace DidoNet.IO
     {
         //System.IO.File;
 
+        // TODO: how to efficiently and elegantly handle forcing application-local files to exist 
+        // TODO: in the local file-system of the runner such that using relative path notation when
+        // TODO: invoking external processes works as expected? use a special method to copy/cache the file.
+        // TODO: set working directory at runner startup to the cache folder?
+
         /// <summary>
-        /// The dedicated message channel marshalling file IO requests by the executing expression on a
+        /// The dedicated message channel marshaling file IO requests by the executing expression on a
         /// Runner to the remote application.
         /// </summary>
         internal MessageChannel? Channel { get; set; }
+
+        /// <summary>
+        /// The path on the runner file-system where files are cached, or null/empty if caching is disabled.
+        /// </summary>
+        internal string? CachePath { get; set; }
 
         /// <summary>
         /// The set of currently open files managed by this instance, keyed to the file path.
@@ -37,17 +47,94 @@ namespace DidoNet.IO
 
         /// <summary>
         /// Create a new instance to proxy file IO over a connection.
-        /// If a connection is not provided, the class instance API will pass-through to the local filesystem.
+        /// If a connection is not provided, the class instance API will pass-through to the local file-system.
         /// </summary>
         /// <param name="connection"></param>
-        internal RunnerFileProxy(Connection? connection)
+        internal RunnerFileProxy(Connection? connection, string? cachePath = null)
         {
+            CachePath = cachePath;
             AvailableChannels = new SortedSet<ushort>(
                 Enumerable.Range(Constants.AppRunner_FileChannelStart, Constants.AppRunner_MaxFileChannels).Select(i => (ushort)i)
                 );
             if (connection != null)
             {
                 Channel = new MessageChannel(connection, Constants.AppRunner_FileChannelId);
+            }
+        }
+
+        public void Cache(string srcPath, string dstPath)
+        {
+            if (Path.IsPathRooted(dstPath))
+            {
+                throw new IOException($"Destination path '{dstPath}' must be a relative (not rooted) path.");
+            }
+            // TODO: optimized copy of a file from a source (srcPath = absolute or relative)
+            // TODO: to a destination (dstPath = relative to cache folder)
+
+            if (Channel != null)
+            {
+                ushort channelNumber = AcquireChannel();
+                try
+                {
+                    //Channel.Send(new FileStartCacheMessage(channelNumber, srcPath));
+                    ////Channel.Send(new FileStartStoreMessage(channelNumber, srcPath));
+
+                    //FileChunkMessage chunk;
+                    //do
+                    //{
+                    //    var ack = Channel.ReceiveMessage<FileAckMessage>();
+                    //    ack.ThrowOnError();
+
+                    //} while (chunk);
+
+                    //// on a successful open, both sides agreed to create a new dedicated channel for
+                    //// IO of the indicated file using the acquired channel number
+                    //var fileChannel = new MessageChannel(Channel.Channel.Connection, channelNumber);
+                    //var stream = new RunnerFileStreamProxy(path, ack.Position, ack.Length, fileChannel, (filename) => Close(filename));
+                    //Files.TryAdd(path, stream);
+                }
+                finally
+                {
+                    ReleaseChannel(channelNumber);
+                }
+            }
+            else
+            {
+                // TODO: nop? file is already where it needs to be
+            }
+        }
+
+        public void Store(string dstPath, string srcPath)
+        {
+            if (Path.IsPathRooted(dstPath))
+            {
+                throw new IOException($"Destination path '{dstPath}' must be a relative (not rooted) path.");
+            }
+            // TODO: optimized copy of a file from a destination (dstPath = relative to cache folder)
+            // TODO: to a source (srcPath = absolute or relative)
+        }
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <param name="path"></param>
+        /// <returns></returns>
+        /// <exception cref="IOException"></exception>
+        public string CachedPath(string path)
+        {
+            if (Channel == null)
+            {
+                // when running locally, the requested path is already the local path
+                return path;
+            }
+            else
+            {
+                // TODO: convert the requested source path to the intended cached target path
+                if (Path.IsPathRooted(path))
+                {
+                    throw new IOException($"Path '{path}' must be a relative (not rooted) path.");
+                }
+                return string.IsNullOrEmpty(CachePath) ? path : Path.Combine(CachePath, path);
             }
         }
 
@@ -255,10 +342,9 @@ namespace DidoNet.IO
                         Files.TryAdd(path, stream);
                         return stream;
                     }
-                    catch (Exception)
+                    finally
                     {
                         ReleaseChannel(channelNumber);
-                        throw;
                     }
                 }
             }

@@ -14,6 +14,9 @@
             // request the assembly from the application
             Channel.Send(new AssemblyRequestMessage(assemblyName));
 
+            // TODO: switch to a chunked approach to incrementally send the data,
+            // TODO: since some assemblies will be large
+
             // receive the response
             var message = Channel.ReceiveMessage();
 

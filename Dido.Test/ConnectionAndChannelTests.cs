@@ -245,6 +245,58 @@ namespace DidoNet.Test
         }
 
         [Fact]
+        public async void MessageChannelReceive()
+        {
+            // create a local client/server system
+            using (var clientServerConnection = await ClientServerConnection.CreateAsync(GetNextAvailablePort()))
+            {
+                // create both sides of a logical channel for the client and server to communicate
+                var channel1ClientSide = clientServerConnection.ClientConnection.GetChannel(1);
+                var channel1ServerSide = clientServerConnection.ServerConnection.GetChannel(1);
+
+                // wrap in a message channel
+                var messageChannel1ClientSide = new MessageChannel(channel1ClientSide);
+                var messageChannel1ServerSide = new MessageChannel(channel1ServerSide);
+
+                // create a test message to send to the server from the client
+                var testMessage = new TestMessage { MyIntValue = 123, MyStringValue = "hello world" };
+
+                // send a test message to the server
+                messageChannel1ClientSide.Send(testMessage);
+
+                // receive the message
+                var receivedMessage = messageChannel1ServerSide.ReceiveMessage<TestMessage>();
+
+                // confirm the messages match
+                Assert.NotNull(receivedMessage);
+                Assert.Equal(testMessage.MyIntValue, receivedMessage?.MyIntValue);
+                Assert.Equal(testMessage.MyStringValue, receivedMessage?.MyStringValue);
+            }
+        }
+
+        [Fact]
+        public async void MessageChannelReceiveWithTimeout()
+        {
+            // create a local client/server system
+            using (var clientServerConnection = await ClientServerConnection.CreateAsync(GetNextAvailablePort()))
+            {
+                // create both sides of a logical channel for the client and server to communicate
+                var channel1ClientSide = clientServerConnection.ClientConnection.GetChannel(1);
+                var channel1ServerSide = clientServerConnection.ServerConnection.GetChannel(1);
+
+                // wrap in a message channel
+                var messageChannel1ClientSide = new MessageChannel(channel1ClientSide);
+                var messageChannel1ServerSide = new MessageChannel(channel1ServerSide);
+
+                // don't send a message and confirm a timeout exception is thrown
+                Assert.Throws<TimeoutException>(() =>
+                {
+                    var receivedMessage = messageChannel1ServerSide.ReceiveMessage<TestMessage>(100);
+                });
+            }
+        }
+
+        [Fact]
         public async void MessageChannels()
         {
             // create a local client/server system
