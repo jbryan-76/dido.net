@@ -6,7 +6,7 @@ namespace DidoNet.Test
     {
         public int MyIntValue { get; set; }
 
-        public string MyStringValue { get; set; }
+        public string MyStringValue { get; set; } = string.Empty;
 
         public void Read(Stream stream)
         {

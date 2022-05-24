@@ -2,7 +2,7 @@
 {
     internal class RunnerNotAvailableMessage : IMessage
     {
-        public string Message { get; set; } = String.Empty;
+        public string Message { get; set; } = string.Empty;
 
         public RunnerNotAvailableMessage()
         //: this("The runner is busy: all task slots are full and the task queue is either full or disabled.")

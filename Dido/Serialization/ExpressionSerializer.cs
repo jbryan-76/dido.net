@@ -35,13 +35,13 @@ namespace DidoNet
             var lambda = (LambdaExpression)exp;
 
             // the return type of the lambda expression will not necessarily match the indicated
-            // generic return type, even if the types are compatible/convertable. so wrap the expression
+            // generic return type, even if the types are compatible/convertible. so wrap the expression
             // in another lambda that performs a type conversion to the generic type the caller is expecting.
             // if the types are not compatible, the caller will need to handle the resulting exception.
             var convert = Expression.Convert(lambda.Body, typeof(TResult));
             lambda = Expression.Lambda(typeof(Func<ExecutionContext, TResult>), convert, lambda.Parameters);
 
-            // finally, compile the lambda into an invokable function and cast it to the proper return type
+            // finally, compile the lambda into an invocation function and cast it to the proper return type
             return (Func<ExecutionContext, TResult>)lambda.Compile();
         }
 
@@ -114,42 +114,32 @@ namespace DidoNet
             {
                 case BinaryExpression exp:
                     throw new NotImplementedException();
-                    break;
                 case BlockExpression exp:
                     throw new NotImplementedException();
-                    break;
                 case ConditionalExpression exp:
                     throw new NotImplementedException();
-                    break;
                 case ConstantExpression exp:
                     TypeChecks.CheckSerializableProperties(exp.Type);
                     return new ConstantNode
                     {
                         ExpressionType = exp.NodeType,
                         Type = new TypeModel(exp.Type),
-                        Value = exp.Value
+                        Value = exp.Value!
                     };
                 case DebugInfoExpression exp:
                     throw new NotImplementedException();
-                    break;
                 case DefaultExpression exp:
                     throw new NotImplementedException();
-                    break;
                 case DynamicExpression exp:
                     throw new NotImplementedException();
-                    break;
                 case GotoExpression exp:
                     throw new NotImplementedException();
-                    break;
                 case IndexExpression exp:
                     throw new NotImplementedException();
-                    break;
                 case InvocationExpression exp:
                     throw new NotImplementedException();
-                    break;
                 case LabelExpression exp:
                     throw new NotImplementedException();
-                    break;
                 case LambdaExpression exp:
                     return new LambdaNode
                     {
@@ -161,10 +151,8 @@ namespace DidoNet
                     };
                 case ListInitExpression exp:
                     throw new NotImplementedException();
-                    break;
                 case LoopExpression exp:
                     throw new NotImplementedException();
-                    break;
                 case MemberExpression exp:
                     // if the expression is actually for a constant value,
                     // convert it to a constant node instead.
@@ -190,7 +178,6 @@ namespace DidoNet
                     }
                 case MemberInitExpression exp:
                     throw new NotImplementedException();
-                    break;
                 case MethodCallExpression exp:
                     return new MethodCallNode
                     {
@@ -201,10 +188,8 @@ namespace DidoNet
                     };
                 case NewArrayExpression exp:
                     throw new NotImplementedException();
-                    break;
                 case NewExpression exp:
                     throw new NotImplementedException();
-                    break;
                 case ParameterExpression exp:
                     return new ParameterNode
                     {
@@ -214,16 +199,12 @@ namespace DidoNet
                     };
                 case RuntimeVariablesExpression exp:
                     throw new NotImplementedException();
-                    break;
                 case SwitchExpression exp:
                     throw new NotImplementedException();
-                    break;
                 case TryExpression exp:
                     throw new NotImplementedException();
-                    break;
                 case TypeBinaryExpression exp:
                     throw new NotImplementedException();
-                    break;
                 case UnaryExpression exp:
                     return new UnaryNode
                     {
@@ -239,14 +220,19 @@ namespace DidoNet
 
         internal static async Task HandleMissingAssemblyException(Exception e, Environment env)
         {
-            string assemblyName = String.Empty;
-            if (e is FileNotFoundException)
+            if(env.ResolveRemoteAssemblyAsync == null)
             {
-                assemblyName = (e as FileNotFoundException).FileName;
+                throw new InvalidOperationException($"'{nameof(Environment.ResolveRemoteAssemblyAsync)}' is not defined on the current Environment parameter.");
             }
-            else if (e is FileLoadException)
+
+            string assemblyName = string.Empty;
+            if (e is FileNotFoundException notFoundException)
             {
-                assemblyName = (e as FileLoadException).FileName;
+                assemblyName = notFoundException.FileName!;
+            }
+            else if (e is FileLoadException loadException)
+            {
+                assemblyName = loadException.FileName!;
             }
             else
             {
@@ -308,7 +294,7 @@ namespace DidoNet
                             // exception handling code flow which requests the proper corresponding assembly.
                             // otherwise the deserialization and type binding used in Constant.Value
                             // may incorrectly bind to an already loaded assembly in the default context.
-                            var intendedType = n.Type.ToType(env);
+                            var intendedType = n.Type.ToType(env)!;
                             return Expression.Constant(n.Value, intendedType);
                         case LambdaNode n:
                             var body = await DecodeToExpressionAsync(n.Body, env, state);
@@ -320,21 +306,21 @@ namespace DidoNet
                         case MemberNode n:
                             return Expression.MakeMemberAccess(
                                 n.Expression != null ? await DecodeToExpressionAsync(n.Expression, env, state) : null,
-                                n.Member.ToInfo(env));
+                                n.Member!.ToInfo(env));
                         case MethodCallNode n:
                             return Expression.Call(
                                 n.Object == null ? null : await DecodeToExpressionAsync(n.Object, env, state),
-                                n.Method.ToInfo(env),
+                                n.Method!.ToInfo(env),
                                 n.Arguments
                                     .Select(async a => await DecodeToExpressionAsync(a, env, state))
                                     .Select(t => t.Result)
                                     .ToArray()
                                     );
                         case ParameterNode n:
-                            var exp = Expression.Parameter(n.Type.ToType(env), n.Name);
+                            var exp = Expression.Parameter(n.Type.ToType(env)!, n.Name);
                             // by design, the only supported expressions are lambdas with a single ExecutionContext parameter.
                             // as soon as a parameter with this type is encountered, remember its ParameterExpression
-                            // so it can be reused/substituted throuhgout the rest of the lambda body expressions.
+                            // so it can be reused/substituted throughout the rest of the lambda body expressions.
                             if (exp.Type == typeof(ExecutionContext))
                             {
                                 if (state.ContextExpression == null)
@@ -348,7 +334,7 @@ namespace DidoNet
                                 return exp;
                             }
                         case UnaryNode n:
-                            return Expression.MakeUnary(n.ExpressionType, await DecodeToExpressionAsync(n.Operand, env, state), n.Type.ToType(env));
+                            return Expression.MakeUnary(n.ExpressionType, await DecodeToExpressionAsync(n.Operand, env, state), n.Type.ToType(env)!);
                         default:
                             throw new NotSupportedException($"Node type {node.GetType()} not yet supported.");
                     }
@@ -359,12 +345,12 @@ namespace DidoNet
                 }
                 catch (JsonSerializationException e)
                 {
-                    await HandleMissingAssemblyException(e.InnerException, env);
+                    await HandleMissingAssemblyException(e.InnerException!, env);
                 }
-                catch (Exception e)
+                catch (Exception)
                 {
                     // TODO: don't fail forever. if reach MAX_TRIES abort with exception
-                    var type = e.GetType();
+                    //var type = e.GetType();
                     throw;
                 }
             }

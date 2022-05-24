@@ -2,19 +2,20 @@
 
 namespace DidoNet
 {
-    public static class StreamWriteExtensions
+    public static class StreamWriteAsyncExtensions
     {
         /// <summary>
         /// Write the provided byte array to a stream.
         /// </summary>
         /// <param name="stream"></param>
         /// <param name="bytes"></param>
-        public static void WriteBytes(this Stream stream, byte[] bytes)
+        public static ValueTask WriteBytesAsync(this Stream stream, byte[] bytes, CancellationToken cancellationToken = default(CancellationToken))
         {
             if (bytes.Length > 0)
             {
-                stream.Write(bytes);
+                return stream.WriteAsync(bytes, cancellationToken);
             }
+            return ValueTask.CompletedTask;
         }
 
         /// <summary>
@@ -22,14 +23,14 @@ namespace DidoNet
         /// </summary>
         /// <param name="stream"></param>
         /// <param name="value"></param>
-        public static void WriteBoolean(this Stream stream, bool value)
+        public static ValueTask WriteBooleanAsync(this Stream stream, bool value, CancellationToken cancellationToken = default(CancellationToken))
         {
             var bytes = BitConverter.GetBytes(value);
             if (BitConverter.IsLittleEndian)
             {
                 Array.Reverse(bytes);
             }
-            WriteBytes(stream, bytes);
+            return WriteBytesAsync(stream, bytes, cancellationToken);
         }
 
         /// <summary>
@@ -37,14 +38,14 @@ namespace DidoNet
         /// </summary>
         /// <param name="stream"></param>
         /// <param name="value"></param>
-        public static void WriteChar(this Stream stream, char value)
+        public static ValueTask WriteCharAsync(this Stream stream, char value, CancellationToken cancellationToken = default(CancellationToken))
         {
             var bytes = BitConverter.GetBytes(value);
             if (BitConverter.IsLittleEndian)
             {
                 Array.Reverse(bytes);
             }
-            WriteBytes(stream, bytes);
+            return WriteBytesAsync(stream, bytes, cancellationToken);
         }
 
         /// <summary>
@@ -52,14 +53,14 @@ namespace DidoNet
         /// </summary>
         /// <param name="stream"></param>
         /// <param name="value"></param>
-        public static void WriteInt16BE(this Stream stream, short value)
+        public static ValueTask WriteInt16BEAsync(this Stream stream, short value, CancellationToken cancellationToken = default(CancellationToken))
         {
             var bytes = BitConverter.GetBytes(value);
             if (BitConverter.IsLittleEndian)
             {
                 Array.Reverse(bytes);
             }
-            WriteBytes(stream, bytes);
+            return WriteBytesAsync(stream, bytes, cancellationToken);
         }
 
         /// <summary>
@@ -67,14 +68,14 @@ namespace DidoNet
         /// </summary>
         /// <param name="stream"></param>
         /// <param name="value"></param>
-        public static void WriteUInt16BE(this Stream stream, ushort value)
+        public static ValueTask WriteUInt16BEAsync(this Stream stream, ushort value, CancellationToken cancellationToken = default(CancellationToken))
         {
             var bytes = BitConverter.GetBytes(value);
             if (BitConverter.IsLittleEndian)
             {
                 Array.Reverse(bytes);
             }
-            WriteBytes(stream, bytes);
+            return WriteBytesAsync(stream, bytes, cancellationToken);
         }
 
         /// <summary>
@@ -82,14 +83,14 @@ namespace DidoNet
         /// </summary>
         /// <param name="stream"></param>
         /// <param name="value"></param>
-        public static void WriteInt32BE(this Stream stream, int value)
+        public static ValueTask WriteInt32BEAsync(this Stream stream, int value, CancellationToken cancellationToken = default(CancellationToken))
         {
             var bytes = BitConverter.GetBytes(value);
             if (BitConverter.IsLittleEndian)
             {
                 Array.Reverse(bytes);
             }
-            WriteBytes(stream, bytes);
+            return WriteBytesAsync(stream, bytes, cancellationToken);
         }
 
         /// <summary>
@@ -97,14 +98,14 @@ namespace DidoNet
         /// </summary>
         /// <param name="stream"></param>
         /// <param name="value"></param>
-        public static void WriteUInt32BE(this Stream stream, uint value)
+        public static ValueTask WriteUInt32BEAsync(this Stream stream, uint value, CancellationToken cancellationToken = default(CancellationToken))
         {
             var bytes = BitConverter.GetBytes(value);
             if (BitConverter.IsLittleEndian)
             {
                 Array.Reverse(bytes);
             }
-            WriteBytes(stream, bytes);
+            return WriteBytesAsync(stream, bytes, cancellationToken);
         }
 
         /// <summary>
@@ -112,14 +113,14 @@ namespace DidoNet
         /// </summary>
         /// <param name="stream"></param>
         /// <param name="value"></param>
-        public static void WriteInt64BE(this Stream stream, long value)
+        public static ValueTask WriteInt64BEAsync(this Stream stream, long value, CancellationToken cancellationToken = default(CancellationToken))
         {
             var bytes = BitConverter.GetBytes(value);
             if (BitConverter.IsLittleEndian)
             {
                 Array.Reverse(bytes);
             }
-            WriteBytes(stream, bytes);
+            return WriteBytesAsync(stream, bytes, cancellationToken);
         }
 
         /// <summary>
@@ -127,14 +128,14 @@ namespace DidoNet
         /// </summary>
         /// <param name="stream"></param>
         /// <param name="value"></param>
-        public static void WriteUInt64BE(this Stream stream, ulong value)
+        public static ValueTask WriteUInt64BEAsync(this Stream stream, ulong value, CancellationToken cancellationToken = default(CancellationToken))
         {
             var bytes = BitConverter.GetBytes(value);
             if (BitConverter.IsLittleEndian)
             {
                 Array.Reverse(bytes);
             }
-            WriteBytes(stream, bytes);
+            return WriteBytesAsync(stream, bytes, cancellationToken);
         }
 
         /// <summary>
@@ -142,14 +143,14 @@ namespace DidoNet
         /// </summary>
         /// <param name="stream"></param>
         /// <param name="value"></param>
-        public static void WriteSingleBE(this Stream stream, float value)
+        public static ValueTask WriteSingleBEAsync(this Stream stream, float value, CancellationToken cancellationToken = default(CancellationToken))
         {
             var bytes = BitConverter.GetBytes(value);
             if (BitConverter.IsLittleEndian)
             {
                 Array.Reverse(bytes);
             }
-            WriteBytes(stream, bytes);
+            return WriteBytesAsync(stream, bytes, cancellationToken);
         }
 
         /// <summary>
@@ -157,14 +158,14 @@ namespace DidoNet
         /// </summary>
         /// <param name="stream"></param>
         /// <param name="value"></param>
-        public static void WriteDoubleBE(this Stream stream, double value)
+        public static ValueTask WriteDoubleBEAsync(this Stream stream, double value, CancellationToken cancellationToken = default(CancellationToken))
         {
             var bytes = BitConverter.GetBytes(value);
             if (BitConverter.IsLittleEndian)
             {
                 Array.Reverse(bytes);
             }
-            WriteBytes(stream, bytes);
+            return WriteBytesAsync(stream, bytes, cancellationToken);
         }
 
         /// <summary>
@@ -172,11 +173,11 @@ namespace DidoNet
         /// </summary>
         /// <param name="stream"></param>
         /// <param name="value"></param>
-        public static void WriteString(this Stream stream, string value)
+        public static async ValueTask WriteStringAsync(this Stream stream, string value, CancellationToken cancellationToken = default(CancellationToken))
         {
             var bytes = Encoding.UTF8.GetBytes(value);
-            stream.WriteInt32BE(bytes.Length);
-            WriteBytes(stream, bytes);
+            await stream.WriteInt32BEAsync(bytes.Length, cancellationToken);
+            await WriteBytesAsync(stream, bytes, cancellationToken);
         }
 
         /// <summary>
@@ -186,12 +187,12 @@ namespace DidoNet
         /// <param name="stream"></param>
         /// <param name="array"></param>
         /// <param name="writer"></param>
-        public static void WriteArray<T>(this Stream stream, T[] array, Action<Stream, T> writer)
+        public static async ValueTask WriteArrayAsync<T>(this Stream stream, T[] array, Func<Stream, T, CancellationToken, Task> writer, CancellationToken cancellationToken = default(CancellationToken))
         {
-            stream.WriteInt32BE(array.Length);
+            await stream.WriteInt32BEAsync(array.Length, cancellationToken);
             foreach (var item in array)
             {
-                writer(stream, item);
+                await writer(stream, item, cancellationToken);
             }
         }
     }

@@ -10,10 +10,15 @@ namespace DidoNet.Test.Common
         private bool IsDisposed = false;
 
         public Connection ServerConnection { get; set; }
+
         public Connection ClientConnection { get; set; }
+
         public ConcurrentQueue<Frame> ServerRecievedFrames { get; set; } = new ConcurrentQueue<Frame>();
+
         public ConcurrentQueue<Frame> ServerTransmittedFrames { get; set; } = new ConcurrentQueue<Frame>();
+
         public ConcurrentQueue<Frame> ClientRecievedFrames { get; set; } = new ConcurrentQueue<Frame>();
+
         public ConcurrentQueue<Frame> ClientTransmittedFrames { get; set; } = new ConcurrentQueue<Frame>();
 
         public void Dispose()
@@ -149,7 +154,7 @@ namespace DidoNet.Test.Common
         }
 
         /// <summary>
-        /// Create a local loopback client+server system on the specified port.
+        /// Create a local loop-back client+server system on the specified port.
         /// </summary>
         /// <param name="port"></param>
         /// <returns></returns>
@@ -162,6 +167,7 @@ namespace DidoNet.Test.Common
             var clientTask = ConnectClient(port);
 
             // ...then wait for their connection to each other to complete
+            Task.WaitAll(clientTask, serverTask);
             result.ServerConnection = await serverTask;
             result.ClientConnection = await clientTask;
 
@@ -174,8 +180,12 @@ namespace DidoNet.Test.Common
             return result;
         }
 
+#pragma warning disable CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
+        private ClientServerConnection() { }
+#pragma warning restore CS8618 // Non-nullable field must contain a non-null value when exiting constructor. Consider declaring as nullable.
+
         /// <summary>
-        /// Start a local loopback server that yields a connection for the first client that connects to the provided port.
+        /// Start a local loop-back server that yields a connection for the first client that connects to the provided port.
         /// </summary>
         /// <param name="port"></param>
         /// <returns></returns>
@@ -197,7 +207,7 @@ namespace DidoNet.Test.Common
         }
 
         /// <summary>
-        /// Connect as a client to an already running local loopback server at the provided port.
+        /// Connect as a client to an already running local loop-back server at the provided port.
         /// </summary>
         /// <param name="port"></param>
         /// <returns></returns>

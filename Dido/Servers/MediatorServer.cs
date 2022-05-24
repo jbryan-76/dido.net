@@ -308,7 +308,7 @@ namespace DidoNet
                 }
 
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 // TODO: catch exceptions and transmit back to caller
                 // (either an application or a runner)
@@ -374,12 +374,12 @@ namespace DidoNet
             /// <summary>
             /// The OS version for the platform the runner is on.
             /// </summary>
-            public string OSVersion { get; set; } = String.Empty;
+            public string OSVersion { get; set; } = string.Empty;
 
             /// <summary>
             /// The uri for applications to use to connect to the runner.
             /// </summary>
-            public string Endpoint { get; set; } = String.Empty;
+            public string Endpoint { get; set; } = string.Empty;
 
             /// <summary>
             /// The maximum number of tasks the runner can execute concurrently.
@@ -403,7 +403,7 @@ namespace DidoNet
             /// <summary>
             /// The optional runner label.
             /// </summary>
-            public string Label { get; set; } = String.Empty;
+            public string Label { get; set; } = string.Empty;
 
             /// <summary>
             /// The optional runner tags.

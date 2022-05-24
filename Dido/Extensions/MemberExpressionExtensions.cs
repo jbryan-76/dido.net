@@ -14,24 +14,24 @@ namespace DidoNet
         /// <param name="value"></param>
         /// <returns></returns>
         /// <exception cref="NotImplementedException"></exception>
-        public static bool GetConstantValue(this MemberExpression exp, out Type type, out object value)
+        public static bool GetConstantValue(this MemberExpression exp, out Type? type, out object? value)
         {
-            if (!(exp.Expression is ConstantExpression))
+            if (exp.Expression is not ConstantExpression)
             {
                 type = null;
                 value = null;
                 return false;
             }
-            object container = ((ConstantExpression)exp.Expression).Value;
+            var container = ((ConstantExpression)exp.Expression).Value;
             switch (exp.Member)
             {
                 case FieldInfo info:
-                    type = ((FieldInfo)exp.Member).FieldType;
-                    value = ((FieldInfo)exp.Member).GetValue(container);
+                    type = info.FieldType;
+                    value = info.GetValue(container);
                     break;
                 case PropertyInfo info:
-                    type = ((PropertyInfo)exp.Member).PropertyType;
-                    value = ((PropertyInfo)exp.Member).GetValue(container);
+                    type = info.PropertyType;
+                    value = info.GetValue(container);
                     break;
                 default:
                     throw new NotImplementedException($"Could not get constant value from member expression: {exp.Member.GetType()} is not supported.");

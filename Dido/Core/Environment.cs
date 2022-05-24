@@ -13,7 +13,7 @@ namespace DidoNet
         // TODO: should this yield a stream or byte[]?
         /// <summary>
         /// Signature for a method that resolves a provided assembly by name,
-        /// returning a stream containing the assembly bytecode.
+        /// returning a stream containing the assembly byte-code.
         /// </summary>
         /// <param name="assemblyName"></param>
         /// <returns></returns>
@@ -44,6 +44,6 @@ namespace DidoNet
             = new Dictionary<string, Assembly>();
 
         // TODO: cache previously fetched assemblies to disk to avoid a network round trip
-        public string AssemblyCachePath { get; set; }
+        //public string AssemblyCachePath { get; set; }
     }
 }

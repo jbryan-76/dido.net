@@ -19,7 +19,7 @@
         /// Indicates the specific label of the runner the task should run on.
         /// If provided, the task can only run on a runner with a matching label.
         /// </summary>
-        public string Label { get; set; } = String.Empty;
+        public string Label { get; set; } = string.Empty;
 
         /// <summary>
         /// Indicates a set of tags to filter runners the task should run on.

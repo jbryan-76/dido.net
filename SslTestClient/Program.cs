@@ -8,7 +8,7 @@ namespace foo
 
     public class SslTcpClient
     {
-        public static async Task RunClient(string targetHost, int port)
+        public static void RunClient(string targetHost, int port)
         {
             var settings = new ClientConnectionSettings { ValidaionPolicy = ServerCertificateValidationPolicies._SKIP_ };
             Console.WriteLine($"Connecting to {targetHost}...");
@@ -60,7 +60,7 @@ namespace foo
             // targetHost must match the name on the server's certificate
             targetHost = args[0];
 
-            SslTcpClient.RunClient(targetHost, 8080).GetAwaiter().GetResult();
+            SslTcpClient.RunClient(targetHost, 8080);
 
             return 0;
         }

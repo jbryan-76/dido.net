@@ -42,7 +42,7 @@ namespace DidoNet
         /// <returns></returns>
         public static bool IsCompilerGeneratedType(this Type type)
         {
-            return type.FullName.Contains("<>");
+            return type.FullName?.Contains("<>") ?? false;
         }
 
         /// <summary>
@@ -72,7 +72,7 @@ namespace DidoNet
         /// <param name="member"></param>
         /// <param name="errors"></param>
         /// <returns></returns>
-        public static bool IsSerializable(this MemberInfo member, List<string> errors = null)
+        public static bool IsSerializable(this MemberInfo member, List<string>? errors = null)
         {
             if (member.IsIgnored())
             {
@@ -121,7 +121,7 @@ namespace DidoNet
         /// <param name="type"></param>
         /// <param name="errors"></param>
         /// <returns></returns>
-        public static bool IsSerializable(this Type type, List<string> errors = null)
+        public static bool IsSerializable(this Type type, List<string>? errors = null)
         {
             var error = $"is not serializable. Use [NonSerialized] on properties if they should not be serialized";
 
@@ -134,7 +134,7 @@ namespace DidoNet
             // any array of a serializable type is serializable
             if (IsArray(type))
             {
-                var arrayType = type.GetElementType();
+                var arrayType = type.GetElementType()!;
                 var errs = new List<string>();
                 if (!IsSerializable(arrayType, errs))
                 {
@@ -296,7 +296,7 @@ namespace DidoNet
         /// <typeparam name="T"></typeparam>
         /// <param name="type"></param>
         /// <returns></returns>
-        public static T GetCustomAttribute<T>(this Type type) where T : Attribute
+        public static T? GetCustomAttribute<T>(this Type type) where T : Attribute
         {
             return type.GetCustomAttributes(typeof(T), true).FirstOrDefault() as T;
         }

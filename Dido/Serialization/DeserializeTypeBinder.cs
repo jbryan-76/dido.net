@@ -27,19 +27,22 @@ namespace DidoNet
         /// <param name="assemblyName"></param>
         /// <param name="typeName"></param>
         /// <returns></returns>
-        public Type BindToType(string assemblyName, string typeName)
+        public Type BindToType(string? assemblyName, string typeName)
         {
-            if (Environment.LoadedAssemblies.TryGetValue(assemblyName, out Assembly asm))
+            ArgumentNullException.ThrowIfNull(assemblyName, nameof(assemblyName));
+            if (!Environment.LoadedAssemblies.TryGetValue(assemblyName, out var asm)
+                || asm == null)
             {
-                return asm.GetType(typeName);
+                throw new FileNotFoundException($"Could not resolve assembly '{assemblyName}' from current Environment.", assemblyName);
             }
-            throw new FileNotFoundException($"Could not resolve assembly '{assemblyName}' from current Environment.", assemblyName);
+            var type = asm.GetType(typeName);
+            return type != null ? type : throw new TypeNotFoundException($"Could not resolve type '{typeName}' in assembly '{assemblyName}'.");
         }
 
         /// <summary>
         /// NOT USED: Only for serialization.
         /// </summary>
-        public void BindToName(Type serializedType, out string assemblyName, out string typeName)
+        public void BindToName(Type serializedType, out string? assemblyName, out string? typeName)
         {
             throw new NotImplementedException();
         }

@@ -15,7 +15,7 @@ namespace DidoNet
         // TODO: add support to indicate progress
 
         /// <summary>
-        /// Used to indicate the task should be cancelled.
+        /// Used to indicate the task should be canceled.
         /// <para/>Executing tasks should monitor the IsCancellationRequested property
         /// and abort execution if a cancellation is requested.
         /// </summary>

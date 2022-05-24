@@ -58,7 +58,7 @@
         /// <summary>
         /// For ServerCertificateValidationPolicies.Thumbprint, the specific certificate thumbprint to validate against.
         /// </summary>
-        public string ServerCertificateThumbprint { get; set; } = String.Empty;
+        public string ServerCertificateThumbprint { get; set; } = string.Empty;
 
         // TODO: provide an api to create custom MessageChannels so the application can optionally support interprocess communication
         //public MessageChannel MessageChannel { get; internal set; }

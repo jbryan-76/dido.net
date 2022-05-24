@@ -42,7 +42,7 @@ The most common traditional solutions are to create one or more auxiliary (micro
 - Updating, migrating, and maintaining multiple services as data models and algorithm needs change.
 - Debugging a large or complex distributed system.
 
-The Dido framework offers a solution that inverts the traditional approach by allowing the application to be written as a single conceptual monolith, where it explicitly contains all necessary code (models, data structures, algorithms, assemblies, etc) to perform all needed work, and where distributed or non-local invokation of that code is desired, a single API call can securely pack and ship the code to a generic .NET host runner service for execution.
+The Dido framework offers a solution that inverts the traditional approach by allowing the application to be written as a single conceptual monolith, where it explicitly contains all necessary code (models, data structures, algorithms, assemblies, etc) to perform all needed work, and where distributed or non-local invocation of that code is desired, a single API call can securely pack and ship the code to a generic .NET host runner service for execution.
 
 This solution is similar to the legacy/deprecated .NET Remoting or general RPC pattern with a crucial difference: all code is specifically and intentionally only authored and contained in the host application - it does not need to be explicitly and proactively "split" into services or auxiliary applications or plugins, and does not require an intermediate compilation or code generation step. The code can be directly authored, tested, and executed in the application during development, and then implicitly and dynamically executed remotely in production.
 

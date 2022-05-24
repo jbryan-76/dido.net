@@ -6,9 +6,9 @@
 
         public long Length { get; set; }
 
-        public string ExceptionType { get; set; } = String.Empty;
+        public string ExceptionType { get; set; } = string.Empty;
 
-        public string ExceptionMessage { get; set; } = String.Empty;
+        public string ExceptionMessage { get; set; } = string.Empty;
 
         public bool IsOk { get { return string.IsNullOrEmpty(ExceptionType); } }
 
@@ -16,7 +16,7 @@
         {
             get
             {
-                return IsOk ? null : Activator.CreateInstance(Type.GetType(ExceptionType), ExceptionMessage) as Exception;
+                return IsOk ? null : Activator.CreateInstance(Type.GetType(ExceptionType)!, ExceptionMessage) as Exception;
             }
         }
 

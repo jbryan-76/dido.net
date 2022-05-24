@@ -44,7 +44,7 @@ namespace DidoNet.Test
             });
 
             // start a runner that will skip certificate validation and assume the server is authentic
-            var clientConnectionTask = Task.Run(async () =>
+            var clientConnectionTask = Task.Run(() =>
             {
                 // connect to the local server
                 var client = new TcpClient("localhost", port);
@@ -87,7 +87,7 @@ namespace DidoNet.Test
             });
 
             // start a runner that knows the certificate thumbprint and uses it to verify the server
-            var clientConnectionTask = Task.Run(async () =>
+            var clientConnectionTask = Task.Run(() =>
             {
                 // connect to the local server
                 var client = new TcpClient("localhost", port);
@@ -143,7 +143,7 @@ namespace DidoNet.Test
             });
 
             // start a runner that should connect using the certificate
-            var clientConnectionTask = Task.Run(async () =>
+            var clientConnectionTask = Task.Run(() =>
             {
                 // connect to the local server
                 var client = new TcpClient("localhost", port);

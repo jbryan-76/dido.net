@@ -2,10 +2,10 @@
 {
     internal class TaskTimeoutMessage : IMessage
     {
-        public string Message { get; set; } = String.Empty;
+        public string Message { get; set; } = string.Empty;
 
         public TaskTimeoutMessage()
-        //: this("The task did not complete in the alotted time.")
+        //: this("The task did not complete in the allotted time.")
         { }
 
         public TaskTimeoutMessage(string message)

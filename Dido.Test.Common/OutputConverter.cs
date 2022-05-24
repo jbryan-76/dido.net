@@ -24,8 +24,12 @@ namespace DidoNet.Test.Common
             get { return Encoding.UTF8; }
         }
 
-        public override void WriteLine(string message)
+        public override void WriteLine(string? message)
         {
+            if( message == null)
+            {
+                return;
+            }
             _output.WriteLine(message);
             if (!string.IsNullOrEmpty(Filename))
             {
@@ -39,7 +43,7 @@ namespace DidoNet.Test.Common
                             File.AppendAllLines(Filename, new string[] { message });
                             return;
                         }
-                        catch (Exception ex)
+                        catch (Exception)
                         {
                             Thread.Sleep(1);
                         }
@@ -48,7 +52,7 @@ namespace DidoNet.Test.Common
             }
         }
 
-        public override void WriteLine(string format, params object[] args)
+        public override void WriteLine(string format, params object?[] args)
         {
             WriteLine(string.Format(format, args));
         }

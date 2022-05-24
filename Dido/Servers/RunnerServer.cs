@@ -218,7 +218,7 @@ namespace DidoNet
 
             while (Interlocked.Read(ref IsRunning) == 1)
             {
-                // TODO: check for active workers that have been cancelled or timed out but haven't stopped yet?
+                // TODO: check for active workers that have been canceled or timed out but haven't stopped yet?
 
                 CleanupCompletedWorkers();
 

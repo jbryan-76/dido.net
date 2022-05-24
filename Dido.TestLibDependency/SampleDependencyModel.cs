@@ -1,7 +1,7 @@
 ﻿namespace DidoNet.TestLibDependency
 {
     /// <summary>
-    /// A POCO model used for testing proper serialization and invokation of
+    /// A POCO model used for testing proper serialization and invocation of
     /// dynamically loaded assemblies.
     /// </summary>
     public class SampleDependencyModel

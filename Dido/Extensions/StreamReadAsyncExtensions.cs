@@ -2,7 +2,7 @@
 
 namespace DidoNet
 {
-    public static class StreamReadExtensions
+    public static class StreamReadAsyncExtensions
     {
         /// <summary>
         /// Read the given number of bytes from the stream.
@@ -12,13 +12,13 @@ namespace DidoNet
         /// </summary>
         /// <param name="stream"></param>
         /// <param name="length"></param>
-        public static byte[] ReadBytes(this Stream stream, int length)
+        public static async Task<byte[]> ReadBytesAsync(this Stream stream, int length, CancellationToken cancellationToken = default(CancellationToken))
         {
             var bytes = new byte[length];
             var remaining = length;
             while (remaining > 0)
             {
-                int read = stream.Read(bytes, length - remaining, remaining);
+                int read = await stream.ReadAsync(bytes, length - remaining, remaining, cancellationToken);
                 remaining -= read;
                 if (read == 0 && remaining > 0)
                 {
@@ -32,18 +32,18 @@ namespace DidoNet
         /// Read a boolean value from a stream.
         /// </summary>
         /// <param name="stream"></param>
-        public static bool ReadBoolean(this Stream stream)
+        public static async Task<bool> ReadBooleanAsync(this Stream stream, CancellationToken cancellationToken = default(CancellationToken))
         {
-            return BitConverter.ToBoolean(stream.ReadBytes(1));
+            return BitConverter.ToBoolean(await stream.ReadBytesAsync(1, cancellationToken));
         }
 
         /// <summary>
         /// Read a char value from a stream.
         /// </summary>
         /// <param name="stream"></param>
-        public static char ReadChar(this Stream stream)
+        public static async Task<char> ReadCharAsync(this Stream stream, CancellationToken cancellationToken = default(CancellationToken))
         {
-            var bytes = stream.ReadBytes(2);
+            var bytes = await stream.ReadBytesAsync(2, cancellationToken);
             if (BitConverter.IsLittleEndian)
             {
                 Array.Reverse(bytes);
@@ -55,9 +55,9 @@ namespace DidoNet
         /// Read a short value from a stream in network-byte-order (ie Big Endian).
         /// </summary>
         /// <param name="stream"></param>
-        public static short ReadInt16BE(this Stream stream)
+        public static async Task<short> ReadInt16BEAsync(this Stream stream, CancellationToken cancellationToken = default(CancellationToken))
         {
-            var bytes = stream.ReadBytes(2);
+            var bytes = await stream.ReadBytesAsync(2, cancellationToken);
             if (BitConverter.IsLittleEndian)
             {
                 Array.Reverse(bytes);
@@ -69,9 +69,9 @@ namespace DidoNet
         /// Read a ushort value from a stream in network-byte-order (ie Big Endian).
         /// </summary>
         /// <param name="stream"></param>
-        public static ushort ReadUInt16BE(this Stream stream)
+        public static async Task<ushort> ReadUInt16BEAsync(this Stream stream, CancellationToken cancellationToken = default(CancellationToken))
         {
-            var bytes = stream.ReadBytes(2);
+            var bytes = await stream.ReadBytesAsync(2, cancellationToken);
             if (BitConverter.IsLittleEndian)
             {
                 Array.Reverse(bytes);
@@ -83,9 +83,9 @@ namespace DidoNet
         /// Read an int value from a stream in network-byte-order (ie Big Endian).
         /// </summary>
         /// <param name="stream"></param>
-        public static int ReadInt32BE(this Stream stream)
+        public static async Task<int> ReadInt32BEAsync(this Stream stream, CancellationToken cancellationToken = default(CancellationToken))
         {
-            var bytes = stream.ReadBytes(4);
+            var bytes = await stream.ReadBytesAsync(4, cancellationToken);
             if (BitConverter.IsLittleEndian)
             {
                 Array.Reverse(bytes);
@@ -97,9 +97,9 @@ namespace DidoNet
         /// Read a uint value from a stream in network-byte-order (ie Big Endian).
         /// </summary>
         /// <param name="stream"></param>
-        public static uint ReadUInt32BE(this Stream stream)
+        public static async Task<uint> ReadUInt32BEAsync(this Stream stream, CancellationToken cancellationToken = default(CancellationToken))
         {
-            var bytes = stream.ReadBytes(4);
+            var bytes = await stream.ReadBytesAsync(4, cancellationToken);
             if (BitConverter.IsLittleEndian)
             {
                 Array.Reverse(bytes);
@@ -111,9 +111,9 @@ namespace DidoNet
         /// Read a long value from a stream in network-byte-order (ie Big Endian).
         /// </summary>
         /// <param name="stream"></param>
-        public static long ReadInt64BE(this Stream stream)
+        public static async Task<long> ReadInt64BEAsync(this Stream stream, CancellationToken cancellationToken = default(CancellationToken))
         {
-            var bytes = stream.ReadBytes(8);
+            var bytes = await stream.ReadBytesAsync(8, cancellationToken);
             if (BitConverter.IsLittleEndian)
             {
                 Array.Reverse(bytes);
@@ -125,9 +125,9 @@ namespace DidoNet
         /// Read a ulong value from a stream in network-byte-order (ie Big Endian).
         /// </summary>
         /// <param name="stream"></param>
-        public static ulong ReadUInt64BE(this Stream stream)
+        public static async Task<ulong> ReadUInt64BEAsync(this Stream stream, CancellationToken cancellationToken = default(CancellationToken))
         {
-            var bytes = stream.ReadBytes(8);
+            var bytes = await stream.ReadBytesAsync(8, cancellationToken);
             if (BitConverter.IsLittleEndian)
             {
                 Array.Reverse(bytes);
@@ -139,9 +139,9 @@ namespace DidoNet
         /// Read a float value from a stream in network-byte-order (ie Big Endian).
         /// </summary>
         /// <param name="stream"></param>
-        public static float ReadSingleBE(this Stream stream)
+        public static async Task<float> ReadSingleBEAsync(this Stream stream, CancellationToken cancellationToken = default(CancellationToken))
         {
-            var bytes = stream.ReadBytes(4);
+            var bytes = await stream.ReadBytesAsync(4, cancellationToken);
             if (BitConverter.IsLittleEndian)
             {
                 Array.Reverse(bytes);
@@ -153,9 +153,9 @@ namespace DidoNet
         /// Read a double value from a stream in network-byte-order (ie Big Endian).
         /// </summary>
         /// <param name="stream"></param>
-        public static double ReadDoubleBE(this Stream stream)
+        public static async Task<double> ReadDoubleBEAsync(this Stream stream, CancellationToken cancellationToken = default(CancellationToken))
         {
-            var bytes = stream.ReadBytes(8);
+            var bytes = await stream.ReadBytesAsync(8, cancellationToken);
             if (BitConverter.IsLittleEndian)
             {
                 Array.Reverse(bytes);
@@ -167,10 +167,10 @@ namespace DidoNet
         /// Read a string from a stream as a length-prefixed character array.
         /// </summary>
         /// <param name="stream"></param>
-        public static string ReadString(this Stream stream)
+        public static async Task<string> ReadStringAsync(this Stream stream, CancellationToken cancellationToken = default(CancellationToken))
         {
-            var length = stream.ReadInt32BE();
-            var bytes = stream.ReadBytes(length);
+            var length = await stream.ReadInt32BEAsync(cancellationToken);
+            var bytes = await stream.ReadBytesAsync(length, cancellationToken);
             return Encoding.UTF8.GetString(bytes);
         }
 
@@ -179,13 +179,13 @@ namespace DidoNet
         /// </summary>
         /// <param name="stream"></param>
         /// <param name="reader"></param>
-        public static T[] ReadArray<T>(this Stream stream, Func<Stream, T> reader)
+        public static async Task<T[]> ReadArrayAsync<T>(this Stream stream, Func<Stream, CancellationToken, Task<T>> reader, CancellationToken cancellationToken = default(CancellationToken))
         {
-            int numItems = stream.ReadInt32BE();
+            int numItems = await stream.ReadInt32BEAsync(cancellationToken);
             var array = new T[numItems];
             for (int i = 0; i < numItems; ++i)
             {
-                array[i] = reader(stream);
+                array[i] = await reader(stream, cancellationToken);
             }
             return array;
         }
@@ -197,18 +197,16 @@ namespace DidoNet
         /// </summary>
         /// <param name="stream"></param>
         /// <param name="length"></param>
-        /// <param name="buffer"></param>
         /// <returns>True if the number of bytes were read successfully, else false.</returns>
-        public static bool TryReadBytes(this Stream stream, int length, out byte[]? buffer)
+        public static async Task<byte[]?> TryReadBytesAsync(this Stream stream, int length, CancellationToken cancellationToken = default(CancellationToken))
         {
             if (stream.Length - stream.Position < length)
             {
-                buffer = null;
-                return false;
+                return null;
             }
-            buffer = new byte[length];
-            stream.Read(buffer, 0, length);
-            return true;
+            var buffer = new byte[length];
+            await stream.ReadAsync(buffer, 0, length, cancellationToken);
+            return buffer;
         }
 
         /// <summary>
@@ -217,17 +215,11 @@ namespace DidoNet
         /// and data is only read if enough bytes are available.
         /// </summary>
         /// <param name="stream"></param>
-        /// <param name="value"></param>
         /// <returns>True if the value was read successfully, else false.</returns>
-        public static bool TryReadByte(this Stream stream, out byte value)
+        public static async Task<byte?> TryReadByteAsync(this Stream stream, CancellationToken cancellationToken = default(CancellationToken))
         {
-            value = 0;
-            if (!stream.TryReadBytes(1, out var bytes))
-            {
-                return false;
-            }
-            value = bytes![0];
-            return true;
+            var bytes = await stream.TryReadBytesAsync(1, cancellationToken);
+            return bytes == null ? null : bytes[0];
         }
 
         /// <summary>
@@ -236,21 +228,19 @@ namespace DidoNet
         /// and data is only read if enough bytes are available.
         /// </summary>
         /// <param name="stream"></param>
-        /// <param name="value"></param>
         /// <returns>True if the value was read successfully, else false.</returns>
-        public static bool TryReadUShortBE(this Stream stream, out ushort value)
+        public static async Task<ushort?> TryReadUShortBEAsync(this Stream stream, CancellationToken cancellationToken = default(CancellationToken))
         {
-            value = 0;
-            if (!stream.TryReadBytes(2, out var bytes))
+            var bytes = await stream.TryReadBytesAsync(2, cancellationToken);
+            if (bytes == null)
             {
-                return false;
+                return null;
             }
             if (BitConverter.IsLittleEndian)
             {
-                Array.Reverse(bytes!);
+                Array.Reverse(bytes);
             }
-            value = BitConverter.ToUInt16(bytes);
-            return true;
+            return BitConverter.ToUInt16(bytes);
         }
 
         /// <summary>
@@ -259,21 +249,19 @@ namespace DidoNet
         /// and data is only read if enough bytes are available.
         /// </summary>
         /// <param name="stream"></param>
-        /// <param name="value"></param>
         /// <returns>True if the value was read successfully, else false.</returns>
-        public static bool TryReadIntBE(this Stream stream, out int value)
+        public static async Task<int?> TryReadIntBEAsync(this Stream stream, CancellationToken cancellationToken = default(CancellationToken))
         {
-            value = 0;
-            if (!stream.TryReadBytes(4, out var bytes))
+            var bytes = await stream.TryReadBytesAsync(4, cancellationToken);
+            if (bytes == null)
             {
-                return false;
+                return null;
             }
             if (BitConverter.IsLittleEndian)
             {
-                Array.Reverse(bytes!);
+                Array.Reverse(bytes);
             }
-            value = BitConverter.ToInt32(bytes);
-            return true;
+            return BitConverter.ToInt32(bytes);
         }
     }
 }

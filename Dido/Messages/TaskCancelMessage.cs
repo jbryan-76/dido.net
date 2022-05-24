@@ -2,10 +2,10 @@
 {
     internal class TaskCancelMessage : IMessage
     {
-        public string Message { get; set; } = String.Empty;
+        public string Message { get; set; } = string.Empty;
 
         public TaskCancelMessage()
-        //: this("The task was cancelled.")
+        //: this("The task was canceled.")
         { }
 
         public TaskCancelMessage(string message)
@@ -15,9 +15,7 @@
 
         public void Read(Stream stream)
         {
-            ThreadHelpers.Debug($"starting to read cancel message");
             Message = stream.ReadString();
-            ThreadHelpers.Debug($"read cancel message: {Message}");
         }
 
         public void Write(Stream stream)

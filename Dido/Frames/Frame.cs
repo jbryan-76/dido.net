@@ -1,6 +1,4 @@
-﻿using System.Text;
-
-namespace DidoNet
+﻿namespace DidoNet
 {
     public enum FrameTypes
     {
@@ -15,9 +13,12 @@ namespace DidoNet
         static public int MaxFrameSize = 512 * 1024;
 
         public byte Type { get; set; }
+        
         public ushort Channel { get; set; }
+        
         public int Length { get; set; }
-        public byte[] Payload { get; set; }
+
+        public byte[] Payload { get; set; } = new byte[0];
 
         public FrameTypes FrameType
         {

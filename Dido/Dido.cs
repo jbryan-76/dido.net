@@ -216,7 +216,7 @@ namespace DidoNet
         /// <returns></returns>
         /// <exception cref="TaskGeneralException"></exception>
         /// <exception cref="TaskDeserializationException"></exception>
-        /// <exception cref="TaskInvokationException"></exception>
+        /// <exception cref="TaskInvocationException"></exception>
         /// <exception cref="InvalidOperationException"></exception>
         private static async Task<Tprop> DoRunRemoteAsync<Tprop>(
             Expression<Func<ExecutionContext, Tprop>> expression,
@@ -392,8 +392,8 @@ namespace DidoNet
                                 throw new TaskGeneralException(error.Error);
                             case TaskErrorMessage.ErrorTypes.Deserialization:
                                 throw new TaskDeserializationException(error.Error);
-                            case TaskErrorMessage.ErrorTypes.Invokation:
-                                throw new TaskInvokationException(error.Error);
+                            case TaskErrorMessage.ErrorTypes.Invocation:
+                                throw new TaskInvocationException(error.Error);
                             default:
                                 throw new InvalidOperationException($"Task error type {error.ErrorType} is unknown");
                         }

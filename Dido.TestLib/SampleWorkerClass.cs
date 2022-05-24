@@ -41,7 +41,7 @@ namespace DidoNet.TestLib
 
         /// <summary>
         /// A static method that loops forever until the given cancellation token
-        /// is cancelled.
+        /// is canceled.
         /// </summary>
         /// <param name="cancel"></param>
         /// <returns></returns>

@@ -14,14 +14,14 @@ namespace DidoNet
     public class Connection : IDisposable
     {
         /// <summary>
-        /// Represents a single bi-directional loopback data stream that can be used to simulate network
+        /// Represents a single bi-directional loop-back data stream that can be used to simulate network
         /// connections for testing purposes. The same instance should be used to construct a pair of
         /// Connections, with one designated as a Client and one as a Server.
         /// </summary>
         public class LoopbackProxy : IDisposable
         {
             /// <summary>
-            /// Role options when creating a pair of Connections from a single loopback proxy.
+            /// Role options when creating a pair of Connections from a single loop-back proxy.
             /// <para/>Note: the designation is effectively arbitrary, but used to ensure each
             /// Connection uses the right "end" of the stream for reading and writing.
             /// </summary>
@@ -55,14 +55,14 @@ namespace DidoNet
         internal delegate void FrameMonitor(Frame frame);
 
         /// <summary>
-        /// How long to wait between sending hearbeat frames.
+        /// How long to wait between sending heartbeat frames.
         /// </summary>
         public static int DefaultHeartbeatPeriodInSeconds = 60; // one minute
 
         /// <summary>
         /// The optional name for the connection.
         /// </summary>
-        public string Name { get; private set; } = String.Empty;
+        public string Name { get; private set; } = string.Empty;
 
         /// <summary>
         /// Indicates whether the connection is connected to the remote endpoint.
@@ -227,7 +227,7 @@ namespace DidoNet
         /// the target host server must match the server's certificate/credentials).
         /// </summary>
         /// <param name="endpoint">The TcpClient connected to the remote server endpoint.</param>
-        /// <param name="targetHost">The hostname of the remote server which is used as part of SSL to authenticate the connection.</param>
+        /// <param name="targetHost">The host name of the remote server which is used as part of SSL to authenticate the connection.</param>
         /// <param name="name">The optional name for the connection.</param>
         /// <param name="settings">The settings to use when configuring the connection.</param>
         public Connection(TcpClient endpoint, string targetHost, string? name = null, ClientConnectionSettings? settings = null)
@@ -274,7 +274,7 @@ namespace DidoNet
             : this(new TcpClient(host, port), host, name, settings) { }
 
         /// <summary>
-        /// Create a new loopback connection that uses the provided proxy instead of a network TcpClient
+        /// Create a new loop-back connection that uses the provided proxy instead of a network TcpClient
         /// but otherwise allows testing all communications and data processing.
         /// </summary>
         public Connection(LoopbackProxy proxy, LoopbackProxy.Role role, string? name = null)
@@ -494,8 +494,8 @@ namespace DidoNet
             }
             else
             {
-                // log loopback info
-                Logger.Info($"Loopback connection created.");
+                // log loop-back info
+                Logger.Info($"Loop-back connection created.");
             }
 
             // start separate threads to read and write data
@@ -543,11 +543,11 @@ namespace DidoNet
         }
 
         /// <summary>
-        /// Continously receives frames until the connection is closed.
+        /// Continuously receives frames until the connection is closed.
         /// </summary>
         private void ReadLoop()
         {
-            // TODO: expore async read optimization strategies
+            // TODO: explore async read optimization strategies
             // https://devblogs.microsoft.com/pfxteam/awaiting-socket-operations/
 
             try
@@ -583,7 +583,7 @@ namespace DidoNet
                         var socketException = e.InnerException as SocketException;
                         if (socketException != null && socketException.SocketErrorCode == SocketError.TimedOut)
                         {
-                            // NOTE it is an antipattern to use exception handling to control 
+                            // NOTE it is an anti-pattern to use exception handling to control 
                             // "normal" expected program flow, but in this case there is no way to
                             // cleanly terminate a thread that is blocking indefinitely on
                             // a Stream.Read.
@@ -790,7 +790,7 @@ namespace DidoNet
 
         /// <summary>
         /// Invoked by the RemoteCertificateValidationDelegate to authenticate the server endpoint when the client
-        /// has configuired a-priori knowledge of the certificate thumbprint the server will use.
+        /// has configured a-priori knowledge of the certificate thumb-print the server will use.
         /// </summary>
         /// <param name="sender"></param>
         /// <param name="certificate"></param>
@@ -801,11 +801,13 @@ namespace DidoNet
         private bool ValidateRemoteServerCertificateThumbprint(
               object sender, // SslStream
               X509Certificate? certificate,
-              X509Chain? chain,
+              X509Chain? _,
               SslPolicyErrors sslPolicyErrors,
               string thumbprint)
         {
-            Logger.Info("Validating remote certificate using thumbprint");
+            Logger.Info("Validating remote certificate using thumb-print");
+
+            ArgumentNullException.ThrowIfNull(certificate, nameof(certificate));
 
             var cert2 = new X509Certificate2(certificate);
 

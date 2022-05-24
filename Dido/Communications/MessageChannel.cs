@@ -7,8 +7,10 @@
     /// and specializes it for sending and receiving atomic messages conforming to the IMessage interface.
     /// Messages should be relatively small, and the underlying channel should EXCLUSIVELY be used by the MessageChannel
     /// (ie do not send both messages and general stream traffic or the data may be interleaved).
-    /// <para/>NOTE While this class is thread-safe and reading and writing can be done on separate threads,
-    /// never use more than 1 thread per direction (read or write), as it may result in data interleaving.
+    /// <para/>WARNING: While this class is thread-safe and reading and writing can be done on separate threads,
+    /// never use more than 1 thread per direction (read or write), as it may result in data interleaving. If the
+    /// application design necessitates multiple threads, it MUST also implement the necessary logic to enforce reading 
+    /// or writing only a single message at a time in critical sections.
     /// </summary>
     public class MessageChannel : IDisposable
     {
@@ -77,19 +79,31 @@
         /// <param name="message"></param>
         public void Send(IMessage message)
         {
-            // lock the channel to only write one message at a time (in case the caller is not heeding the warning)
-            lock (Channel)
-            {
-                var messageType = message.GetType();
-                ThreadHelpers.Debug($"{ChannelNumber} {Channel.Name} sending message {messageType.AssemblyQualifiedName}");
-                Channel.WriteString(messageType.AssemblyQualifiedName);
-                message.Write(Channel);
-                ThreadHelpers.Debug($"{ChannelNumber} {Channel.Name} sent message {messageType.AssemblyQualifiedName}");
-                Channel.Flush();
-                var checkType = Type.GetType(messageType.AssemblyQualifiedName);
-                ThreadHelpers.Debug($"{ChannelNumber} {Channel.Name} confirmed:  {checkType}");
-            }
+            var messageType = message.GetType();
+            //ThreadHelpers.Debug($"{ChannelNumber} {Channel.Name} sending message {messageType.AssemblyQualifiedName}");
+            Channel.WriteString(messageType.AssemblyQualifiedName!);
+            message.Write(Channel);
+            //ThreadHelpers.Debug($"{ChannelNumber} {Channel.Name} sent message {messageType.AssemblyQualifiedName}");
+            Channel.Flush();
+            //var checkType = Type.GetType(messageType.AssemblyQualifiedName);
+            //ThreadHelpers.Debug($"{ChannelNumber} {Channel.Name} confirmed:  {checkType}");
         }
+
+        ///// <summary>
+        ///// Write the given message to the underlying channel.
+        ///// </summary>
+        ///// <param name="message"></param>
+        //public async Task SendAsync(IMessage message)
+        //{
+        //    var messageType = message.GetType();
+        //    //ThreadHelpers.Debug($"{ChannelNumber} {Channel.Name} sending message {messageType.AssemblyQualifiedName}");
+        //    await Channel.WriteStringAsync(messageType.AssemblyQualifiedName!);
+        //    message.Write(Channel);
+        //    //ThreadHelpers.Debug($"{ChannelNumber} {Channel.Name} sent message {messageType.AssemblyQualifiedName}");
+        //    Channel.Flush();
+        //    //var checkType = Type.GetType(messageType.AssemblyQualifiedName);
+        //    //ThreadHelpers.Debug($"{ChannelNumber} {Channel.Name} confirmed:  {checkType}");
+        //}
 
         // TODO: explore in future. an interesting idea, but there are some timing concerns
         // TODO: that probably don't make it very reliable
@@ -123,12 +137,13 @@
         /// <returns></returns>
         /// <exception cref="InvalidOperationException"></exception>
         /// <exception cref="TimeoutException"></exception>
-        public IMessage ReceiveMessage(int? timeoutInMs = null)
+        public IMessage ReceiveMessage(TimeSpan? timeout = null)
         {
             // TODO: add timeout
-            if (timeoutInMs != null)
+            if (timeout != null)
             {
-                var task = Task.Run(async () =>
+                // TODO: any way to do this without using a thread?
+                var task = Task.Run(() =>
                 {
                     var typeName = Channel.ReadString();
                     var messageType = Type.GetType(typeName);
@@ -145,7 +160,7 @@
                     return message;
 
                 });
-                var result = task.TimeoutAfter(TimeSpan.FromMilliseconds(timeoutInMs.Value)).GetAwaiter().GetResult();
+                var result = task.TimeoutAfter(timeout.Value).GetAwaiter().GetResult();
                 return result;
             }
 
@@ -180,19 +195,12 @@
         /// <returns></returns>
         /// <exception cref="InvalidOperationException"></exception>
         /// <exception cref="TimeoutException"></exception>
-        public T ReceiveMessage<T>(int? timeoutInMs = null) where T : class, IMessage
+        public T ReceiveMessage<T>(TimeSpan? timeout = null) where T : class, IMessage
         {
-            // TODO: add timeout
-
-            var message = ReceiveMessage(timeoutInMs);
-            if (message is T)
-            {
-                return (message as T)!;
-            }
-            else
-            {
-                throw new InvalidOperationException($"Received message is type '{message.GetType()}', which cannot be assigned to intended type '{typeof(T)}'.");
-            }
+            var message = ReceiveMessage(timeout);
+            return message is T t
+                ? t
+                : throw new InvalidOperationException($"Received message is type '{message.GetType()}', which cannot be assigned to intended type '{typeof(T)}'.");
         }
 
         /// <summary>

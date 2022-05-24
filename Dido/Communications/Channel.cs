@@ -26,7 +26,7 @@ namespace DidoNet
         /// </summary>
         public ChannelDataAvailableHandler? OnDataAvailable = null;
 
-        public string Name { get; set; }
+        public string Name { get; set; } = string.Empty;
 
         /// <summary>
         /// The unique id for the channel.
@@ -34,7 +34,7 @@ namespace DidoNet
         public ushort ChannelNumber { get; private set; }
 
         /// <summary>
-        /// The Connection the channel is using for data tranmission.
+        /// The Connection the channel is using for data transmission.
         /// </summary>
         public Connection Connection { get; private set; }
 
@@ -113,6 +113,8 @@ namespace DidoNet
         public Task<bool> WaitForDataAsync(bool throwIfClosed = false)
         {
             var source = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            // TODO: any way to do this without using a thread?
+            // TODO: try setting and then blocking on an AutoResetEvent instead?
             Task.Run(() =>
             {
                 while (!IsDataAvailable)
@@ -164,6 +166,8 @@ namespace DidoNet
         /// </summary>
         public override void Flush()
         {
+            // TODO: try setting and then blocking on an AutoResetEvent instead?
+
             // block until the write buffer clears
             while (WriteBuffer.Length > 0 && IsConnected)
             {
@@ -210,7 +214,7 @@ namespace DidoNet
             {
                 // TODO: explore using QueueBufferStream instead?
                 // peek at the next available segment
-                if (ReadBuffer.TryPeek(out byte[] segment))
+                if (ReadBuffer.TryPeek(out var segment))
                 {
                     // how many bytes remain to be read in the current segment?
                     int remainingInSegment = segment.Length - CurrentSegmentOffset;
@@ -363,7 +367,7 @@ namespace DidoNet
                     }
                     ThreadHelpers.Yield();
                 }
-                ThreadHelpers.Debug($"channel {ChannelNumber} {Name} read loop stopping readbuffer={ReadBuffer.Count}");
+                ThreadHelpers.Debug($"channel {ChannelNumber} {Name} read loop stopping read buffer={ReadBuffer.Count}");
             }
             catch (Exception e)
             {
@@ -402,7 +406,7 @@ namespace DidoNet
                     }
                     ThreadHelpers.Yield();
                 }
-                ThreadHelpers.Debug($"channel {ChannelNumber} {Name} write loop stopping writebuffer={WriteBuffer.Length}");
+                ThreadHelpers.Debug($"channel {ChannelNumber} {Name} write loop stopping write buffer={WriteBuffer.Length}");
             }
             catch (Exception e)
             {

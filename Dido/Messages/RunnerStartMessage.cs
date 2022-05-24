@@ -18,15 +18,15 @@ namespace DidoNet
     {
         public OSPlatforms Platform { get; set; } = OSPlatforms.Unknown;
 
-        public string OSVersion { get; set; } = String.Empty;
+        public string OSVersion { get; set; } = string.Empty;
 
-        public string Endpoint { get; set; } = String.Empty;
+        public string Endpoint { get; set; } = string.Empty;
 
         public int MaxTasks { get; set; } = 0;
 
         public int MaxQueue { get; set; } = 0;
 
-        public string Label { get; set; } = String.Empty;
+        public string Label { get; set; } = string.Empty;
 
         public string[] Tags { get; set; } = new string[0];
 

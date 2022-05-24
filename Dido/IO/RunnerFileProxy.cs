@@ -62,7 +62,7 @@ namespace DidoNet.IO
             }
         }
 
-        public void Cache(string srcPath, string dstPath)
+        public async Task CacheAsync(string srcPath, string dstPath)
         {
             if (Path.IsPathRooted(dstPath))
             {

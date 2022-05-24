@@ -275,16 +275,14 @@ namespace DidoNet
                         }
                     }
                 }
-                catch (OperationCanceledException ex)
+                catch (OperationCanceledException)
                 {
-                    ThreadHelpers.Debug($"RUNNER: sending cancelled message");
                     TasksChannel.Send(new TaskCancelMessage());
-                    ThreadHelpers.Debug($"RUNNER: cancelled message sent");
                 }
                 catch (Exception ex)
                 {
-                    // catch and report invokation errors
-                    var errorMessage = new TaskErrorMessage(ex, TaskErrorMessage.ErrorTypes.Invokation);
+                    // catch and report invocation errors
+                    var errorMessage = new TaskErrorMessage(ex, TaskErrorMessage.ErrorTypes.Invocation);
                     TasksChannel.Send(errorMessage);
                 }
                 finally

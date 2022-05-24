@@ -2,22 +2,29 @@
 
 namespace DidoNet
 {
+    /// <summary>
+    /// Represents a serializable data model for a Type.
+    /// </summary>
     internal class TypeModel
     {
         public TypeModel() { }
+
         public TypeModel(Type type)
         {
-            Name = type.FullName;
-            AssemblyName = type.Assembly.FullName;
+            Name = type.FullName ?? string.Empty;
+            AssemblyName = type.Assembly.FullName ?? string.Empty;
             RuntimeVersion = type.Assembly.ImageRuntimeVersion;
         }
-        public string Name { get; set; }
-        public string AssemblyName { get; set; }
-        public string RuntimeVersion { get; set; }
 
-        public Type ToType(Environment env)
+        public string Name { get; set; } = string.Empty;
+
+        public string AssemblyName { get; set; } = string.Empty;
+
+        public string RuntimeVersion { get; set; } = string.Empty;
+
+        public Type? ToType(Environment env)
         {
-            if (env.LoadedAssemblies.TryGetValue(AssemblyName, out Assembly asm))
+            if (env.LoadedAssemblies.TryGetValue(AssemblyName, out var asm))
             {
                 return asm.GetType(Name);
             }
@@ -47,16 +54,14 @@ namespace DidoNet
 
         public static bool operator ==(TypeModel lhs, Type rhs)
         {
-            if (lhs is null)
-            {
-                return rhs is null ? true : false;
-            }
-            else
-            {
-                return lhs.Equals(new TypeModel(rhs));
-            }
+            return lhs is null ? rhs is null : lhs.Equals(new TypeModel(rhs));
         }
 
         public static bool operator !=(TypeModel lhs, Type rhs) => !(lhs == rhs);
+
+        public override int GetHashCode()
+        {
+            return HashCode.Combine(Name.GetHashCode(), AssemblyName.GetHashCode());
+        }
     }
 }

@@ -9,13 +9,13 @@
         /// The unique id of the server instance.
         /// If not provided, a random unique id will be assigned for each Runner server when it starts.
         /// </summary>
-        public string? Id { get; private set; } = String.Empty;
+        public string? Id { get; private set; } = string.Empty;
 
         /// <summary>
         /// The optional label for the runner. 
         /// When submitting a task request this can be used to select a specific runner.
         /// </summary>
-        public string Label { get; set; } = String.Empty;
+        public string Label { get; set; } = string.Empty;
 
         /// <summary>
         /// The set of optional tags for the runner.
@@ -66,14 +66,14 @@
         /// <summary>
         /// For ServerCertificateValidationPolicies.Thumbprint, the specific certificate thumbprint to validate against.
         /// </summary>
-        public string ServerCertificateThumbprint { get; set; } = String.Empty;
+        public string ServerCertificateThumbprint { get; set; } = string.Empty;
 
         public string CachePath { get; set; } = "cache";
 
         public TimeSpan CacheMaxAge { get; set; } = TimeSpan.Zero;
 
-        internal string AssemblyCachePath { get; set; } = String.Empty;
+        internal string AssemblyCachePath { get; set; } = string.Empty;
 
-        internal string FileCachePath { get; set; } = String.Empty;
+        internal string FileCachePath { get; set; } = string.Empty;
     }
 }

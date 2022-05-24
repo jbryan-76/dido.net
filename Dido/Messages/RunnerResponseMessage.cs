@@ -2,7 +2,7 @@
 {
     internal class RunnerResponseMessage : IMessage
     {
-        public string Endpoint { get; set; } = String.Empty;
+        public string Endpoint { get; set; } = string.Empty;
 
         public RunnerResponseMessage() { }
 

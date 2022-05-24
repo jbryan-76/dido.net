@@ -291,7 +291,7 @@ namespace DidoNet.Test
                 // don't send a message and confirm a timeout exception is thrown
                 Assert.Throws<TimeoutException>(() =>
                 {
-                    var receivedMessage = messageChannel1ServerSide.ReceiveMessage<TestMessage>(100);
+                    var receivedMessage = messageChannel1ServerSide.ReceiveMessage<TestMessage>(TimeSpan.FromMilliseconds(100));
                 });
             }
         }
@@ -321,13 +321,13 @@ namespace DidoNet.Test
                 // message handlers
                 MessageChannel.MessageReceivedHandler serverHandler = (message, channel) =>
                 {
-                    serverMessages.Add(new Tuple<TestMessage, int>(message as TestMessage, channel.ChannelNumber));
+                    serverMessages.Add(new Tuple<TestMessage, int>((TestMessage)message, channel.ChannelNumber));
                     channel.Send(testResponseMessage);
                     Interlocked.Increment(ref messageCount);
                 };
                 MessageChannel.MessageReceivedHandler clientHandler = (message, channel) =>
                 {
-                    clientMessages.Add(new Tuple<TestMessage, int>(message as TestMessage, channel.ChannelNumber));
+                    clientMessages.Add(new Tuple<TestMessage, int>((TestMessage)message, channel.ChannelNumber));
                     Interlocked.Increment(ref messageCount);
                 };
 
