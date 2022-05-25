@@ -28,6 +28,12 @@ namespace DidoNet.IO
         internal string? CachePath { get; set; }
 
         /// <summary>
+        /// The maximum age for a cached file before it is deleted or replaced.
+        /// A timespan less than or equal to zero indicates cached files never expire.
+        /// </summary>
+        internal TimeSpan CacheMaxAge { get; set; } = TimeSpan.Zero;
+
+        /// <summary>
         /// The set of currently open files managed by this instance, keyed to the file path.
         /// </summary>
         private ConcurrentDictionary<string, RunnerFileStreamProxy> Files = new ConcurrentDictionary<string, RunnerFileStreamProxy>();
@@ -50,9 +56,10 @@ namespace DidoNet.IO
         /// If a connection is not provided, the class instance API will pass-through to the local file-system.
         /// </summary>
         /// <param name="connection"></param>
-        internal RunnerFileProxy(Connection? connection, string? cachePath = null)
+        internal RunnerFileProxy(Connection? connection, RunnerConfiguration? configuration = null)
         {
-            CachePath = cachePath;
+            CachePath = configuration?.FileCachePath;
+            CacheMaxAge = configuration?.CacheMaxAge ?? TimeSpan.Zero;
             AvailableChannels = new SortedSet<ushort>(
                 Enumerable.Range(Constants.AppRunner_FileChannelStart, Constants.AppRunner_MaxFileChannels).Select(i => (ushort)i)
                 );
@@ -62,80 +69,176 @@ namespace DidoNet.IO
             }
         }
 
-        public async Task CacheAsync(string srcPath, string dstPath)
+        /// <summary>
+        /// Copies (or overwrites as needed) the file at the provided source path (with respect to the application's local
+        /// file-system) to the provided destination path (with respect to the runner's local file-system).
+        /// <para/>Existing files are not updated if they are heuristically determined to be the same as the source file.
+        /// Nominally this is done by comparing the source and destination file lengths and last write time, but this
+        /// comparison can be made more robust by setting the 'checksum' parameter to 'true' to additionally incorporate
+        /// an MD5 hash in the heuristic.
+        /// <para/>Note: the destination path MUST be a relative (non-rooted) path, which will be combined with
+        /// the runner's configured location for cached files, to create the final returned absolute (rooted) path 
+        /// referencing the cached file.
+        /// <para/>Note: If the task code invoking this method is running in "local" mode, the destination path is ignored
+        /// and the source path is returned.
+        /// </summary>
+        /// <param name="srcPath"></param>
+        /// <param name="dstPath"></param>
+        /// <param name="checksum"></param>
+        /// <returns>The resulting final path of the cached destination file.</returns>
+        /// <exception cref="IOException"></exception>
+        public async Task<string> CacheAsync(string srcPath, string dstPath, bool checksum = false)
         {
+            if (string.IsNullOrEmpty(CachePath))
+            {
+                throw new InvalidOperationException($"File caching is not enabled. To enable, ensure the '{nameof(RunnerConfiguration)}.{nameof(RunnerConfiguration.CachePath)}' property is set to a valid value.");
+            }
+
             if (Path.IsPathRooted(dstPath))
             {
                 throw new IOException($"Destination path '{dstPath}' must be a relative (not rooted) path.");
             }
-            // TODO: optimized copy of a file from a source (srcPath = absolute or relative)
-            // TODO: to a destination (dstPath = relative to cache folder)
 
-            if (Channel != null)
+            if (Channel == null)
+            {
+                // when running locally, nothing is transferred: the cached path is the source path
+                return srcPath;
+            }
+            else
             {
                 ushort channelNumber = AcquireChannel();
                 try
                 {
-                    //Channel.Send(new FileStartCacheMessage(channelNumber, srcPath));
-                    ////Channel.Send(new FileStartStoreMessage(channelNumber, srcPath));
+                    // get the destination path for the cached file
+                    var dstCachedPath = GetCachedPath(dstPath);
 
-                    //FileChunkMessage chunk;
-                    //do
-                    //{
-                    //    var ack = Channel.ReceiveMessage<FileAckMessage>();
-                    //    ack.ThrowOnError();
+                    // if the cached file already exists, get its info and send with the FileStart request
+                    // (if the files are the same, the application will send back a degenerate chunk message
+                    // instead of sending the whole file)
+                    if (File.Exists(dstCachedPath))
+                    {
+                        var info = new FileInfo(dstCachedPath);
 
-                    //} while (chunk);
+                        // if the cached file is expired, force a new copy to get transferred
+                        if (CacheMaxAge > TimeSpan.Zero &&
+                            DateTime.UtcNow - File.GetLastWriteTimeUtc(dstCachedPath) > CacheMaxAge)
+                        {
+                            File.Delete(dstCachedPath);
+                            Channel.Send(new FileStartCacheMessage(srcPath, channelNumber));
+                        }
+                        else
+                        {
+                            // otherwise send the current file info to all the application to decide
+                            // whether to transmit the file
+                            byte[]? hash = null;
+                            if (checksum)
+                            {
+                                using (var md5 = System.Security.Cryptography.MD5.Create())
+                                using (var stream = File.OpenRead(dstCachedPath))
+                                {
+                                    hash = md5.ComputeHash(stream);
+                                }
+                            }
+                            Channel.Send(new FileStartCacheMessage(srcPath, channelNumber, info.Length, info.LastWriteTimeUtc, hash));
+                        }
+                    }
+                    else
+                    {
+                        Channel.Send(new FileStartCacheMessage(srcPath, channelNumber));
+                    }
 
-                    //// on a successful open, both sides agreed to create a new dedicated channel for
-                    //// IO of the indicated file using the acquired channel number
-                    //var fileChannel = new MessageChannel(Channel.Channel.Connection, channelNumber);
-                    //var stream = new RunnerFileStreamProxy(path, ack.Position, ack.Length, fileChannel, (filename) => Close(filename));
-                    //Files.TryAdd(path, stream);
+                    // on a successful open, both sides agreed to create a new dedicated channel for
+                    // IO of the indicated file using the acquired channel number
+                    using (var fileChannel = new MessageChannel(Channel.Channel.Connection, channelNumber))
+                    {
+                        // receive a corresponding message containing the details of the requested file
+                        var info = fileChannel.ReceiveMessage<FileInfoMessage>();
+                        info.ThrowOnError();
+
+                        // handle the degenerate case of an empty file
+                        if (info.Length == 0)
+                        {
+                            File.WriteAllBytes(dstCachedPath, new byte[0]);
+                        }
+                        else
+                        {
+                            // otherwise loop and receive the entire file in chunks
+                            FileStream? file = null;
+                            FileChunkMessage chunk;
+                            do
+                            {
+                                chunk = fileChannel.ReceiveMessage<FileChunkMessage>();
+                                chunk.ThrowOnError();
+
+                                if (chunk.Length >= 0)
+                                {
+                                    // don't open the file until absolutely necessary:
+                                    // if the identical file is already cached, a degenerate chunk will be received
+                                    // and the file should not be overwritten
+                                    if (file == null)
+                                    {
+                                        // make sure the directory exists
+                                        Directory.CreateDirectory(Path.GetDirectoryName(dstCachedPath)!);
+                                        file = File.Open(dstCachedPath, FileMode.Create, FileAccess.Write);
+                                    }
+                                    file.Write(chunk.Bytes);
+                                }
+                            } while (!chunk.EOF);
+
+                            file?.Dispose();
+                        }
+
+                        // now force the cached file attributes to match the source
+                        File.SetCreationTimeUtc(dstCachedPath, info.CreationTimeUtc);
+                        File.SetLastAccessTimeUtc(dstCachedPath, info.LastAccessTimeUtc);
+                        File.SetLastWriteTimeUtc(dstCachedPath, info.LastWriteTimeUtc);
+                    }
+
+                    return dstCachedPath;
                 }
                 finally
                 {
                     ReleaseChannel(channelNumber);
                 }
             }
-            else
-            {
-                // TODO: nop? file is already where it needs to be
-            }
-        }
-
-        public void Store(string dstPath, string srcPath)
-        {
-            if (Path.IsPathRooted(dstPath))
-            {
-                throw new IOException($"Destination path '{dstPath}' must be a relative (not rooted) path.");
-            }
-            // TODO: optimized copy of a file from a destination (dstPath = relative to cache folder)
-            // TODO: to a source (srcPath = absolute or relative)
         }
 
         /// <summary>
-        /// 
+        /// Copies the file at the provided source path (with respect to the runner's local file-system)
+        /// to the provided destination path (with respect to the application's local file-system).
+        /// <para/>
         /// </summary>
-        /// <param name="path"></param>
-        /// <returns></returns>
+        /// <param name="srcPath"></param>
+        /// <param name="dstPath"></param>
         /// <exception cref="IOException"></exception>
-        public string CachedPath(string path)
+        public async Task StoreAsync(string srcPath, string dstPath)
         {
             if (Channel == null)
             {
-                // when running locally, the requested path is already the local path
-                return path;
+
             }
-            else
+        }
+
+        /// <summary>
+        /// Combines the provided relative destination path (with respect to the runner's local file-system) with
+        /// the runner's configured path for cached files, to create a final absolute (rooted) path referencing a
+        /// cached file.
+        /// </summary>
+        /// <param name="relativeDestinationPath"></param>
+        /// <returns></returns>
+        /// <exception cref="IOException"></exception>
+        internal string GetCachedPath(string relativeDestinationPath)
+        {
+            if (string.IsNullOrEmpty(CachePath))
             {
-                // TODO: convert the requested source path to the intended cached target path
-                if (Path.IsPathRooted(path))
-                {
-                    throw new IOException($"Path '{path}' must be a relative (not rooted) path.");
-                }
-                return string.IsNullOrEmpty(CachePath) ? path : Path.Combine(CachePath, path);
+                throw new InvalidOperationException($"File caching is not enabled. To enable, ensure the '{nameof(RunnerConfiguration)}.{nameof(RunnerConfiguration.CachePath)}' property is set to a valid value.");
             }
+            // only relative paths are supported
+            if (Path.IsPathRooted(relativeDestinationPath))
+            {
+                throw new IOException($"Path '{relativeDestinationPath}' must be a relative (not rooted) path.");
+            }
+            return Path.Combine(CachePath, relativeDestinationPath);
         }
 
         /// <summary>
@@ -331,7 +434,7 @@ namespace DidoNet.IO
                         // because this code block has a lock on the connection, the request/response
                         // pair will be correlated and not interleaved with another thread's attempt
                         // to open or create a file
-                        Channel.Send(new FileOpenMessage(channelNumber, path, mode, access, share));
+                        Channel.Send(new FileOpenMessage(path, channelNumber, mode, access, share));
                         var ack = Channel.ReceiveMessage<FileAckMessage>();
                         ack.ThrowOnError();
 

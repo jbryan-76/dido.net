@@ -187,8 +187,12 @@ namespace DidoNet
 
             // ensure the cache folders exist and are accessible
             var workingDirectory = Directory.GetCurrentDirectory();
-            Directory.CreateDirectory(Configuration.AssemblyCachePath = Path.Combine(Configuration.CachePath, Id, "assemblies"));
-            Directory.CreateDirectory(Configuration.FileCachePath = Path.Combine(Configuration.CachePath, Id, "files"));
+            var assemblyDirInfo = Directory.CreateDirectory(Path.Combine(Configuration.CachePath, Id, "assemblies"));
+            var fileDirInfo = Directory.CreateDirectory(Path.Combine(Configuration.CachePath, Id, "files"));
+            
+            // update the configuration to use absolute paths
+            Configuration.AssemblyCachePath = assemblyDirInfo.FullName;
+            Configuration.FileCachePath = fileDirInfo.FullName;
 
             // remove any expired assets
             if (Configuration.CacheMaxAge > TimeSpan.Zero)

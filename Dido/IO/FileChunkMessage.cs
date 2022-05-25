@@ -1,26 +1,28 @@
-﻿using System.Text;
-
-namespace DidoNet.IO
+﻿namespace DidoNet.IO
 {
-    internal class FileWriteMessage : FileMessageBase
+    internal class FileChunkMessage : FileAckMessage
     {
-        public long Position { get; set; }
-
         public byte[] Bytes { get; private set; } = new byte[0];
 
-        public FileWriteMessage() { }
+        public bool EOF { get { return Position == Length; } }
 
-        public FileWriteMessage(string filename, long position, byte[] bytes)
-            : base(filename)
+        public FileChunkMessage() { }
+
+        public FileChunkMessage(string filename)
+            : base(filename, -1, -1) { }
+
+        public FileChunkMessage(string filename, byte[] bytes, long position, long length)
+            : base(filename, position, length)
         {
-            Position = position;
             Bytes = bytes;
         }
+
+        public FileChunkMessage(string filename, Exception exception)
+            : base(filename, exception) { }
 
         public override void Read(Stream stream)
         {
             base.Read(stream);
-            Position = stream.ReadInt64BE();
             int length = stream.ReadInt32BE();
             Bytes = stream.ReadBytes(length);
         }
@@ -28,7 +30,6 @@ namespace DidoNet.IO
         public override void Write(Stream stream)
         {
             base.Write(stream);
-            stream.WriteInt64BE(Position);
             int length = Bytes?.Length ?? 0;
             stream.WriteInt32BE(length);
             if (length > 0)

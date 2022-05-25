@@ -1,9 +1,5 @@
 ﻿namespace DidoNet.IO
 {
-    //internal class FileCreateMessage : FileMessageBase
-    //{
-    //}
-
     internal class FileOpenMessage : FileMessageBase
     {
         public ushort ChannelNumber { get; set; }
@@ -16,7 +12,7 @@
 
         public FileOpenMessage() { }
 
-        public FileOpenMessage(ushort channelNumber, string filename, FileMode mode, FileAccess access, FileShare share)
+        public FileOpenMessage(string filename, ushort channelNumber, FileMode mode, FileAccess access, FileShare share)
             : base(filename)
         {
             ChannelNumber = channelNumber;

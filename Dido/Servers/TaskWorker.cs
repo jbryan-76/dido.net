@@ -74,7 +74,7 @@ namespace DidoNet
             Context = new ExecutionContext
             {
                 ExecutionMode = ExecutionModes.Local,
-                File = new IO.RunnerFileProxy(Connection, configuration.FileCachePath),
+                File = new IO.RunnerFileProxy(Connection, configuration),
                 Directory = new IO.RunnerDirectoryProxy(Connection),
                 Cancel = CancelSource.Token
             };

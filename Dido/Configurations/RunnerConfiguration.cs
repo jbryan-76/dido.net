@@ -68,12 +68,20 @@
         /// </summary>
         public string ServerCertificateThumbprint { get; set; } = string.Empty;
 
+        /// <summary>
+        /// The relative or absolute path on the runner's local file-system where proxied application
+        /// files requested by an executing task are cached.
+        /// </summary>
         public string CachePath { get; set; } = "cache";
 
+        /// <summary>
+        /// The maximum age for a cached file before it is deleted or replaced.
+        /// A timespan less than or equal to zero indicates cached files never expire.
+        /// </summary>
         public TimeSpan CacheMaxAge { get; set; } = TimeSpan.Zero;
 
-        internal string AssemblyCachePath { get; set; } = string.Empty;
+        internal string? AssemblyCachePath { get; set; } = null;
 
-        internal string FileCachePath { get; set; } = string.Empty;
+        internal string? FileCachePath { get; set; } = null;
     }
 }

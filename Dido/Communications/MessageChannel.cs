@@ -21,6 +21,12 @@
         public delegate void MessageReceivedHandler(IMessage message, MessageChannel channel);
 
         /// <summary>
+        /// Signature for a method that is invoked when a message is transmitted or received. 
+        /// </summary>
+        /// <param name="frame"></param>
+        internal delegate void MessageMonitor(IMessage message);
+
+        /// <summary>
         /// An event handler that is triggered when a new message is received.
         /// Messages are delivered serially and in order. The handler should consume 
         /// the message as quickly as possible to avoid creating a backlog.
@@ -34,7 +40,7 @@
             set
             {
                 MessageReceived = value;
-                Channel.OnDataAvailable = (channel) => DataReceived();
+                Channel.OnDataAvailable = MessageReceived == null ? null : (channel) => DataReceived();
             }
         }
 
@@ -48,6 +54,19 @@
         /// </summary>
         public ushort ChannelNumber { get { return Channel.ChannelNumber; } }
 
+        /// <summary>
+        /// Internal handler for unit tests to monitor received messages.
+        /// </summary>
+        internal MessageMonitor? UnitTestReceiveMessageMonitor;
+
+        /// <summary>
+        /// Internal handler for unit tests to monitor transmitted messages.
+        /// </summary>
+        internal MessageMonitor? UnitTestTransmitMessageMonitor;
+
+        /// <summary>
+        /// The event handler triggered when a new message is received.
+        /// </summary>
         private MessageReceivedHandler? MessageReceived = null;
 
         /// <summary>
@@ -79,6 +98,7 @@
         /// <param name="message"></param>
         public void Send(IMessage message)
         {
+            UnitTestTransmitMessageMonitor?.Invoke(message);
             var messageType = message.GetType();
             //ThreadHelpers.Debug($"{ChannelNumber} {Channel.Name} sending message {messageType.AssemblyQualifiedName}");
             Channel.WriteString(messageType.AssemblyQualifiedName!);
@@ -139,7 +159,6 @@
         /// <exception cref="TimeoutException"></exception>
         public IMessage ReceiveMessage(TimeSpan? timeout = null)
         {
-            // TODO: add timeout
             if (timeout != null)
             {
                 // TODO: any way to do this without using a thread?
@@ -161,6 +180,7 @@
 
                 });
                 var result = task.TimeoutAfter(timeout.Value).GetAwaiter().GetResult();
+                UnitTestReceiveMessageMonitor?.Invoke(result);
                 return result;
             }
 
@@ -185,6 +205,7 @@
             message.Read(Channel);
             ThreadHelpers.Debug($"{ChannelNumber} {Channel.Name} received message {typeName}");
 
+            UnitTestReceiveMessageMonitor?.Invoke(message);
             return message;
         }
 
