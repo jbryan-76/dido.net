@@ -70,6 +70,12 @@ namespace DidoNet
             TasksChannel = new MessageChannel(Connection, Constants.AppRunner_TaskChannelId);
             AssembliesChannel = new MessageChannel(Connection, Constants.AppRunner_AssemblyChannelId);
 
+            // TODO: add "tethering" configuration: what to do if the application connection breaks?
+            // TODO: in "tethered" mode, the task should cancel.
+            // TODO: in "untethered" mode, the task should continue. what if the task is long running? how to reconnect?
+
+            // TODO: add option to "store" result in Mediator instead/in-addition to sending to application (to support "job mode")
+
             // create the execution context that is available to the expression while it's running
             Context = new ExecutionContext
             {

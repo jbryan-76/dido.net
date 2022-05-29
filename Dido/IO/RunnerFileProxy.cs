@@ -75,12 +75,10 @@ namespace DidoNet.IO
         /// <para/>Existing files are not updated if they are heuristically determined to be the same as the source file.
         /// Nominally this is done by comparing the source and destination file lengths and last write time, but this
         /// comparison can be made more robust by setting the 'checksum' parameter to 'true' to additionally incorporate
-        /// an MD5 hash in the heuristic.
+        /// an MD5 hash into the heuristic.
         /// <para/>Note: the destination path MUST be a relative (non-rooted) path, which will be combined with
         /// the runner's configured location for cached files, to create the final returned absolute (rooted) path 
         /// referencing the cached file.
-        /// <para/>Note: If the task code invoking this method is running in "local" mode, the destination path is ignored
-        /// and the source path is returned.
         /// </summary>
         /// <param name="srcPath"></param>
         /// <param name="dstPath"></param>
@@ -99,20 +97,20 @@ namespace DidoNet.IO
                 throw new IOException($"Destination path '{dstPath}' must be a relative (not rooted) path.");
             }
 
+            // get the destination path for the cached file
+            var dstCachedPath = GetCachedPath(dstPath);
+
             if (Channel == null)
             {
-                // when running locally, nothing is transferred: the cached path is the source path
-                return srcPath;
+                // when running locally, just short-circuit and copy the file
+                File.Copy(srcPath, dstCachedPath, true);
             }
             else
             {
                 ushort channelNumber = AcquireChannel();
                 try
                 {
-                    // get the destination path for the cached file
-                    var dstCachedPath = GetCachedPath(dstPath);
-
-                    // if the cached file already exists, get its info and send with the FileStart request
+                    // if the cached file already exists, get its info and send with the start request
                     // (if the files are the same, the application will send back a degenerate chunk message
                     // instead of sending the whole file)
                     if (File.Exists(dstCachedPath))
@@ -128,7 +126,7 @@ namespace DidoNet.IO
                         }
                         else
                         {
-                            // otherwise send the current file info to all the application to decide
+                            // otherwise send the current file info to the application to decide
                             // whether to transmit the file
                             byte[]? hash = null;
                             if (checksum)
@@ -188,13 +186,118 @@ namespace DidoNet.IO
                             file?.Dispose();
                         }
 
-                        // now force the cached file attributes to match the source
-                        File.SetCreationTimeUtc(dstCachedPath, info.CreationTimeUtc);
-                        File.SetLastAccessTimeUtc(dstCachedPath, info.LastAccessTimeUtc);
+                        // now force the cached last write time to match the source
+                        // to support the cache heuristic for determining identical files
                         File.SetLastWriteTimeUtc(dstCachedPath, info.LastWriteTimeUtc);
                     }
+                }
+                finally
+                {
+                    ReleaseChannel(channelNumber);
+                }
+            }
+            return dstCachedPath;
+        }
 
-                    return dstCachedPath;
+        /// <summary>
+        /// Copies (or overwrites as needed) the file at the provided source path (with respect to the runner's local file-system)
+        /// to the provided destination path (with respect to the application's local file-system).
+        /// <para/>Existing files are not updated if they are heuristically determined to be the same as the source file.
+        /// Nominally this is done by comparing the source and destination file lengths and last write time, but this
+        /// comparison can be made more robust by setting the 'checksum' parameter to 'true' to additionally incorporate
+        /// an MD5 hash into the heuristic.
+        /// <para/>Note: the source path MUST be a relative (non-rooted) path, which will be combined with
+        /// the runner's configured location for cached files, to create the final returned absolute (rooted) path 
+        /// referencing the application file.
+        /// </summary>
+        /// <param name="srcPath"></param>
+        /// <param name="dstPath"></param>
+        /// <exception cref="IOException"></exception>
+        public async Task StoreAsync(string srcPath, string dstPath, bool checksum = false)
+        {
+            var srcCachedPath = GetCachedPath(srcPath);
+
+            // if the source file doesn't exist, throw an error
+            if (!File.Exists(srcCachedPath))
+            {
+                throw new FileNotFoundException(null, srcCachedPath);
+            }
+
+            if (Channel == null)
+            {
+                // when running locally, just short-circuit and copy the file
+                File.Copy(srcCachedPath, dstPath, true);
+            }
+            else
+            {
+                ushort channelNumber = AcquireChannel();
+                try
+                {
+                    // get the file info and send with the start request
+                    var fileInfo = new FileInfo(srcCachedPath);
+                    byte[] hash = new byte[0];
+                    if (checksum)
+                    {
+                        using (var md5 = System.Security.Cryptography.MD5.Create())
+                        using (var stream = File.OpenRead(srcCachedPath))
+                        {
+                            hash = md5.ComputeHash(stream);
+                        }
+                    }
+                    var storeMessage = new FileStartStoreMessage(dstPath, channelNumber, fileInfo.Length, fileInfo.LastWriteTimeUtc, hash);
+                    Channel.Send(storeMessage);
+
+                    // on a successful open, both sides agreed to create a new dedicated channel for
+                    // IO of the indicated file using the acquired channel number
+                    using (var fileChannel = new MessageChannel(Channel.Channel.Connection, channelNumber))
+                    {
+                        // receive a corresponding message containing the details of the requested file
+                        var info = fileChannel.ReceiveMessage<FileInfoMessage>();
+                        info.ThrowOnError();
+
+                        // handle the degenerate case of an empty file
+                        if (fileInfo.Length == 0)
+                        {
+                            fileChannel.Send(new FileChunkMessage(dstPath, new byte[0], 0, 0));
+                        }
+                        else
+                        {
+                            // otherwise if the file already exists, the application will have sent back its info.
+                            // check whether the content changed
+                            bool same = Enumerable.SequenceEqual(hash, info.Hash)
+                                && fileInfo.Length == info.Length
+                                && fileInfo.LastWriteTimeUtc == info.LastWriteTimeUtc;
+                            if (same)
+                            {
+                                // if the destination file hasn't changed, send a degenerate chunk
+                                fileChannel.Send(new FileChunkMessage(dstPath));
+                            }
+                            else
+                            {
+                                // otherwise send the file in chunks
+                                using (var file = File.Open(srcCachedPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+                                {
+                                    var buffer = new byte[512 * 1024]; // 0.5MB
+                                    long remaining = file.Length;
+                                    while (remaining > 0)
+                                    {
+                                        var count = (int)Math.Min(remaining, buffer.Length);
+                                        int read = file.Read(buffer, 0, count);
+                                        var data = buffer;
+                                        // the message only sends a contiguous byte array containing all data,
+                                        // so resize if needed (which should only happen on the last chunk)
+                                        if (read != buffer.Length)
+                                        {
+                                            data = new byte[read];
+                                            Buffer.BlockCopy(buffer, 0, data, 0, read);
+                                        }
+                                        fileChannel.Send(new FileChunkMessage(dstPath, data, file.Position, file.Length));
+                                        remaining -= read;
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
                 finally
                 {
@@ -204,41 +307,24 @@ namespace DidoNet.IO
         }
 
         /// <summary>
-        /// Copies the file at the provided source path (with respect to the runner's local file-system)
-        /// to the provided destination path (with respect to the application's local file-system).
-        /// <para/>
+        /// Combines the provided relative path with the runner's configured path for cached files on its local
+        /// file-system to create a final absolute (rooted) path referencing a cached file.
         /// </summary>
-        /// <param name="srcPath"></param>
-        /// <param name="dstPath"></param>
-        /// <exception cref="IOException"></exception>
-        public async Task StoreAsync(string srcPath, string dstPath)
-        {
-            if (Channel == null)
-            {
-
-            }
-        }
-
-        /// <summary>
-        /// Combines the provided relative destination path (with respect to the runner's local file-system) with
-        /// the runner's configured path for cached files, to create a final absolute (rooted) path referencing a
-        /// cached file.
-        /// </summary>
-        /// <param name="relativeDestinationPath"></param>
+        /// <param name="relativePath"></param>
         /// <returns></returns>
         /// <exception cref="IOException"></exception>
-        internal string GetCachedPath(string relativeDestinationPath)
+        internal string GetCachedPath(string relativePath)
         {
             if (string.IsNullOrEmpty(CachePath))
             {
                 throw new InvalidOperationException($"File caching is not enabled. To enable, ensure the '{nameof(RunnerConfiguration)}.{nameof(RunnerConfiguration.CachePath)}' property is set to a valid value.");
             }
             // only relative paths are supported
-            if (Path.IsPathRooted(relativeDestinationPath))
+            if (Path.IsPathRooted(relativePath))
             {
-                throw new IOException($"Path '{relativeDestinationPath}' must be a relative (not rooted) path.");
+                throw new IOException($"Path '{relativePath}' must be a relative (not rooted) path.");
             }
-            return Path.Combine(CachePath, relativeDestinationPath);
+            return Path.Combine(CachePath, relativePath);
         }
 
         /// <summary>

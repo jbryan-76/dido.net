@@ -4,10 +4,20 @@
     {
         public byte[] Bytes { get; private set; } = new byte[0];
 
+        /// <summary>
+        /// Indicates this chunk represents the last chunk for the file
+        /// (i.e. the position equals the length).
+        /// </summary>
         public bool EOF { get { return Position == Length; } }
 
         public FileChunkMessage() { }
-
+        
+        /// <summary>
+        /// Create a new file chunk message object of a degenerate chunk
+        /// indicating the existing destination file is the same as the source,
+        /// and no further chunks will be sent.
+        /// </summary>
+        /// <param name="filename"></param>
         public FileChunkMessage(string filename)
             : base(filename, -1, -1) { }
 

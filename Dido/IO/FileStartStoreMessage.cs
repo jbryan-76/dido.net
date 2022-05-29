@@ -1,10 +1,10 @@
 ﻿namespace DidoNet.IO
 {
-    internal class FileStartCacheMessage : FileTransferMessageBase
+    internal class FileStartStoreMessage : FileTransferMessageBase
     {
-        public FileStartCacheMessage() { }
+        public FileStartStoreMessage() { }
 
-        public FileStartCacheMessage(string filename, ushort channelNumber,
+        public FileStartStoreMessage(string filename, ushort channelNumber,
             long? length = null, DateTime? modifiedUtc = null, byte[]? hash = null)
             : base(filename, channelNumber, length, modifiedUtc, hash) { }
     }

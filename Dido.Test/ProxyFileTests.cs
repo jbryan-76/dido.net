@@ -105,7 +105,7 @@ namespace DidoNet.Test
             using (var localFile = new TemporaryFile())
             {
                 var testFileName = "testfile";
-                var testFileSize = 1024;
+                var testFileSize = 2001024;
 
                 // create a local application file that should be cached on the runner
                 using (var file = File.Open(localFile.Filename, FileMode.Create, FileAccess.Write))
@@ -191,6 +191,148 @@ namespace DidoNet.Test
                     {
                         File.Delete(cachedFilename);
                     }
+                }
+            }
+        }
+
+        [Fact]
+        public async void Store()
+        {
+            using (var loopback = new Connection.LoopbackProxy())
+            using (var appLoopbackConnection = new Connection(loopback, Connection.LoopbackProxy.Role.Client))
+            using (var runnerLoopbackConnection = new Connection(loopback, Connection.LoopbackProxy.Role.Server))
+            using (var localFile = new TemporaryFile())
+            using (var localDirectory = new TemporaryFile())
+            {
+                // create a local temp directory to act as the runner cache location
+                Directory.CreateDirectory(localDirectory.Filename);
+
+                // create the proxies to marshal all IO requests
+                var appIoProxy = new ApplicationIOProxy(appLoopbackConnection);
+                var runnerProxy = new RunnerFileProxy(runnerLoopbackConnection, new RunnerConfiguration
+                {
+                    FileCachePath = localDirectory.Filename
+                });
+
+                var testFileName = "testfile";
+                var runnerCachedPath = runnerProxy.GetCachedPath(testFileName);
+                var testFileSize = 2001024;
+
+                // create a local runner file that should be stored back to the application
+                using (var file = File.Open(runnerCachedPath, FileMode.Create, FileAccess.Write))
+                {
+                    file.Write(RandomBytes(testFileSize, 0));
+                }
+
+                // test various use cases for runner's file to be stored on the application's file-system:
+                try
+                {
+                    // store the file, but track all the received communication frames
+                    var receivedFrames_NewFile = new List<Frame>();
+                    var sentFrames = new List<Frame>();
+                    runnerLoopbackConnection.UnitTestTransmitFrameMonitor = (frame) => sentFrames.Add(frame);
+                    appLoopbackConnection.UnitTestReceiveFrameMonitor = (frame) => receivedFrames_NewFile.Add(frame);
+                    await runnerProxy.StoreAsync(testFileName, localFile.Filename);
+
+                    // block until the application finishes receiving the file
+                    while (!File.Exists(localFile.Filename) ||
+                        new FileInfo(runnerCachedPath).Length != new FileInfo(localFile.Filename).Length)
+                    {
+                        ThreadHelpers.Yield();
+                    }
+
+                    var totalDataNewFile = receivedFrames_NewFile.Sum(frame => frame.Payload.Length);
+
+                    // make sure both files match
+                    AssertFilesEqual(runnerCachedPath, localFile.Filename);
+
+                    // try to store the file again, but track the communication frames in a separate list
+                    // to make sure the file is not actually transferred (since it hasn't changed)
+                    var receivedFrames_ExistingFile = new List<Frame>();
+                    appLoopbackConnection.UnitTestReceiveFrameMonitor = (frame) => receivedFrames_ExistingFile.Add(frame);
+                    sentFrames.Clear();
+                    await runnerProxy.StoreAsync(testFileName, localFile.Filename);
+                    var totalDataExistingFile = receivedFrames_ExistingFile.Sum(frame => frame.Payload.Length);
+
+                    // block until the application finishes receiving the frames
+                    while (sentFrames.Count() != receivedFrames_ExistingFile.Count()
+                        || sentFrames.Sum(f => f.Length) != receivedFrames_ExistingFile.Sum(f => f.Length))
+                    {
+                        ThreadHelpers.Yield();
+                    }
+
+                    // make sure less data was transferred (reflecting that the whole file was not copied since it
+                    // already existed, unchanged)
+                    Assert.True(totalDataExistingFile < testFileSize);
+                    Assert.True(totalDataExistingFile < totalDataNewFile);
+
+                    // make sure both files match
+                    AssertFilesEqual(runnerCachedPath, localFile.Filename);
+
+                    // append additional runner file content, then request to store it again, then make sure the application file is updated
+                    using (var file = File.Open(runnerCachedPath, FileMode.Append, FileAccess.Write))
+                    {
+                        file.Write(RandomBytes(256, 1));
+                    }
+                    await runnerProxy.StoreAsync(testFileName, localFile.Filename);
+
+                    // block until the application finishes receiving the file
+                    while (!File.Exists(localFile.Filename) ||
+                        new FileInfo(runnerCachedPath).Length != new FileInfo(localFile.Filename).Length)
+                    {
+                        ThreadHelpers.Yield();
+                    }
+
+                    AssertFilesEqual(runnerCachedPath, localFile.Filename);
+
+                    // now update the file content in place, and force the timestamp to show the file as unmodified...
+                    var lastWrite = File.GetLastWriteTimeUtc(runnerCachedPath);
+                    using (var file = File.Open(runnerCachedPath, FileMode.Open, FileAccess.ReadWrite))
+                    {
+                        file.Seek(10, SeekOrigin.Begin);
+                        file.Write(RandomBytes(10, 2));
+                    }
+                    File.SetLastWriteTimeUtc(runnerCachedPath, lastWrite);
+
+                    // ...then request to cache it again WITHOUT hashing and verify the content is different
+                    // (since the timestamp and size matches, the proxy assumes the cached copy is the same,
+                    // and DOES NOT update it)
+                    sentFrames.Clear();
+                    receivedFrames_ExistingFile.Clear();
+                    await runnerProxy.StoreAsync(testFileName, localFile.Filename);
+
+                    // block until the application finishes receiving the frames
+                    while (sentFrames.Count() != receivedFrames_ExistingFile.Count()
+                        || sentFrames.Sum(f => f.Length) != receivedFrames_ExistingFile.Sum(f => f.Length))
+                    {
+                        ThreadHelpers.Yield();
+                    }
+                    // then wait a bit longer to finish any file IO
+                    ThreadHelpers.Yield(500);
+                    // then check
+                    Assert.False(Enumerable.SequenceEqual(File.ReadAllBytes(runnerCachedPath), File.ReadAllBytes(localFile.Filename)));
+
+                    // finally, request to cache it again WITH hashing and verify it is properly transferred
+                    // and the files match
+                    sentFrames.Clear();
+                    receivedFrames_ExistingFile.Clear();
+                    await runnerProxy.StoreAsync(testFileName, localFile.Filename, true);
+
+                    // block until the application finishes receiving the frames
+                    while (sentFrames.Count() != receivedFrames_ExistingFile.Count()
+                        || sentFrames.Sum(f => f.Length) != receivedFrames_ExistingFile.Sum(f => f.Length))
+                    {
+                        ThreadHelpers.Yield();
+                    }
+                    // then wait a bit longer to finish any file IO
+                    ThreadHelpers.Yield(500);
+                    // then check
+                    AssertFilesEqual(runnerCachedPath, localFile.Filename);
+                }
+                finally
+                {
+                    // clean up
+                    Directory.Delete(localDirectory.Filename, true);
                 }
             }
         }

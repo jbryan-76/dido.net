@@ -89,15 +89,17 @@ namespace DidoNet.IO
                         // ensure the file exists and send an error if not
                         if (!File.Exists(cache.Filename))
                         {
-                            cacheChannel.Send(new FileChunkMessage(cache.Filename, new FileNotFoundException(null, cache.Filename)));
+                            cacheChannel.Send(new FileInfoMessage(cache.Filename, new FileNotFoundException(null, cache.Filename)));
                         }
                         else
                         {
+                            FileInfoMessage info;
+
+                            // send back the file info
                             try
                             {
                                 var fileInfo = new FileInfo(cache.Filename);
-
-                                var info = new FileInfoMessage(cache.Filename, fileInfo.Length, fileInfo.CreationTimeUtc, fileInfo.LastAccessTimeUtc, fileInfo.LastWriteTimeUtc, new byte[0]);
+                                info = new FileInfoMessage(cache.Filename, fileInfo.Length, fileInfo.CreationTimeUtc, fileInfo.LastAccessTimeUtc, fileInfo.LastWriteTimeUtc, new byte[0]);
 
                                 // if hashing is requested, hash the file
                                 if (cache.Hash.Length > 0)
@@ -108,10 +110,16 @@ namespace DidoNet.IO
                                         info.Hash = md5.ComputeHash(stream);
                                     }
                                 }
-
-                                // send back the file info
                                 cacheChannel.Send(info);
+                            }
+                            catch (Exception ex)
+                            {
+                                cacheChannel.Send(new FileInfoMessage(cache.Filename, ex));
+                                break;
+                            }
 
+                            try
+                            {
                                 // only continue sending file chunks if the file is not empty
                                 if (info.Length > 0)
                                 {
@@ -122,7 +130,7 @@ namespace DidoNet.IO
                                     if (same)
                                     {
                                         // if the file is already cached and hasn't changed,
-                                        // send a single empty chunk
+                                        // send a degenerate chunk
                                         cacheChannel.Send(new FileChunkMessage(cache.Filename));
                                     }
                                     else
@@ -155,6 +163,80 @@ namespace DidoNet.IO
                             {
                                 cacheChannel.Send(new FileChunkMessage(cache.Filename, ex));
                             }
+                        }
+                    }
+                    break;
+
+                case FileStartStoreMessage store:
+                    using (var storeChannel = new MessageChannel(Channel.Connection, store.ChannelNumber))
+                    {
+                        // if the file exists, send back its info so the remote side can decide whether to transmit the file
+                        if (File.Exists(store.Filename))
+                        {
+                            // get the file info
+                            try
+                            {
+                                var fileInfo = new FileInfo(store.Filename);
+                                var info = new FileInfoMessage(store.Filename, fileInfo.Length, fileInfo.CreationTimeUtc, fileInfo.LastAccessTimeUtc, fileInfo.LastWriteTimeUtc, new byte[0]);
+
+                                // if hashing is requested, hash the file
+                                if (store.Hash.Length > 0)
+                                {
+                                    using (var md5 = System.Security.Cryptography.MD5.Create())
+                                    using (var stream = File.OpenRead(store.Filename))
+                                    {
+                                        info.Hash = md5.ComputeHash(stream);
+                                    }
+                                }
+                                storeChannel.Send(info);
+                            }
+                            catch (Exception ex)
+                            {
+                                storeChannel.Send(new FileInfoMessage(store.Filename, ex));
+                                break;
+                            }
+                        }
+                        // otherwise send back a degenerate message indicating the file doesn't exist
+                        // and should be transmitted
+                        else
+                        {
+                            storeChannel.Send(new FileInfoMessage(store.Filename));
+                        }
+
+                        try
+                        {
+                            // loop and receive the entire file in chunks
+                            FileStream? file = null;
+                            FileChunkMessage chunk;
+                            do
+                            {
+                                chunk = storeChannel.ReceiveMessage<FileChunkMessage>();
+                                chunk.ThrowOnError();
+
+                                if (chunk.Length >= 0)
+                                {
+                                    // don't open the file until absolutely necessary:
+                                    // if the identical file is already cached, a degenerate chunk will be received
+                                    // and the file should not be overwritten
+                                    if (file == null)
+                                    {
+                                        // make sure the directory exists
+                                        Directory.CreateDirectory(Path.GetDirectoryName(store.Filename)!);
+                                        file = File.Open(store.Filename, FileMode.Create, FileAccess.Write);
+                                    }
+                                    file.Write(chunk.Bytes);
+                                }
+                            } while (!chunk.EOF);
+
+                            file?.Dispose();
+
+                            // now force the target last write time to match the source
+                            // to support the cache heuristic for determining identical files
+                            File.SetLastWriteTimeUtc(store.Filename, store.LastWriteTimeUtc);
+                        }
+                        catch (Exception ex)
+                        {
+                            storeChannel.Send(new FileChunkMessage(store.Filename, ex));
                         }
                     }
                     break;
