@@ -53,7 +53,7 @@
         /// <summary>
         /// The validation policy for authenticating the remote server certificate for SSL connections.
         /// </summary>
-        public ServerCertificateValidationPolicies ServerValidationPolicy { get; set; } = ServerCertificateValidationPolicies.RootCA;
+        public ServerCertificateValidationPolicies ServerCertificateValidationPolicy { get; set; } = ServerCertificateValidationPolicies.RootCA;
 
         /// <summary>
         /// For ServerCertificateValidationPolicies.Thumbprint, the specific certificate thumbprint to validate against.

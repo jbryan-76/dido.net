@@ -227,7 +227,7 @@ namespace DidoNet
 
             var connectionSettings = new ClientConnectionSettings
             {
-                ValidaionPolicy = configuration.ServerValidationPolicy,
+                ValidaionPolicy = configuration.ServerCertificateValidationPolicy,
                 Thumbprint = configuration.ServerCertificateThumbprint
             };
 

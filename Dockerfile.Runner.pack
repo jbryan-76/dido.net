@@ -1,0 +1,9 @@
+## CREATE IMAGE BY PACKING THE EXISTING BINARIES:
+# dotnet publish -c Release
+# docker build -f Dockerfile.Runner.pack -t dido.runner .
+
+FROM mcr.microsoft.com/dotnet/sdk:6.0
+COPY Dido.Runner/bin/Release/net6.0/ Runner/
+COPY *.pfx Runner/
+WORKDIR /Runner
+ENTRYPOINT ["dotnet", "Dido.Runner.dll"]

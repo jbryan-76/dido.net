@@ -16,12 +16,14 @@
 
         var conf = new DidoNet.Configuration
         {
-            ServerValidationPolicy = DidoNet.ServerCertificateValidationPolicies.Thumbprint,
+            ServerCertificateValidationPolicy = DidoNet.ServerCertificateValidationPolicies.Thumbprint,
             ServerCertificateThumbprint = "06c66fae6f5f6fbc0c5a882832963a7ec0351293",
             ExecutionMode = DidoNet.ExecutionModes.Remote,
             RunnerUri = new UriBuilder(args[0]).Uri
         };
+
         Console.WriteLine($"Starting remote execution of a sample task on {conf.RunnerUri}...");
+
         var result = await DidoNet.Dido.RunAsync((context) => Work.DoSomethingLongAndExpensive(64), conf);
 
         Console.WriteLine($"Result: duration={result.Duration} average={result.Average}");
