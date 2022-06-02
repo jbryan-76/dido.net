@@ -205,6 +205,51 @@ namespace DidoNet.Test.Runner
             runnerServer.Dispose();
         }
 
+        static class SleepThenException
+        {
+            public static bool DoFakeWork(string message)
+            {
+                Thread.Sleep(250);
+                throw new InvalidOperationException(message);
+            }
+        }
+
+        [Fact]
+        public async void RunRemoteWithException()
+        {
+            // create and start a secure localhost loopback runner server that can execute serialized expressions
+            var runnerServer = new RunnerServer();
+            int port = GetNextAvailablePort();
+            runnerServer.Start(TestSelfSignedCert.ServerCertificate, port, IPAddress.Loopback);
+
+            // create configuration to use the loopback server
+            var configuration = new Configuration
+            {
+                MaxTries = 1,
+                RunnerUri = new Uri($"https://localhost:{port}"),
+                ExecutionMode = ExecutionModes.Remote,
+                // use the unit test assembly resolver instead of the default implementation
+                ResolveLocalAssemblyAsync = (assemblyName) => TestFixture.AssemblyResolver.ResolveAssembly(TestFixture.Environment, assemblyName),
+                // bypass server cert validation since unit tests are using a base-64 self-signed cert
+                ServerCertificateValidationPolicy = ServerCertificateValidationPolicies._SKIP_
+            };
+
+            // execute the busy loop using the remote runner and confirm it throws the expected exception
+            var message = Guid.NewGuid().ToString();
+            var ex = await Assert.ThrowsAsync<TaskInvocationException>(async () =>
+            {
+                var result = await Dido.RunAsync<bool>(
+                    (context) => SleepThenException.DoFakeWork(message),
+                    configuration);
+            });
+            Assert.NotNull(ex.InnerException);
+            Assert.Equal(typeof(InvalidOperationException), ex.InnerException!.GetType());
+            Assert.Contains(message, ex.InnerException.Message);
+
+            // cleanup
+            runnerServer.Dispose();
+        }
+
         /// <summary>
         /// Performs an end-to-end test of Dido.RemoteExecuteAsync using local loopback mediator and runner servers.
         /// </summary>

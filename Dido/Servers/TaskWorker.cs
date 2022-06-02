@@ -59,6 +59,16 @@ namespace DidoNet
         private ILogger Logger = LogManager.GetCurrentClassLogger();
 
         /// <summary>
+        /// Timestamp for when a task starts.
+        /// </summary>
+        private DateTime TaskStarted;
+
+        /// <summary>
+        /// Timestamp for when a task stops.
+        /// </summary>
+        private DateTime TaskStopped;
+
+        /// <summary>
         /// Create a new worker to process application task requests on the provided connection.
         /// </summary>
         /// <param name="connection"></param>
@@ -81,7 +91,7 @@ namespace DidoNet
             {
                 ExecutionMode = ExecutionModes.Local,
                 File = new IO.RunnerFileProxy(Connection, configuration),
-                Directory = new IO.RunnerDirectoryProxy(Connection),
+                Directory = new IO.RunnerDirectoryProxy(Connection, configuration),
                 Cancel = CancelSource.Token
             };
         }
@@ -92,7 +102,6 @@ namespace DidoNet
         /// <param name="onComplete"></param>
         public void Start(Action<TaskWorker> onComplete)
         {
-            Logger.Info($"Worker task {Id} starting");
             OnComplete = onComplete;
             WorkThread = new Thread(() => DoWork());
             WorkThread.Start();
@@ -120,6 +129,9 @@ namespace DidoNet
         {
             try
             {
+                TaskStarted = DateTime.UtcNow;
+                Logger.Info($"Worker task {Id} starting");
+
                 // keep a reference to the task execution thread to cleanup later
                 Thread? taskExecutionThread = null;
 
@@ -141,7 +153,7 @@ namespace DidoNet
 
                             // cancel the running task
                             case TaskCancelMessage cancel:
-                                ThreadHelpers.Debug($"RUNNER cancelling the worker");
+                                ThreadHelpers.Debug($"RUNNER canceling the worker");
                                 CancelSource.Cancel();
                                 break;
 
@@ -152,7 +164,7 @@ namespace DidoNet
                     catch (Exception ex)
                     {
                         // handle all unexpected exceptions explicitly by notifying the application that an error occurred
-                        var errorMessage = new TaskErrorMessage(ex, TaskErrorMessage.ErrorTypes.General);
+                        var errorMessage = new TaskErrorMessage(TaskErrorMessage.Categories.General, ex);
                         ThreadHelpers.Debug($"RUNNER got error: {ex.ToString()}");
                         TasksChannel.Send(errorMessage);
                         CancelSource.Cancel();
@@ -170,14 +182,15 @@ namespace DidoNet
             catch (Exception ex)
             {
                 // handle all unexpected exceptions explicitly by notifying the application that an error occurred
-                var errorMessage = new TaskErrorMessage(ex, TaskErrorMessage.ErrorTypes.General);
+                var errorMessage = new TaskErrorMessage(TaskErrorMessage.Categories.General, ex);
                 TasksChannel.Send(errorMessage);
                 // TODO: log it?
             }
             finally
             {
-                Logger.Info($"Worker task {Id} finished");
                 OnComplete?.Invoke(this);
+                TaskStopped = DateTime.UtcNow;
+                Logger.Info($"Worker task {Id} finished. Elapsed = {(TaskStopped - TaskStarted)}");
             }
         }
 
@@ -207,7 +220,7 @@ namespace DidoNet
                 catch (Exception ex)
                 {
                     // catch and report deserialization errors
-                    var errorMessage = new TaskErrorMessage(ex, TaskErrorMessage.ErrorTypes.Deserialization);
+                    var errorMessage = new TaskErrorMessage(TaskErrorMessage.Categories.Deserialization, ex);
                     TasksChannel.Send(errorMessage);
                     // indicate to the main thread that the task is done
                     TaskComplete.Set();
@@ -288,7 +301,7 @@ namespace DidoNet
                 catch (Exception ex)
                 {
                     // catch and report invocation errors
-                    var errorMessage = new TaskErrorMessage(ex, TaskErrorMessage.ErrorTypes.Invocation);
+                    var errorMessage = new TaskErrorMessage(TaskErrorMessage.Categories.Invocation, ex);
                     TasksChannel.Send(errorMessage);
                 }
                 finally

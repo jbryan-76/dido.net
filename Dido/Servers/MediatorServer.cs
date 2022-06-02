@@ -129,9 +129,9 @@ namespace DidoNet
             var query = RunnerPool.Where(x => x.State == RunnerStates.Ready);
 
             // filter to include only matching platforms, if necessary
-            if (request.Platform != OSPlatforms.Unknown)
+            if (request.Platforms?.Length > 0)
             {
-                query = query.Where(x => x.Platform == request.Platform);
+                query = query.Where(x => request.Platforms.Contains(x.Platform));
             }
 
             // filter to include only matching runner labels, if necessary

@@ -1,5 +1,5 @@
 ﻿using DidoNet.IO;
-using System.Collections.Concurrent;
+using NLog;
 using System.Linq.Expressions;
 using System.Runtime.Loader;
 
@@ -49,6 +49,8 @@ namespace DidoNet
         /// the global configuration will be used.
         /// </summary>
         public static Configuration? GlobalConfiguration = null;
+
+        private static ILogger Logger = LogManager.GetCurrentClassLogger();
 
         /// <summary>
         /// Execute the provided expression as a task and return its result.
@@ -240,7 +242,7 @@ namespace DidoNet
                 {
                     // create the communications channel and request an available runner from the mediator
                     var applicationChannel = new MessageChannel(mediatorConnection, Constants.MediatorApp_ChannelId);
-                    applicationChannel.Send(new RunnerRequestMessage());
+                    applicationChannel.Send(new RunnerRequestMessage(configuration.RunnerOSPlatforms, configuration.RunnerLabel, configuration.RunnerTags));
 
                     // receive and process the response
                     // TODO: add timeout
@@ -265,40 +267,14 @@ namespace DidoNet
             {
                 // TODO: refactor below channel+handler into separate classes to handle all the business logic
 
+                Logger.Trace($"Executing expression via {nameof(RunRemoteAsync)} to {runnerUri}");
+
                 // create communication channels to the runner for: task messages, assemblies
                 var tasksChannel = new MessageChannel(runnerConnection, Constants.AppRunner_TaskChannelId);
                 var assembliesChannel = new MessageChannel(runnerConnection, Constants.AppRunner_AssemblyChannelId);
 
-                //var filesChannel = new MessageChannel(runnerConnection, Constants.AppRunner_FileChannelId);
-                //var files = new ConcurrentDictionary<string, ApplicationFileProxy>();
-                
                 // create a proxy to handle file-system IO requests from the expression executing on the runner
                 var ioProxy = new ApplicationIOProxy(runnerConnection);
-
-                //// handle file messages
-                //filesChannel.OnMessageReceived = async (message, channel) =>
-                //{
-                //    switch (message)
-                //    {
-                //        case FileOpenMessage open:
-                //            try
-                //            {
-                //                var file = new ApplicationFileProxy(runnerConnection, open, file => files.TryRemove(open.Filename, out _));
-                //                files.TryAdd(open.Filename, file);
-                //            }
-                //            catch (Exception ex)
-                //            {
-                //                channel.Send(new FileAckMessage(open.Filename, ex));
-                //            }
-
-                //            break;
-                //        default:
-                //            throw new InvalidOperationException($"Unknown message type '{message.GetType()}'");
-                //    }
-                //};
-
-                // create a proxy to handle file IO requests from the remotely executing expression
-                //var ioProxy = new ApplicationIOProxy(runnerConnection, Constants.AppRunner_FileChannelId);
 
                 // handle assembly messages
                 assembliesChannel.OnMessageReceived = async (message, channel) =>
@@ -384,18 +360,35 @@ namespace DidoNet
                 switch (message)
                 {
                     case TaskResponseMessage response:
-                        return (Tprop)Convert.ChangeType(response.Result, typeof(Tprop));
-                    case TaskErrorMessage error:
-                        switch (error.ErrorType)
+                        // the runner will always return a non-task value.
+                        // if the expression return type is a Task, wrap the result in a properly typed
+                        // Task so it can be awaited.
+                        var resultType = typeof(Tprop);
+                        if (resultType.IsGenericType && resultType.GetGenericTypeDefinition() == typeof(Task<>))
                         {
-                            case TaskErrorMessage.ErrorTypes.General:
-                                throw new TaskGeneralException(error.Error);
-                            case TaskErrorMessage.ErrorTypes.Deserialization:
-                                throw new TaskDeserializationException(error.Error);
-                            case TaskErrorMessage.ErrorTypes.Invocation:
-                                throw new TaskInvocationException(error.Error);
+                            // convert the result to the expected generic task type
+                            var resultGenericType = resultType.GenericTypeArguments[0];
+                            var resultValue = Convert.ChangeType(response.Result, resultGenericType);
+                            // then construct a Task.FromResult using the expected generic type
+                            var method = typeof(Task).GetMethod(nameof(Task.FromResult), System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public);
+                            method = method!.MakeGenericMethod(resultGenericType);
+                            return (Tprop)method!.Invoke(null, new[] { resultValue })!;
+                        }
+                        else
+                        {
+                            return (Tprop)Convert.ChangeType(response.Result, typeof(Tprop));
+                        }
+                    case TaskErrorMessage error:
+                        switch (error.Category)
+                        {
+                            case TaskErrorMessage.Categories.General:
+                                throw new TaskGeneralException("Error while executing remote expression", error.Exception);
+                            case TaskErrorMessage.Categories.Deserialization:
+                                throw new TaskDeserializationException("Error while executing remote expression", error.Exception);
+                            case TaskErrorMessage.Categories.Invocation:
+                                throw new TaskInvocationException("Error while executing remote expression", error.Exception);
                             default:
-                                throw new InvalidOperationException($"Task error type {error.ErrorType} is unknown");
+                                throw new InvalidOperationException($"Task error category {error.Category} is unknown");
                         }
                     case TaskTimeoutMessage timeout:
                         throw string.IsNullOrEmpty(timeout.Message) ? new TimeoutException() : new TimeoutException(timeout.Message);
@@ -463,9 +456,36 @@ namespace DidoNet
             Configuration configuration,
             CancellationToken cancellationToken)
         {
+            Logger.Trace($"Executing expression via {nameof(DebugRunLocalAsync)}");
+
             // to adequately test end-to-end processing and the current configuration,
             // use a degenerate loopback connection for file channel messages
-            //var loopbackConnection = new Connection();
+            var loopback = new Connection.LoopbackProxy();
+            var appLoopbackConnection = new Connection(loopback, Connection.LoopbackProxy.Role.Client);
+            var runnerLoopbackConnection = new Connection(loopback, Connection.LoopbackProxy.Role.Server);
+            var ioProxy = new ApplicationIOProxy(appLoopbackConnection);
+
+            string cachePath;
+            string? tempCacheFolder = null;
+            if (string.IsNullOrEmpty(configuration.DebugCachePath))
+            {
+                tempCacheFolder = Path.GetTempFileName();
+                if (File.Exists(tempCacheFolder))
+                {
+                    File.Delete(tempCacheFolder);
+                }
+                Directory.CreateDirectory(tempCacheFolder);
+                cachePath = tempCacheFolder;
+            }
+            else
+            {
+                cachePath = configuration.DebugCachePath;
+            }
+
+            var runnerConfig = new RunnerConfiguration
+            {
+                FileCachePath = Path.Combine(cachePath, "files")
+            };
 
             var context = new ExecutionContext
             {
@@ -473,8 +493,8 @@ namespace DidoNet
                 ExecutionMode = ExecutionModes.Local,
                 // in debug local mode, use a loopback connection to ensure all IO works as expected
                 // when the expression is executed remotely
-                //File = new IO.RunnerFileProxy(loopbackConnection),
-                //Directory = new IO.RunnerDirectoryProxy(loopbackConnection)
+                File = new RunnerFileProxy(runnerLoopbackConnection, runnerConfig),
+                Directory = new RunnerDirectoryProxy(runnerLoopbackConnection, runnerConfig)
             };
 
             var env = new Environment
@@ -486,6 +506,8 @@ namespace DidoNet
 
             try
             {
+                // TODO: should this use a proxy RunnerServer too (like the unit tests), or is that overkill?
+
                 // to adequately test end-to-end processing and the current configuration,
                 // serialize and deserialize the expression
                 var data = await SerializeAsync(expression);
@@ -501,6 +523,14 @@ namespace DidoNet
             finally
             {
                 env.AssemblyContext.Unload();
+                runnerLoopbackConnection.Dispose();
+                appLoopbackConnection.Dispose();
+                loopback.Dispose();
+
+                if (Directory.Exists(tempCacheFolder))
+                {
+                    Directory.Delete(tempCacheFolder, true);
+                }
             }
         }
 
@@ -516,6 +546,8 @@ namespace DidoNet
             Configuration configuration,
             CancellationToken cancellationToken)
         {
+            Logger.Trace($"Executing expression via {nameof(ReleaseRunLocalAsync)}");
+
             var context = new ExecutionContext
             {
                 Cancel = cancellationToken,

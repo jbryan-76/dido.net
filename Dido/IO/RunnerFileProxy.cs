@@ -215,18 +215,16 @@ namespace DidoNet.IO
         /// <exception cref="IOException"></exception>
         public async Task StoreAsync(string srcPath, string dstPath, bool checksum = false)
         {
-            var srcCachedPath = GetCachedPath(srcPath);
-
             // if the source file doesn't exist, throw an error
-            if (!File.Exists(srcCachedPath))
+            if (!File.Exists(srcPath))
             {
-                throw new FileNotFoundException(null, srcCachedPath);
+                throw new FileNotFoundException(null, srcPath);
             }
 
             if (Channel == null)
             {
                 // when running locally, just short-circuit and copy the file
-                File.Copy(srcCachedPath, dstPath, true);
+                File.Copy(srcPath, dstPath, true);
             }
             else
             {
@@ -234,12 +232,12 @@ namespace DidoNet.IO
                 try
                 {
                     // get the file info and send with the start request
-                    var fileInfo = new FileInfo(srcCachedPath);
+                    var fileInfo = new FileInfo(srcPath);
                     byte[] hash = new byte[0];
                     if (checksum)
                     {
                         using (var md5 = System.Security.Cryptography.MD5.Create())
-                        using (var stream = File.OpenRead(srcCachedPath))
+                        using (var stream = File.OpenRead(srcPath))
                         {
                             hash = md5.ComputeHash(stream);
                         }
@@ -275,7 +273,7 @@ namespace DidoNet.IO
                             else
                             {
                                 // otherwise send the file in chunks
-                                using (var file = File.Open(srcCachedPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+                                using (var file = File.Open(srcPath, FileMode.Open, FileAccess.Read, FileShare.Read))
                                 {
                                     var buffer = new byte[512 * 1024]; // 0.5MB
                                     long remaining = file.Length;
@@ -296,6 +294,10 @@ namespace DidoNet.IO
                                     }
                                 }
                             }
+
+                            // receive confirmation
+                            var ack = fileChannel.ReceiveMessage<FileAckMessage>();
+                            ack.ThrowOnError();
                         }
                     }
                 }
@@ -313,7 +315,7 @@ namespace DidoNet.IO
         /// <param name="relativePath"></param>
         /// <returns></returns>
         /// <exception cref="IOException"></exception>
-        internal string GetCachedPath(string relativePath)
+        public string GetCachedPath(string relativePath)
         {
             if (string.IsNullOrEmpty(CachePath))
             {
@@ -323,6 +325,10 @@ namespace DidoNet.IO
             if (Path.IsPathRooted(relativePath))
             {
                 throw new IOException($"Path '{relativePath}' must be a relative (not rooted) path.");
+            }
+            if( relativePath.Contains(".."))
+            {
+                throw new IOException($"Path '{relativePath}' must be a strict relative path, and not contain any parent directory (../) notations.");
             }
             return Path.Combine(CachePath, relativePath);
         }

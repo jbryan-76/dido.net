@@ -8,7 +8,7 @@
 
         internal Connection? Connection { get; set; }
 
-        internal RunnerDirectoryProxy(Connection? connection)
+        internal RunnerDirectoryProxy(Connection? connection, RunnerConfiguration? configuration = null)
         {
             Connection = connection;
         }

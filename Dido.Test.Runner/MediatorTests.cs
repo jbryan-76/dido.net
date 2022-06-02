@@ -66,6 +66,7 @@ namespace DidoNet.Test.Runner
         {
             var mediator = new MediatorServer();
 
+            // create 3 identical available runners, differing only by OS
             var linux = new MediatorServer.Runner()
             {
                 Label = Guid.NewGuid().ToString(),
@@ -93,13 +94,24 @@ namespace DidoNet.Test.Runner
             };
             mediator.RunnerPool.Add(osx);
 
+            // first verify filtering for a specific OS works
             var runner = mediator.GetNextAvailableRunner(new RunnerRequestMessage
             {
-                Platform = OSPlatforms.Windows
+                Platforms = new[] { OSPlatforms.Windows }
             });
 
             Assert.NotNull(runner);
             Assert.Equal(windows.Label, runner!.Label);
+
+            // next verify filtering for multiple OS works
+            runner = mediator.GetNextAvailableRunner(new RunnerRequestMessage
+            {
+                Platforms = new[] { OSPlatforms.Linux, OSPlatforms.Windows }
+            });
+
+            // since the linux runner is first in the pool, it should be the first available runner
+            Assert.NotNull(runner);
+            Assert.Equal(linux.Label, runner!.Label);
         }
 
         [Fact]

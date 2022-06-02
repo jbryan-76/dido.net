@@ -12,6 +12,13 @@ namespace DidoNet
 
         public TaskResponseMessage(object? result)
         {
+            // if the result is a task, get its value
+            var resultType = result?.GetType();
+            if (resultType != null && resultType.IsGenericType && resultType.GetGenericTypeDefinition() == typeof(Task<>))
+            {
+                result = resultType.GetProperty(nameof(Task<object?>.Result))?.GetValue(result);
+            }
+
             // TODO: the current JsonSerializer cannot serialize eg built-in
             // TODO: value types (int, string, etc) to BSON. fix this somehow
             using (var stream = new MemoryStream())

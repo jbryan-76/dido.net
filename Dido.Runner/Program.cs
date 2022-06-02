@@ -40,6 +40,12 @@ namespace DidoNet.Runner.Windows
             LocalService
         }
 
+        private static int? CommandLinePort = null;
+
+        private static string? CommandLineId = null;
+
+        private static string? CommandLineLabel = null;
+
         /// <summary>
         /// Runs the service using standard options and minimal configuration. 
         /// Use in the console app's Program.cs as follows:
@@ -60,6 +66,12 @@ namespace DidoNet.Runner.Windows
         {
             var rc = HostFactory.Run(c =>
             {
+                // add support to override certain configuration from the command line
+                c.AddCommandLineDefinition("port", v => CommandLinePort = Int32.Parse(v));
+                c.AddCommandLineDefinition("id", v => CommandLineId = v);
+                c.AddCommandLineDefinition("label", v => CommandLineLabel = v);
+                c.ApplyCommandLine();
+
                 // change the environment builder on non-windows systems
                 if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
                 {
@@ -117,6 +129,19 @@ namespace DidoNet.Runner.Windows
                 Configuration.Bind("Runner", RunnerConfig);
                 ServerConfig = new ServerConfiguration();
                 Configuration.Bind("Server", ServerConfig);
+
+                if (CommandLinePort != null)
+                {
+                    ServerConfig.Port = CommandLinePort.Value;
+                }
+                if (CommandLineId != null)
+                {
+                    RunnerConfig.Id = CommandLineId;
+                }
+                if (CommandLineLabel != null)
+                {
+                    RunnerConfig.Label = CommandLineLabel;
+                }
 
                 Server = new RunnerServer(RunnerConfig);
 
@@ -214,7 +239,7 @@ namespace DidoNet.Runner.Windows
 
     class Program
     {
-        public static void Main()
+        public static void Main(string[] args)
         {
             RunnerService.EasyRun<RunnerService>("Dido.NET Runner Service", "Dido.NET Runner", "Dido.NET.Runner");
         }

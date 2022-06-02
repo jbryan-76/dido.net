@@ -6,7 +6,7 @@
     public class TaskGeneralException : Exception
     {
         public TaskGeneralException() { }
-        public TaskGeneralException(string message) : base(message) { }
-        public TaskGeneralException(string message, Exception innerException) : base(message, innerException) { }
+        public TaskGeneralException(string? message) : base(message) { }
+        public TaskGeneralException(string? message, Exception? innerException) : base(message, innerException) { }
     }
 }

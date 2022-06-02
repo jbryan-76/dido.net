@@ -7,7 +7,7 @@
     public class TaskDeserializationException : Exception
     {
         public TaskDeserializationException() { }
-        public TaskDeserializationException(string message) : base(message) { }
-        public TaskDeserializationException(string message, Exception innerException) : base(message, innerException) { }
+        public TaskDeserializationException(string? message) : base(message) { }
+        public TaskDeserializationException(string? message, Exception? innerException) : base(message, innerException) { }
     }
 }

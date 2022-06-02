@@ -2,7 +2,7 @@
 
 # SUMMARY
 
-Dido is a .NET framework to facilitate incorporating distributed computing patterns directly within an application without the overhead of authoring, releasing, or maintaining multiple services. Code can be executed locally within the application domain or remotely in a different environment or OS, in any combination, using a single, configurable API. In this manner, its goal is similar to the .NET [Task Parallel Library](https://docs.microsoft.com/en-us/dotnet/standard/parallel-programming/task-parallel-library-tpl) (TPL) to easily add parallel/distributed computing capability directly to existing code, often with no refactoring.
+Dido is a .NET framework to facilitate incorporating distributed computing patterns directly into an application without the overhead of authoring, releasing, or maintaining multiple services. Code can be executed locally within the application domain or remotely in a different environment or OS, in any combination, using a single, configurable API. In this manner, its goal is similar to the .NET [Task Parallel Library](https://docs.microsoft.com/en-us/dotnet/standard/parallel-programming/task-parallel-library-tpl) (TPL) to easily add parallel and distributed computing capability directly to existing code, often with no refactoring.
 
 # BASIC EXAMPLE
 
@@ -33,9 +33,9 @@ class MyApp
 
 # BACKGROUND
 
-The Dido framework targets the distributed computing problem space where there is a need to develop, test, and deploy an application that performs CPU- and memory-intensive calculations but those calculations should not or can not be performed on the machine or in the environment of the host application, usually due to resource constraints.
+At the most basic level, the Dido framework targets the distributed computing problem space where there is a need to develop, test, and deploy an application that performs CPU- and memory-intensive calculations but those calculations should not or can not be performed on the machine or in the environment of the host application, usually due to resource constraints. In more complex scenarios, with proper configuration and an available pool of generic Dido services, other use cases such as a jobs system or a service-oriented system of microservices are also possible from a single monolithic application.
 
-The most common traditional solutions are to create one or more auxiliary (micro)services, a generic job processing system, or use cloud platforms (eg AWS, Azure, GCP), where the host application orchestrates and communicates with the auxiliary systems to perform the necessary work. These solutions are powerful and flexible, but increase overall application complexity and typically require additional development expertise and administrative overhead, such as:
+The most common traditional solutions for distributed computing problems are to create one or more auxiliary (micro)services, a generic job processing system, or use cloud platforms (eg AWS, Azure, GCP), where the host application orchestrates and communicates with the auxiliary systems to perform the necessary work. These solutions are powerful and flexible, but increase overall application complexity and typically require additional development expertise and administrative overhead, such as:
 - Experience with distributed communication and synchronization patterns.
 - Experience designing and authoring auxiliary services.
 - Developing and troubleshooting communications and security protocols.
@@ -44,7 +44,7 @@ The most common traditional solutions are to create one or more auxiliary (micro
 
 The Dido framework offers a solution that inverts the traditional approach by allowing the application to be written as a single conceptual monolith, where it explicitly contains all necessary code (models, data structures, algorithms, assemblies, etc) to perform all needed work, and where distributed or non-local invocation of that code is desired, a single API call can securely pack and ship the code to a generic .NET host runner service for execution.
 
-This solution is similar to the legacy/deprecated .NET Remoting or general RPC pattern with a crucial difference: all code is specifically and intentionally only authored and contained in the host application - it does not need to be explicitly and proactively "split" into services or auxiliary applications or plugins, and does not require an intermediate compilation or code generation step. The code can be directly authored, tested, and executed in the application during development, and then implicitly and dynamically executed remotely in production.
+This solution is similar to the legacy/deprecated .NET Remoting or general RPC pattern with a crucial difference: all code is specifically and intentionally only authored and contained in the host application - it does not need to be explicitly and proactively "split" into services or auxiliary applications or plugins, it does not require an intermediate compilation or code generation step, and it does not require proactive developer or IT management to handle new code versions. The code can be directly authored, tested, and executed in the application in a single local environment during development, and then implicitly and dynamically executed remotely on one or more distributed generic "runner" services in production.
 
 Note: while Dido can be a powerful and flexible solution for some common distributed computing use cases, it is not intended to be a panacea, nor replace dedicated and optimized solutions for specific problems.
 
@@ -69,7 +69,7 @@ Although a variety of different use cases are supported via appropriate configur
 2. The Mediator is contacted to find an available runner.
 3. The expression is serialized and transmitted to the runner.
 4. The runner deserializes the expression and attempts to instantiate and execute it.
-5. Inevitably, the expression requires application and dependency assemblies that do not yet exist in the runner domain (or whose previously cached version is different), so those assemblies are securely transmitted to the runner.
+5. Inevitably, the expression requires application and dependency assemblies that do not yet exist in the runner domain (or whose previously cached version is out of date), so those assemblies are securely transmitted to the runner.
 6. Once all assemblies are available and loaded, the expression is executed.
 7. The expression result is transmitted back to the application.
 
@@ -117,6 +117,9 @@ Dido.RunAsync((ctx) => myObj.DoWork(ctx), config);
 ```
 
 When a Dido API method is configured for Remote Execution with a mediator, the code is executed remotely using the best available runner that matches configured filter criteria, but otherwise identical to the dedicated runner scenario described above. When paired with appropriate monitoring and auto-scaling solutions such as Kubernetes, the runner pool can dynamically adjust to load conditions from one or more applications, with no configuration nor code changes required by the application.
+
+### Zero-Maintenance Updates
+TODO
 
 ### Security
 TODO

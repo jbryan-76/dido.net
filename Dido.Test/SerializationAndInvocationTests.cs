@@ -5,6 +5,7 @@ using System;
 using System.IO;
 using System.Linq.Expressions;
 using System.Reflection;
+using System.Threading.Tasks;
 using Xunit;
 
 namespace DidoNet.Test
@@ -121,6 +122,45 @@ namespace DidoNet.Test
             var lambda = await Dido.DeserializeAsync<int>(data, TestFixture.Environment);
             var result = lambda.Invoke(TestFixture.Environment.ExecutionContext);
             Assert.Equal(arg, result);
+        }
+
+        [Fact]
+        public async void TestCompleteSerialization()
+        {
+            var args = new string[] { "one", "two", "three" };
+            // to test BinaryExpressions, an array must be passed as an argument
+            await TestComprehensiveExpressionSerialization(args);
+        }
+
+        async Task TestComprehensiveExpressionSerialization(string[] args)
+        {
+            var expectedResult = AllExpressions.ComprehensiveExpressionMethod(args[0], args[1], args[2]);
+
+            // encode a lambda expression to a serializable model
+            var transmittedModel = ExpressionSerializer.Encode((context) => AllExpressions.ComprehensiveExpressionMethod(args[0], args[1], args[2]));
+
+            // serialize and deserialize the model to simulate transmitting and receiving it
+            Node receivedModel;
+            using (var stream = new MemoryStream())
+            {
+                var settings = new ExpressionSerializeSettings
+                {
+                    Format = ExpressionSerializeSettings.Formats.Json
+                };
+                ExpressionSerializer.Serialize(transmittedModel, stream, settings);
+
+                var bytes = stream.ToArray();
+
+                stream.Position = 0;
+                receivedModel = ExpressionSerializer.Deserialize(stream, settings);
+            }
+
+            // decode the model back to a lambda expression and execute it
+            var lambda = await ExpressionSerializer.DecodeAsync<object>(receivedModel, TestFixture.Environment);
+            var result = lambda.Invoke(TestFixture.Environment.ExecutionContext);
+
+            // confirm the result
+            Assert.Equal(expectedResult, result);
         }
 
         /// <summary>

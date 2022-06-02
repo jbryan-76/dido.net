@@ -9,11 +9,11 @@
         //public int Priority { get; set; } = 0;
 
         /// <summary>
-        /// Indicates the runner OS platform the task should run on.
-        /// If not OSPlatforms.Unknown, the task can only be run on a runner
-        /// with a matching OS platform.
+        /// Indicates a set of runner OS platforms the task should run on.
+        /// If provided, the task can only run on a runner where the set intersection
+        /// with the runner's platform is non-empty.
         /// </summary>
-        public OSPlatforms Platform { get; set; } = OSPlatforms.Unknown;
+        public OSPlatforms[] Platforms { get; set; } = new OSPlatforms[0];
 
         /// <summary>
         /// Indicates the specific label of the runner the task should run on.
@@ -32,24 +32,24 @@
 
         public RunnerRequestMessage() { }
 
-        public RunnerRequestMessage(OSPlatforms platform, string label, string[] tags)
+        public RunnerRequestMessage(OSPlatforms[] platforms, string label, string[] tags)
         {
-            Platform = platform;
             Label = label;
+            Platforms = platforms.ToArray();
             Tags = tags.ToArray();
         }
 
         public void Read(Stream stream)
         {
-            Platform = Enum.Parse<OSPlatforms>(stream.ReadString());
             Label = stream.ReadString();
+            Platforms = stream.ReadArray((s) => Enum.Parse<OSPlatforms>(s.ReadString()));
             Tags = stream.ReadArray((s) => s.ReadString());
         }
 
         public void Write(Stream stream)
         {
-            stream.WriteString(Platform.ToString());
             stream.WriteString(Label);
+            stream.WriteArray(Platforms, (s, item) => s.WriteString(item.ToString()));
             stream.WriteArray(Tags, (s, item) => s.WriteString(item));
         }
     }

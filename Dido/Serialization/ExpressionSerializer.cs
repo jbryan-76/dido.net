@@ -113,7 +113,15 @@ namespace DidoNet
             switch (expression)
             {
                 case BinaryExpression exp:
-                    throw new NotImplementedException();
+                    return new BinaryNode
+                    {
+                        ExpressionType = exp.NodeType,
+                        Conversion = exp.Conversion != null ? EncodeFromExpression(exp.Conversion, exp) : null,
+                        Left = EncodeFromExpression(exp.Left, exp),
+                        LiftToNull = exp.IsLiftedToNull,
+                        Right = EncodeFromExpression(exp.Right, exp),
+                        Method = exp.Method != null ? new MethodInfoModel(exp.Method) : null
+                    };
                 case BlockExpression exp:
                     throw new NotImplementedException();
                 case ConditionalExpression exp:
@@ -220,7 +228,7 @@ namespace DidoNet
 
         internal static async Task HandleMissingAssemblyException(Exception e, Environment env)
         {
-            if(env.ResolveRemoteAssemblyAsync == null)
+            if (env.ResolveRemoteAssemblyAsync == null)
             {
                 throw new InvalidOperationException($"'{nameof(Environment.ResolveRemoteAssemblyAsync)}' is not defined on the current Environment parameter.");
             }
@@ -285,6 +293,12 @@ namespace DidoNet
                 {
                     switch (node)
                     {
+                        case BinaryNode n:
+                            return Expression.MakeBinary(n.ExpressionType,
+                                await DecodeToExpressionAsync(n.Left, env, state),
+                                await DecodeToExpressionAsync(n.Right, env, state),
+                                n.LiftToNull,
+                                n.Method?.ToInfo(env));
                         case ConstantNode n:
                             // ensure the constant node has the current environment so it can access the 
                             // loaded assemblies while deserializing the value

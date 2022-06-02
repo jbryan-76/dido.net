@@ -6,7 +6,7 @@
     public class TaskInvocationException : Exception
     {
         public TaskInvocationException() { }
-        public TaskInvocationException(string message) : base(message) { }
-        public TaskInvocationException(string message, Exception innerException) : base(message, innerException) { }
+        public TaskInvocationException(string? message) : base(message) { }
+        public TaskInvocationException(string? message, Exception? innerException) : base(message, innerException) { }
     }
 }

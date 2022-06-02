@@ -9,7 +9,7 @@
         /// The unique id of the server instance.
         /// If not provided, a random unique id will be assigned for each Runner server when it starts.
         /// </summary>
-        public string? Id { get; private set; } = string.Empty;
+        public string? Id { get; set; } = string.Empty;
 
         /// <summary>
         /// The optional label for the runner. 

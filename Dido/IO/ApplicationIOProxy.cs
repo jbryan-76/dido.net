@@ -215,28 +215,41 @@ namespace DidoNet.IO
 
                                 if (chunk.Length >= 0)
                                 {
-                                    // don't open the file until absolutely necessary:
-                                    // if the identical file is already cached, a degenerate chunk will be received
-                                    // and the file should not be overwritten
+                                    // don't open the file until absolutely necessary
+                                    // (if the identical file is already cached, a degenerate chunk will be received
+                                    // and the file should not be overwritten)
                                     if (file == null)
                                     {
                                         // make sure the directory exists
-                                        Directory.CreateDirectory(Path.GetDirectoryName(store.Filename)!);
+                                        var directory = Path.GetDirectoryName(store.Filename)!;
+                                        if (!string.IsNullOrEmpty(directory))
+                                        {
+                                            Directory.CreateDirectory(directory);
+                                        }
                                         file = File.Open(store.Filename, FileMode.Create, FileAccess.Write);
                                     }
                                     file.Write(chunk.Bytes);
                                 }
                             } while (!chunk.EOF);
 
-                            file?.Dispose();
+                            long length = 0;
+                            if (file != null)
+                            {
+                                file.Flush();
+                                length = file.Length;
+                                file.Dispose();
+                            }
 
                             // now force the target last write time to match the source
                             // to support the cache heuristic for determining identical files
                             File.SetLastWriteTimeUtc(store.Filename, store.LastWriteTimeUtc);
+
+                            // acknowledge the file was received
+                            storeChannel.Send(new FileAckMessage(store.Filename, length, length));
                         }
                         catch (Exception ex)
                         {
-                            storeChannel.Send(new FileChunkMessage(store.Filename, ex));
+                            storeChannel.Send(new FileAckMessage(store.Filename, ex));
                         }
                     }
                     break;

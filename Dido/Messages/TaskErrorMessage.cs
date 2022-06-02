@@ -2,38 +2,50 @@
 {
     internal class TaskErrorMessage : IMessage
     {
-        public enum ErrorTypes
+        public enum Categories
         {
             General,
             Deserialization,
             Invocation
         }
 
-        public ErrorTypes ErrorType { get; private set; }
+        public Categories Category { get; private set; }
 
-        public string Error { get; private set; } = string.Empty;
+        public string ExceptionType { get; private set; } = string.Empty;
+
+        public string ExceptionMessage { get; private set; } = string.Empty;
+
+        public Exception? Exception
+        {
+            get
+            {
+                return string.IsNullOrEmpty(ExceptionType) 
+                    ? null 
+                    : Activator.CreateInstance(Type.GetType(ExceptionType)!, ExceptionMessage) as Exception;
+            }
+        }
 
         public TaskErrorMessage() { }
 
-        public TaskErrorMessage(string error, ErrorTypes errorType)
+        public TaskErrorMessage(Categories category, Exception exception)
         {
-            ErrorType = errorType;
-            Error = error;
+            Category = category;
+            ExceptionMessage = exception.ToString();
+            ExceptionType = exception.GetType().FullName!;
         }
-
-        public TaskErrorMessage(Exception ex, ErrorTypes errorType)
-            : this(ex.ToString(), errorType) { }
 
         public void Read(Stream stream)
         {
-            ErrorType = Enum.Parse<ErrorTypes>(stream.ReadString());
-            Error = stream.ReadString();
+            Category = Enum.Parse<Categories>(stream.ReadString());
+            ExceptionType = stream.ReadString();
+            ExceptionMessage = stream.ReadString();
         }
 
         public void Write(Stream stream)
         {
-            stream.WriteString(ErrorType.ToString());
-            stream.WriteString(Error);
+            stream.WriteString(Category.ToString());
+            stream.WriteString(ExceptionType);
+            stream.WriteString(ExceptionMessage);
         }
     }
 }

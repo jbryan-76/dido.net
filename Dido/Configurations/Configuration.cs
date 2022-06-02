@@ -33,8 +33,8 @@
             = ExecutionModes.Local;
 
         /// <summary>
-        /// The uri for the mediator service used to negotiate the specific runner service
-        /// that remotely executes tasks.
+        /// The uri for the mediator service used to select the best available specific runner service
+        /// to remotely execute a task.
         /// </summary>
         public Uri? MediatorUri { get; set; } = null;
 
@@ -43,6 +43,29 @@
         /// If set, any configured mediator will not be used.
         /// </summary>
         public Uri? RunnerUri { get; set; } = null;
+
+        /// <summary>
+        /// When a mediator is used to select the best available runner, this option filters all
+        /// available runners by a specific set of allowed operating systems.
+        /// When provided, the task can only run on a runner where the set intersection
+        /// with the runner's platform is non-empty.
+        /// </summary>
+        public OSPlatforms[] RunnerOSPlatforms { get; set; } = new OSPlatforms[0];
+
+        /// <summary>
+        /// When a mediator is used to select the best available runner, this option filters all
+        /// available runners by a specific label.
+        /// When provided, the task can only run on a runner with a matching label.
+        /// </summary>
+        public string RunnerLabel { get; set; } = string.Empty;
+
+        /// <summary>
+        /// When a mediator is used to select the best available runner, this option filters all
+        /// available runners by a specific set of tags.
+        /// When provided, the task can only run on a runner where the set intersection
+        /// with the runner's tags is non-empty.
+        /// </summary>
+        public string[] RunnerTags { get; set; } = new string[0];
 
         /// <summary>
         /// A delegate method for resolving local runtime assemblies used by the host application.
@@ -62,5 +85,7 @@
 
         // TODO: provide an api to create custom MessageChannels so the application can optionally support interprocess communication
         //public MessageChannel MessageChannel { get; internal set; }
+
+        public string DebugCachePath { get; set; } = string.Empty;
     }
 }
