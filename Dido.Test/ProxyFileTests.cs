@@ -97,6 +97,25 @@ namespace DidoNet.Test
         }
 
         [Fact]
+        public void ReadWriteSeek()
+        {
+            using (var loopback = new Connection.LoopbackProxy())
+            using (var appLoopbackConnection = new Connection(loopback, Connection.LoopbackProxy.Role.Client))
+            using (var runnerLoopbackConnection = new Connection(loopback, Connection.LoopbackProxy.Role.Server))
+            using (var localFile = new TemporaryFile())
+            using (var remoteFile = new TemporaryFile())
+            {
+                ReadWriteSeekInternal(localFile.Filename, null);
+
+                var ioProxy = new ApplicationIOProxy(appLoopbackConnection);
+                ReadWriteSeekInternal(remoteFile.Filename, runnerLoopbackConnection);
+                WaitForProxyToFinish(ioProxy);
+
+                AssertFilesEqual(localFile.Filename, remoteFile.Filename);
+            }
+        }
+
+        [Fact]
         public void SetLength()
         {
             using (var loopback = new Connection.LoopbackProxy())
@@ -585,6 +604,49 @@ namespace DidoNet.Test
                 // confirm content
                 stream.Seek(0, SeekOrigin.Begin);
                 actual = new byte[stream.Length];
+                stream.Read(actual, 0, actual.Length);
+                Assert.True(Enumerable.SequenceEqual(expected, actual));
+            }
+        }
+
+        void ReadWriteSeekInternal(string filename, Connection? connection)
+        {
+            // create a new file with some content
+            var proxy = new RunnerFileProxy(connection);
+            byte[] expected;
+            using (var stream = proxy.Open(filename, FileMode.Create))
+            {
+                expected = RandomBytes(64, 0);
+                stream.Write(expected);
+
+                // seek/write/read in a few places.
+                // also update the expected array to match content:
+
+                // overwrite data at the beginning
+                stream.Seek(0, SeekOrigin.Begin);
+                Assert.Equal(0, stream.Position);
+                var chunk = RandomBytes(8, 1);
+                stream.Write(chunk);
+                Buffer.BlockCopy(chunk, 0, expected, 0, chunk.Length);
+
+                // copy some data to the end
+                stream.Seek(4, SeekOrigin.Current);
+                Buffer.BlockCopy(expected, (int)stream.Position, expected, expected.Length - chunk.Length, chunk.Length);
+                stream.Read(chunk);
+                stream.Seek(-chunk.Length, SeekOrigin.End);
+                stream.Write(chunk);
+                Assert.Equal(stream.Length, stream.Position);
+
+                // overwrite data in the middle
+                stream.Seek(-expected.Length / 4, SeekOrigin.End);
+                Assert.Equal(expected.Length - expected.Length / 4, stream.Position);
+                chunk = RandomBytes(8, 1);
+                stream.Write(chunk);
+                Buffer.BlockCopy(chunk, 0, expected, expected.Length - expected.Length / 4, chunk.Length);
+
+                // confirm content
+                stream.Seek(0, SeekOrigin.Begin);
+                var actual = new byte[stream.Length];
                 stream.Read(actual, 0, actual.Length);
                 Assert.True(Enumerable.SequenceEqual(expected, actual));
             }

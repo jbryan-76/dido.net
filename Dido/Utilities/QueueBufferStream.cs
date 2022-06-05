@@ -314,7 +314,7 @@
                         newPosition = offset;
                         break;
                     case SeekOrigin.End:
-                        newPosition = Length - offset;
+                        newPosition = Length + offset;
                         break;
                     case SeekOrigin.Current:
                         newPosition += offset;
