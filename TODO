@@ -1,0 +1,19 @@
+- add caching and version checking for resolved assemblies
+- investigate a way to resolve/retrieve assemblies "in-line"; ie without throwing and restarting a whole task
+- enhance Run() configuration or parameters to support the application creating custom communication channels
+  (and corresponding symmetric capability on the execution context)
+- add progress support to execution context
+- create Dido.Mediator from Dido.Runner and use MediatorServer
+- create Dockerfile.Mediator.build
+- create Dockerfile.Mediator.pack
+- create jobs system with mediator, including configurable optional persistence
+- explore task "tethering": what should a task running on a runner do when the application connection terminates
+  unexpectedly? also terminate? keep going and store result on a mediator? can we support re-establishing a connection?
+- explore supporting fire-and-forget tasks, also with dynamic reconnection? this would enable eg microservice patterns.
+  however what does it mean for following use case?
+    1) application starts an untethered microservice task
+    2) application stops (microservice task keeps running)
+    3) application updates the microservice code
+    4) application restarts and reconnects to the microservice task
+    =>) if code has changed (? how to tell?), stop task, unload assemblies, restart task
+- 

@@ -97,6 +97,25 @@ namespace DidoNet.Test
         }
 
         [Fact]
+        public void SetLength()
+        {
+            using (var loopback = new Connection.LoopbackProxy())
+            using (var appLoopbackConnection = new Connection(loopback, Connection.LoopbackProxy.Role.Client))
+            using (var runnerLoopbackConnection = new Connection(loopback, Connection.LoopbackProxy.Role.Server))
+            using (var localFile = new TemporaryFile())
+            using (var remoteFile = new TemporaryFile())
+            {
+                SetLengthInternal(localFile.Filename, null);
+
+                var ioProxy = new ApplicationIOProxy(appLoopbackConnection);
+                SetLengthInternal(remoteFile.Filename, runnerLoopbackConnection);
+                WaitForProxyToFinish(ioProxy);
+
+                AssertFilesEqual(localFile.Filename, remoteFile.Filename);
+            }
+        }
+
+        [Fact]
         public async void Cache()
         {
             using (var loopback = new Connection.LoopbackProxy())
@@ -495,6 +514,8 @@ namespace DidoNet.Test
             {
                 expected = RandomBytes(64, 0);
                 stream.Write(expected);
+                Assert.Equal(expected.Length, stream.Position);
+                Assert.Equal(expected.Length, stream.Length);
             }
             var actual = proxy.ReadAllBytes(filename);
             Assert.True(Enumerable.SequenceEqual(expected, actual));
@@ -512,7 +533,59 @@ namespace DidoNet.Test
             using (var stream = proxy.Open(filename, FileMode.Open))
             {
                 var actual = new byte[(int)stream.Length];
+                Assert.Equal(0, stream.Position);
+                Assert.Equal(expected.Length, stream.Length);
                 stream.Read(actual);
+                Assert.Equal(expected.Length, stream.Position);
+                Assert.Equal(expected.Length, stream.Length);
+                Assert.True(Enumerable.SequenceEqual(expected, actual));
+            }
+        }
+
+        void SetLengthInternal(string filename, Connection? connection)
+        {
+            // create a new file with some content
+            var proxy = new RunnerFileProxy(connection);
+            byte[] expected;
+            var deltaLength = 10;
+            using (var stream = proxy.Open(filename, FileMode.Create))
+            {
+                expected = RandomBytes(64, 0);
+                stream.Write(expected);
+
+                // set the length to longer and confirm length and position
+                var expectedPosition = stream.Position;
+                var expectedNewLength = stream.Length + deltaLength;
+                stream.SetLength(expectedNewLength);
+                Assert.Equal(expectedNewLength, stream.Length);
+                Assert.Equal(expectedPosition, stream.Position);
+
+                // write some data to fill the length and confirm length and position and content
+                var extraData = RandomBytes(deltaLength, 1);
+                expected = expected.Concat(extraData).ToArray();
+                stream.WriteBytes(extraData);
+                Assert.Equal(expectedNewLength, stream.Length);
+                Assert.Equal(expectedNewLength, stream.Position);
+
+                // confirm content
+                stream.Seek(0, SeekOrigin.Begin);
+                var actual = new byte[stream.Length];
+                stream.Read(actual, 0, actual.Length);
+                Assert.True(Enumerable.SequenceEqual(expected, actual));
+                Assert.Equal(expectedNewLength, stream.Position);
+
+                // set the length to shorter and confirm length and position and content
+                expectedNewLength -= deltaLength / 2;
+                expectedPosition = expectedNewLength;
+                expected = expected.Take((int)expectedNewLength).ToArray();
+                stream.SetLength(expectedNewLength);
+                Assert.Equal(expectedNewLength, stream.Length);
+                Assert.Equal(expectedPosition, stream.Position);
+
+                // confirm content
+                stream.Seek(0, SeekOrigin.Begin);
+                actual = new byte[stream.Length];
+                stream.Read(actual, 0, actual.Length);
                 Assert.True(Enumerable.SequenceEqual(expected, actual));
             }
         }

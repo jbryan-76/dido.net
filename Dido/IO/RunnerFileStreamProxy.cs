@@ -31,7 +31,7 @@
         public override bool CanWrite => true;
 
         /// <summary>
-        /// 
+        /// The message channel used to communicate with the remote application.
         /// </summary>
         internal MessageChannel Channel { get; set; }
 
@@ -47,11 +47,19 @@
 
         public override int Read(byte[] buffer, int offset, int count)
         {
-            // TODO: break up and loop send based on a max message size
+            // TODO: optimize this: break up and loop send+receive based on a max message size.
+            // TODO: explore decoupling the send and receive loops so they can run concurrently. producer-consumer?
+            return ReadInternal(buffer, offset, count);
+        }
+
+        private int ReadInternal(byte[] buffer, int offset, int count)
+        {
             Channel.Send(new FileReadRequestMessage(Name, Position, count));
             var response = Channel.ReceiveMessage<FileReadResponseMessage>();
             response.ThrowOnError();
             Buffer.BlockCopy(response.Bytes, 0, buffer, offset, response.Bytes.Length);
+            _length = response.Length;
+            Position = response.Position;
             return response.Bytes.Length;
         }
 
@@ -84,23 +92,32 @@
         {
             Channel.Send(new FileSetLengthMessage(Name, value));
             var ack = Channel.ReceiveMessage<FileAckMessage>();
-            // TODO: use FileSetLengthResponseMessage and set _length to the returned value
             ack.ThrowOnError();
+            _length = ack.Length;
+            Position = ack.Position;
         }
 
         // TODO: override WriteAsync to provide dedicated implementation?
 
         public override void Write(byte[] buffer, int offset, int count)
         {
-            // TODO: break up and loop send based on a max message size
+            // TODO: optimize this: break up and loop send+receive based on a max message size.
+            // TODO: explore decoupling the send and receive loops so they can run concurrently. producer-consumer?
+            WriteInternal(buffer, offset, count);
+        }
+
+        private void WriteInternal(byte[] buffer, int offset, int count)
+        {
             var data = new byte[count];
             Buffer.BlockCopy(buffer, offset, data, 0, count);
             Channel.Send(new FileWriteMessage(Name, Position, data));
             var ack = Channel.ReceiveMessage<FileAckMessage>();
             ack.ThrowOnError();
+            _length = ack.Length;
+            Position = ack.Position;
         }
 
-        // TODO: explore making waiting for acknowledgement optional to increase throughput,
+        // TODO: explore making waiting for acknowledgment optional to increase throughput,
         // TODO: then receiving errors asynchronously and throwing during the next op
 
         /// <summary>

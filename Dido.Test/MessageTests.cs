@@ -43,8 +43,5 @@ namespace DidoNet.Test
                 Assert.Equal(tx.QueueLength, rx.QueueLength);
             }
         }
-
-        // TODO: RunnerRequestMessage
-        // TODO: RunnerResponseMessage
     }
 }

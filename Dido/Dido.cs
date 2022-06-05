@@ -3,8 +3,6 @@ using NLog;
 using System.Linq.Expressions;
 using System.Runtime.Loader;
 
-// TODO: best name? dido (distribute, disseminate, divide, spread, separate, put) vs alio (to another place)
-
 // generate self-signed certs automatically:
 // https://stackoverflow.com/questions/695802/using-ssl-and-sslstream-for-peer-to-peer-authentication
 // view installed certificates: certmgr.msc

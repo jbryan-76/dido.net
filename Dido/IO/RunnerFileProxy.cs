@@ -9,13 +9,6 @@ namespace DidoNet.IO
     /// </summary>
     public class RunnerFileProxy
     {
-        //System.IO.File;
-
-        // TODO: how to efficiently and elegantly handle forcing application-local files to exist 
-        // TODO: in the local file-system of the runner such that using relative path notation when
-        // TODO: invoking external processes works as expected? use a special method to copy/cache the file.
-        // TODO: set working directory at runner startup to the cache folder?
-
         /// <summary>
         /// The dedicated message channel marshaling file IO requests by the executing expression on a
         /// Runner to the remote application.

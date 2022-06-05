@@ -8,8 +8,6 @@ namespace DidoNet
 {
     // NOTE: it's outside the scope of this library to decide how and when to spin up new Runners.
 
-    // TODO: add logging
-
     public class RunnerServer : IDisposable
     {
         /// <summary>

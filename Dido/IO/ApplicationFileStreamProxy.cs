@@ -50,6 +50,10 @@
                     try
                     {
                         var data = new byte[read.Count];
+                        if (read.Position != Stream.Position)
+                        {
+                            Stream.Seek(read.Position, SeekOrigin.Begin);
+                        }
                         var count = Stream.Read(data, 0, data.Length);
                         if (count < data.Length)
                         {
@@ -69,12 +73,28 @@
                 case FileWriteMessage write:
                     try
                     {
+                        if (write.Position != Stream.Position)
+                        {
+                            Stream.Seek(write.Position, SeekOrigin.Begin);
+                        }
                         Stream.Write(write.Bytes);
                         Channel!.Send(new FileAckMessage(write.Filename, Stream.Position, Stream.Length));
                     }
                     catch (Exception ex)
                     {
                         Channel!.Send(new FileAckMessage(write.Filename, ex));
+                    }
+                    break;
+
+                case FileSetLengthMessage length:
+                    try
+                    {
+                        Stream.SetLength(length.Length);
+                        Channel!.Send(new FileAckMessage(length.Filename, Stream.Position, Stream.Length));
+                    }
+                    catch (Exception ex)
+                    {
+                        Channel!.Send(new FileAckMessage(length.Filename, ex));
                     }
                     break;
 
