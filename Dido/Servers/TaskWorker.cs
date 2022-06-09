@@ -201,13 +201,11 @@ namespace DidoNet
         private async void ExecuteTask(TaskRequestMessage request)
         {
             // create the runtime environment
-            var environment = new Environment
+            using (var environment = new Environment
             {
-                AssemblyContext = new AssemblyLoadContext(Guid.NewGuid().ToString(), true),
                 ExecutionContext = Context,
                 ResolveRemoteAssemblyAsync = new DefaultRemoteAssemblyResolver(AssembliesChannel).ResolveAssembly,
-            };
-
+            })
             using (var stream = new MemoryStream(request.Bytes))
             {
                 Func<ExecutionContext, object>? expression = null;

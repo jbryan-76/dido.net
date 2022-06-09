@@ -8,6 +8,10 @@ namespace DidoNet
 {
     // NOTE: it's outside the scope of this library to decide how and when to spin up new Runners.
 
+    /// <summary>
+    /// A configurable Dido Runner server that can be deployed as a console app, service, or integrated into a
+    /// larger application.
+    /// </summary>
     public class RunnerServer : IDisposable
     {
         /// <summary>
@@ -97,7 +101,7 @@ namespace DidoNet
         }
 
         /// <summary>
-        /// Starts listening for incoming connection requests from applications.
+        /// Starts listening for incoming connection requests from remote applications.
         /// </summary>
         /// <param name="cert"></param>
         /// <param name="port"></param>
@@ -150,6 +154,7 @@ namespace DidoNet
             WorkLoopThread.Start();
 
             // debounce the server by giving it a beat or two to startup
+            // TODO: test and remove this: is it necessary?
             Thread.Sleep(10);
         }
 
@@ -243,6 +248,9 @@ namespace DidoNet
 
                     // create a secure connection to the endpoint
                     var connection = new Connection(client, cert);
+
+                    // TODO: if the connection is reconnecting to an existing runner,
+                    // TODO: find and update the worker
 
                     // the mediator uses an optimistic scheduling strategy, which means
                     // it will route traffic to runners based on the conditions known at the 

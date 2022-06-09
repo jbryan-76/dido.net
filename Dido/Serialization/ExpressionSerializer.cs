@@ -226,13 +226,20 @@ namespace DidoNet
             }
         }
 
-        internal static async Task HandleMissingAssemblyException(Exception e, Environment env)
+        /// <summary>
+        /// Handles processing when a needed assembly could not be found during deserialization or invocation of
+        /// an expression.
+        /// <para/>Note: the AssemblyLoadContext.Resolving event is also used, but does not handle all cases, so 
+        /// additional core logic is needed to explicitly catch and process exceptions involving missing assemblies.
+        /// </summary>
+        /// <param name="e"></param>
+        /// <param name="env"></param>
+        /// <returns></returns>
+        /// <exception cref="InvalidOperationException"></exception>
+        /// <exception cref="MissingAssemblyException"></exception>
+        internal static void HandleMissingAssemblyException(Exception e, Environment env)
         {
-            if (env.ResolveRemoteAssemblyAsync == null)
-            {
-                throw new InvalidOperationException($"'{nameof(Environment.ResolveRemoteAssemblyAsync)}' is not defined on the current Environment parameter.");
-            }
-
+            // determine the missing assembly name from the exception
             string assemblyName = string.Empty;
             if (e is FileNotFoundException notFoundException)
             {
@@ -247,41 +254,22 @@ namespace DidoNet
                 throw new MissingAssemblyException($"Cannot handle missing assembly from exception {e.GetType()}. See inner exception for details.", e);
             }
 
-            // TODO: first try to load the assembly from a disk cache using Environment.AssemblyCachePath
-
             // this conditional should never evaluate to true, but keep it here to prevent
             // potential infinite loops: if the correct assembly exists in Environment.LoadedAssemblies,
             // that means it was successfully loaded already, but if an exception was thrown indicating
             // it could not be found, then something else must be going on.
             // TODO: better understand whether this can ever happen, and how to handle it when it does
-            if (env.LoadedAssemblies.ContainsKey(assemblyName))
+            //if (env.LoadedAssemblies.ContainsKey(assemblyName))
+            if (env.IsAssemblyLoaded(assemblyName))
             {
                 throw new MissingAssemblyException($"Could not resolve assembly '{assemblyName}'. See inner exception for details.", e);
             }
 
-            // check if the assembly is already loaded into the default context
-            // (this will be common eg for standard .NET assemblies, eg System)
-            var asm = AssemblyLoadContext.Default.Assemblies.FirstOrDefault(asm => asm.FullName == assemblyName);
-            if (asm != null)
-            {
-                env.LoadedAssemblies.Add(assemblyName, asm);
-                return;
-            }
-
-            // assembly not found. try to resolve it from the remote host
-            var stream = await env.ResolveRemoteAssemblyAsync(env, assemblyName);
-            if (stream == null)
+            var asm = env.ResolveAssembly(assemblyName);
+            if (asm == null)
             {
                 throw new MissingAssemblyException($"Could not resolve assembly '{assemblyName}'", e);
             }
-
-            // load the assembly into the environment context and cache its reference
-            var context = env.AssemblyContext ?? AssemblyLoadContext.Default;
-            asm = context.LoadFromStream(stream);
-            env.LoadedAssemblies.Add(assemblyName, asm);
-
-            // cleanup
-            stream.Dispose();
         }
 
         private static async Task<Expression> DecodeToExpressionAsync(Node node, Environment env, ExpressionVisitorState state)
@@ -355,11 +343,11 @@ namespace DidoNet
                 }
                 catch (Exception e) when (e is FileLoadException || e is FileNotFoundException)
                 {
-                    await HandleMissingAssemblyException(e, env);
+                    HandleMissingAssemblyException(e, env);
                 }
                 catch (JsonSerializationException e)
                 {
-                    await HandleMissingAssemblyException(e.InnerException!, env);
+                    HandleMissingAssemblyException(e.InnerException!, env);
                 }
                 catch (Exception)
                 {

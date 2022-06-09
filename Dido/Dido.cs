@@ -243,8 +243,7 @@ namespace DidoNet
                     applicationChannel.Send(new RunnerRequestMessage(configuration.RunnerOSPlatforms, configuration.RunnerLabel, configuration.RunnerTags));
 
                     // receive and process the response
-                    // TODO: add timeout
-                    var message = applicationChannel.ReceiveMessage();
+                    var message = applicationChannel.ReceiveMessage(configuration.MediatorTimeout);
                     switch (message)
                     {
                         case RunnerResponseMessage response:
@@ -315,6 +314,7 @@ namespace DidoNet
                 var responseSource = new TaskCompletionSource<IMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
                 tasksChannel.OnMessageReceived = (message, channel) =>
                 {
+                    // TODO: switch messages instead?
                     ThreadHelpers.Debug($"dido: received message {message.GetType()}");
                     // after kicking off the task request below, exactly one response message is expected back,
                     // which is received in this handler and attached to the response source to be awaited
@@ -495,32 +495,32 @@ namespace DidoNet
                 Directory = new RunnerDirectoryProxy(runnerLoopbackConnection, runnerConfig)
             };
 
-            var env = new Environment
-            {
-                ExecutionContext = context,
-                AssemblyContext = new AssemblyLoadContext(Guid.NewGuid().ToString(), true),
-                ResolveRemoteAssemblyAsync = new DebugRemoteAssemblyResolver(AppContext.BaseDirectory).ResolveAssembly
-            };
 
             try
             {
-                // TODO: should this use a proxy RunnerServer too (like the unit tests), or is that overkill?
+                using (var env = new Environment
+                {
+                    ExecutionContext = context,
+                    ResolveRemoteAssemblyAsync = new DebugRemoteAssemblyResolver(AppContext.BaseDirectory).ResolveAssembly
+                })
+                {
+                    // TODO: should this use a proxy RunnerServer too (like the unit tests), or is that overkill?
 
-                // to adequately test end-to-end processing and the current configuration,
-                // serialize and deserialize the expression
-                var data = await SerializeAsync(expression);
-                var func = await DeserializeAsync<Tprop>(data, env);
+                    // to adequately test end-to-end processing and the current configuration,
+                    // serialize and deserialize the expression
+                    var data = await SerializeAsync(expression);
+                    var func = await DeserializeAsync<Tprop>(data, env);
 
-                // run the expression with the optional configured timeout and return its result
-                var result = await Task
-                    .Run(() => func.Invoke(context))
-                    .WaitAsync(TimeSpan.FromMilliseconds(configuration.TimeoutInMs));
-                cancellationToken.ThrowIfCancellationRequested();
-                return result;
+                    // run the expression with the optional configured timeout and return its result
+                    var result = await Task
+                        .Run(() => func.Invoke(context))
+                        .WaitAsync(TimeSpan.FromMilliseconds(configuration.TimeoutInMs));
+                    cancellationToken.ThrowIfCancellationRequested();
+                    return result;
+                }
             }
             finally
             {
-                env.AssemblyContext.Unload();
                 runnerLoopbackConnection.Dispose();
                 appLoopbackConnection.Dispose();
                 loopback.Dispose();

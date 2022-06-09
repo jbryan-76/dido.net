@@ -85,7 +85,15 @@
 
         // TODO: provide an api to create custom MessageChannels so the application can optionally support interprocess communication
         //public MessageChannel MessageChannel { get; internal set; }
-
+        
+        /// <summary>
+        /// A local file-system path used in debug mode to cache proxied files requested by a remotely executing task.
+        /// </summary>
         public string DebugCachePath { get; set; } = string.Empty;
+
+        /// <summary>
+        /// The maximum time to wait when communicating with the mediator before throwing a TimeoutException.
+        /// </summary>
+        public TimeSpan MediatorTimeout { get; set; } = TimeSpan.FromSeconds(10);
     }
 }

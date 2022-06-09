@@ -63,7 +63,6 @@ namespace DidoNet.Test.Common
                 {
                     ExecutionMode = ExecutionModes.Local,
                 },
-                AssemblyContext = new AssemblyLoadContext("test", true)
             };
 
             // set up a common configuration instance
@@ -81,6 +80,7 @@ namespace DidoNet.Test.Common
         public void Dispose()
         {
             //Directory.Delete(SharedTestDataPath, true);
+            Environment.Dispose();
         }
 
         /// <summary>

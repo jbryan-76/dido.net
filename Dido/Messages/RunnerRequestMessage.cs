@@ -8,6 +8,8 @@
         // TODO: incorporate a "priority" for the task or runner?
         //public int Priority { get; set; } = 0;
 
+        // TODO: for "tetherless" tasks, incorporate a runner id in the request, that always succeeds if the runner exists
+
         /// <summary>
         /// Indicates a set of runner OS platforms the task should run on.
         /// If provided, the task can only run on a runner where the set intersection

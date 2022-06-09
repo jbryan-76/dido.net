@@ -30,12 +30,11 @@ namespace DidoNet
         public Type BindToType(string? assemblyName, string typeName)
         {
             ArgumentNullException.ThrowIfNull(assemblyName, nameof(assemblyName));
-            if (!Environment.LoadedAssemblies.TryGetValue(assemblyName, out var asm)
-                || asm == null)
+            if (!Environment.TryGetLoadedAssembly(assemblyName, out var asm))
             {
                 throw new FileNotFoundException($"Could not resolve assembly '{assemblyName}' from current Environment.", assemblyName);
             }
-            var type = asm.GetType(typeName);
+            var type = asm!.GetType(typeName);
             return type != null ? type : throw new TypeNotFoundException($"Could not resolve type '{typeName}' in assembly '{assemblyName}'.");
         }
 

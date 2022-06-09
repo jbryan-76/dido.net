@@ -6,10 +6,14 @@ using System.Security.Cryptography.X509Certificates;
 
 namespace DidoNet
 {
+    /// <summary>
+    /// A configurable Dido Mediator server that can be deployed as a console app, service, or integrated into a
+    /// larger application.
+    /// </summary>
     public class MediatorServer
     {
         /// <summary>
-        /// The unique id of the server instance.
+        /// The unique id of the mediator instance.
         /// </summary>
         public string Id { get; private set; } = Guid.NewGuid().ToString();
 
@@ -123,6 +127,9 @@ namespace DidoNet
         /// <returns></returns>
         internal Runner? GetNextAvailableRunner(RunnerRequestMessage request)
         {
+            // TODO: if the request identifies a specific runner (by id) for a "tetherless" re-connect,
+            // TODO: find and return that runner immediately, with no filtering
+
             // TODO: build the query once and reuse it
 
             // initialize a query to the current set of ready runners
@@ -225,6 +232,12 @@ namespace DidoNet
             }
         }
 
+        /// <summary>
+        /// Processes the given connection from either an application or a mediator,
+        /// handling all received messages and communication.
+        /// </summary>
+        /// <param name="id"></param>
+        /// <param name="connection"></param>
         private void ProcessClient(Guid id, Connection connection)
         {
             // create communication channels.
@@ -244,11 +257,6 @@ namespace DidoNet
                     // this connection is to an application.
                     // close the runner channel so as not to tie up a thread
                     runnerChannel?.Dispose();
-                    //if (runnerChannel != null)
-                    //{
-                    //    connection.CloseChannel(runnerChannel.Channel);
-                    //    runnerChannel = null;
-                    //}
 
                     // process the message
                     switch (message)
@@ -273,11 +281,6 @@ namespace DidoNet
                     // this connection is to a runner.
                     // close the application channel so as not to tie up a thread
                     applicationChannel?.Dispose();
-                    //if (applicationChannel != null)
-                    //{
-                    //    connection.CloseChannel(applicationChannel.Channel);
-                    //    applicationChannel = null;
-                    //}
 
                     // add the runner to the pool, if necessary
                     if (runner == null)
@@ -306,13 +309,10 @@ namespace DidoNet
                 {
                     ThreadHelpers.Yield();
                 }
-
             }
-            catch (Exception)
+            catch (Exception ex)
             {
-                // TODO: catch exceptions and transmit back to caller
-                // (either an application or a runner)
-                // TODO: log it?
+                Logger.Error(ex);
             }
             finally
             {
@@ -340,7 +340,7 @@ namespace DidoNet
         private class ConnectedClient
         {
             /// <summary>
-            /// The proecssing thread for the client.
+            /// The processing thread for the client.
             /// </summary>
             public Thread Thread { get; private set; }
 

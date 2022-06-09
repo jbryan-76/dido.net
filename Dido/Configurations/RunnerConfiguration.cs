@@ -80,6 +80,9 @@
         /// </summary>
         public TimeSpan CacheMaxAge { get; set; } = TimeSpan.Zero;
 
+        /// <summary>
+        /// A local file-system path used to cache application assemblies used by the runner.
+        /// </summary>
         internal string? AssemblyCachePath { get; set; } = null;
 
         internal string? FileCachePath { get; set; } = null;

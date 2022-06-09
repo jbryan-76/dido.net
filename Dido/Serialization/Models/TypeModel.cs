@@ -24,9 +24,9 @@ namespace DidoNet
 
         public Type? ToType(Environment env)
         {
-            if (env.LoadedAssemblies.TryGetValue(AssemblyName, out var asm))
+            if (env.TryGetLoadedAssembly(AssemblyName, out var asm))
             {
-                return asm.GetType(Name);
+                return asm!.GetType(Name);
             }
             throw new FileNotFoundException($"Could not resolve assembly '{AssemblyName}' from current Environment.", AssemblyName);
         }
