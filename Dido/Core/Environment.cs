@@ -26,7 +26,7 @@ namespace DidoNet
         public RemoteAssemblyResolver? ResolveRemoteAssemblyAsync { get; set; }
 
         /// <summary>
-        /// An optional runtime AssemblyLoadContext which serves as an isolated container
+        /// A runtime AssemblyLoadContext which serves as an isolated container
         /// for all assemblies needed to execute an expression.
         /// </summary>
         public AssemblyLoadContext AssemblyContext { get; private set; }
@@ -52,7 +52,7 @@ namespace DidoNet
         /// <summary>
         /// 
         /// </summary>
-        public string AssemblyCachePath { get; set; }
+        public string? AssemblyCachePath { get; set; }
 
         /// <summary>
         /// Initializes a new instance of the Environment class.
@@ -101,7 +101,7 @@ namespace DidoNet
         internal Assembly? ResolveAssembly(string assemblyName)
         {
             // check if the assembly is already loaded into the default context
-            // (this will be common for standard .NET assemblies, eg System)
+            // (this will be common for standard .NET assemblies, e.g. System)
             var asm = AssemblyLoadContext.Default.Assemblies.FirstOrDefault(asm => asm.FullName == assemblyName);
             if (asm != null)
             {
@@ -134,6 +134,12 @@ namespace DidoNet
             asm = AssemblyContext.LoadFromStream(stream);
             LoadedAssemblies.TryAdd(assemblyName, asm);
             stream.Dispose();
+
+            // TODO: cache the assembly to disk
+            if (!string.IsNullOrEmpty(AssemblyCachePath))
+            {
+            }
+
             return asm;
         }
 

@@ -1,5 +1,4 @@
 ﻿using NLog;
-using System.Runtime.Loader;
 
 namespace DidoNet
 {
@@ -19,14 +18,14 @@ namespace DidoNet
         public Connection Connection { get; private set; }
 
         /// <summary>
+        /// The configuration of the runner that is executing this task.
+        /// </summary>
+        private RunnerConfiguration Configuration { get; set; }
+
+        /// <summary>
         /// The main thread for the worker.
         /// </summary>
         private Thread? WorkThread { get; set; }
-
-        /// <summary>
-        /// The context available to the task while it's executing.
-        /// </summary>
-        private ExecutionContext Context { get; set; }
 
         /// <summary>
         /// A cancellation token source to cancel an executing task.
@@ -75,6 +74,7 @@ namespace DidoNet
         public TaskWorker(Connection connection, RunnerConfiguration configuration)
         {
             Connection = connection;
+            Configuration = configuration;
 
             // create communication channels to the application for: task communication, assemblies, files
             TasksChannel = new MessageChannel(Connection, Constants.AppRunner_TaskChannelId);
@@ -85,15 +85,6 @@ namespace DidoNet
             // TODO: in "untethered" mode, the task should continue. what if the task is long running? how to reconnect?
 
             // TODO: add option to "store" result in Mediator instead/in-addition to sending to application (to support "job mode")
-
-            // create the execution context that is available to the expression while it's running
-            Context = new ExecutionContext
-            {
-                ExecutionMode = ExecutionModes.Local,
-                File = new IO.RunnerFileProxy(Connection, configuration),
-                Directory = new IO.RunnerDirectoryProxy(Connection, configuration),
-                Cancel = CancelSource.Token
-            };
         }
 
         /// <summary>
@@ -200,12 +191,25 @@ namespace DidoNet
         /// <param name="request"></param>
         private async void ExecuteTask(TaskRequestMessage request)
         {
+            // create the execution context that is available to the expression while it's running
+            var context = new ExecutionContext
+            {
+                Connection = Connection,
+                ExecutionMode = ExecutionModes.Remote,
+                File = new IO.RunnerFileProxy(Connection, Configuration, request.ApplicationId),
+                Directory = new IO.RunnerDirectoryProxy(Connection, Configuration, request.ApplicationId),
+                Cancel = CancelSource.Token
+            };
+
             // create the runtime environment
             using (var environment = new Environment
             {
-                ExecutionContext = Context,
+                ExecutionContext = context,
                 ResolveRemoteAssemblyAsync = new DefaultRemoteAssemblyResolver(AssembliesChannel).ResolveAssembly,
+                AssemblyCachePath = Configuration.AssemblyCachePath
             })
+
+            // decode and execute the requested expression
             using (var stream = new MemoryStream(request.Bytes))
             {
                 Func<ExecutionContext, object>? expression = null;
@@ -253,7 +257,7 @@ namespace DidoNet
                         }, null, request.TimeoutInMs, Timeout.Infinite);
                     }
 
-                    // now execute the task by invoking the expression.
+                    // execute the task by invoking the expression.
                     // the task will run for as long as necessary.
                     ThreadHelpers.Debug($"RUNNER: starting task");
                     var result = expression?.Invoke(environment.ExecutionContext);
@@ -294,6 +298,7 @@ namespace DidoNet
                 }
                 catch (OperationCanceledException)
                 {
+                    // catch and report cancellations
                     TasksChannel.Send(new TaskCancelMessage());
                 }
                 catch (Exception ex)
@@ -304,6 +309,7 @@ namespace DidoNet
                 }
                 finally
                 {
+                    // cleanup
                     timeout?.Dispose();
                 }
 

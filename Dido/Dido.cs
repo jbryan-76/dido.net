@@ -35,7 +35,7 @@ namespace DidoNet
         public delegate void ResultHandler<T>(T result);
 
         /// <summary>
-        /// Signature for a method that handles execptions during asynchronous
+        /// Signature for a method that handles exceptions during asynchronous
         /// execution of a task.
         /// </summary>
         /// <typeparam name="T"></typeparam>
@@ -114,7 +114,7 @@ namespace DidoNet
         }
 
         /// <summary>
-        /// Execute the provided expression as a task locally (ie using the current application domain
+        /// Execute the provided expression as a task locally (i.e. using the current application domain
         /// and environment), regardless of the value of configuration.ExecutionMode.
         /// </summary>
         /// <typeparam name="Tprop"></typeparam>
@@ -326,7 +326,7 @@ namespace DidoNet
                 using (var stream = new MemoryStream())
                 {
                     await ExpressionSerializer.SerializeAsync(expression, stream);
-                    var requestMessage = new TaskRequestMessage(stream.ToArray(), configuration.TimeoutInMs);
+                    var requestMessage = new TaskRequestMessage(stream.ToArray(), configuration.Id, configuration.TimeoutInMs);
                     lock (tasksChannel)
                     {
                         tasksChannel.Send(requestMessage);
@@ -494,7 +494,6 @@ namespace DidoNet
                 File = new RunnerFileProxy(runnerLoopbackConnection, runnerConfig),
                 Directory = new RunnerDirectoryProxy(runnerLoopbackConnection, runnerConfig)
             };
-
 
             try
             {

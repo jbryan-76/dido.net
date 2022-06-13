@@ -15,13 +15,21 @@
         public delegate Task<Stream?> LocalAssemblyResolver(string assemblyName);
 
         /// <summary>
+        /// The unique id of the application.
+        /// This is used exclusively to help manage file caching on a runner.
+        /// If not provided, a default id derived from the executing application's name and version
+        /// is used.
+        /// </summary>
+        public string Id { get; set; } = GetDefaultApplicationId();
+
+        /// <summary>
         /// The maximum number of attempts to make when executing a remote task.
         /// Use a value &lt;= 0 to retry forever.
         /// </summary>
         public int MaxTries { get; set; } = 3;
 
         /// <summary>
-        /// How long (in milliseconds) to wait before cancelling a task
+        /// How long (in milliseconds) to wait before canceling a task
         /// and throwing a TimeoutException.
         /// </summary>
         public int TimeoutInMs { get; set; } = Timeout.Infinite;
@@ -85,7 +93,7 @@
 
         // TODO: provide an api to create custom MessageChannels so the application can optionally support interprocess communication
         //public MessageChannel MessageChannel { get; internal set; }
-        
+
         /// <summary>
         /// A local file-system path used in debug mode to cache proxied files requested by a remotely executing task.
         /// </summary>
@@ -95,5 +103,15 @@
         /// The maximum time to wait when communicating with the mediator before throwing a TimeoutException.
         /// </summary>
         public TimeSpan MediatorTimeout { get; set; } = TimeSpan.FromSeconds(10);
+
+        /// <summary>
+        /// Get a default application id derived from the entry assembly name and version.
+        /// </summary>
+        /// <returns></returns>
+        internal static string GetDefaultApplicationId()
+        {
+            var appName = System.Reflection.Assembly.GetEntryAssembly()!.GetName();
+            return $"{appName.Name}.{appName.Version}";
+        }
     }
 }

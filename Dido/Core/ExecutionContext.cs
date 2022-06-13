@@ -23,11 +23,18 @@ namespace DidoNet
 
         // TODO: set current try? maxtries?
 
-        // TODO: provide an api to create custom MessageChannels so the application can optionally support interprocess communication
-        //public MessageChannel MessageChannel { get; internal set; }
 
         public RunnerFileProxy File { get; internal set; }
 
         public RunnerDirectoryProxy Directory { get; internal set; }
+
+
+        // TODO: provide an api to create custom MessageChannels so the application can optionally support interprocess communication
+        //public MessageChannel GetChannel()
+        //{
+
+        //}
+
+        internal Connection Connection { get; set; }
     }
 }

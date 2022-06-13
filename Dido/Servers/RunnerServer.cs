@@ -65,6 +65,11 @@ namespace DidoNet
         private ConcurrentQueue<TaskWorker> QueuedWorkers = new ConcurrentQueue<TaskWorker>();
 
         /// <summary>
+        /// A timer to periodically clean the cache.
+        /// </summary>
+        private Timer? CacheCleanupTimer;
+
+        /// <summary>
         /// The class logger instance.
         /// </summary>
         private ILogger Logger = LogManager.GetCurrentClassLogger();
@@ -97,6 +102,7 @@ namespace DidoNet
                 MediatorConnection?.Dispose();
                 IsDisposed = true;
             }
+            CacheCleanupTimer?.Dispose();
             GC.SuppressFinalize(this);
         }
 
@@ -179,6 +185,35 @@ namespace DidoNet
         }
 
         /// <summary>
+        /// Delete the runner's cache.
+        /// </summary>
+        public void DeleteCache()
+        {
+            Directory.Delete(Configuration.CachePath, true);
+        }
+
+        /// <summary>
+        /// Delete all expired cached files.
+        /// </summary>
+        internal void CleanCache()
+        {
+            if (Configuration.CacheMaxAge <= TimeSpan.Zero)
+            {
+                return;
+            }
+
+            var now = DateTime.UtcNow;
+            foreach (var file in Directory.EnumerateFiles(Path.Combine(Configuration.CachePath, Id), "*", SearchOption.AllDirectories))
+            {
+                var lastWrite = File.GetLastWriteTimeUtc(file);
+                if (now - lastWrite > Configuration.CacheMaxAge)
+                {
+                    File.Delete(file);
+                }
+            }
+        }
+
+        /// <summary>
         /// Initialize and cleanup the local cache folder for the runner.
         /// </summary>
         private void InitCache()
@@ -189,27 +224,19 @@ namespace DidoNet
             }
 
             // ensure the cache folders exist and are accessible
-            var workingDirectory = Directory.GetCurrentDirectory();
             var assemblyDirInfo = Directory.CreateDirectory(Path.Combine(Configuration.CachePath, Id, "assemblies"));
             var fileDirInfo = Directory.CreateDirectory(Path.Combine(Configuration.CachePath, Id, "files"));
-            
+
             // update the configuration to use absolute paths
             Configuration.AssemblyCachePath = assemblyDirInfo.FullName;
             Configuration.FileCachePath = fileDirInfo.FullName;
 
-            // remove any expired assets
-            if (Configuration.CacheMaxAge > TimeSpan.Zero)
-            {
-                var now = DateTime.UtcNow;
-                foreach (var file in Directory.EnumerateFiles(Path.Combine(Configuration.CachePath, Id), "*", SearchOption.AllDirectories))
-                {
-                    var lastWrite = File.GetLastWriteTimeUtc(file);
-                    if (now - lastWrite > Configuration.CacheMaxAge)
-                    {
-                        File.Delete(file);
-                    }
-                }
-            }
+            // start a timer to periodically clean the cache, constrained to a reasonable timespan
+            int cleanupPeriodInSeconds = Math.Max(
+                60 * 60, // no more frequent than once an hour
+                Math.Min(24 * 60 * 60, // at least once a day
+                (int)Configuration.CacheMaxAge.TotalSeconds));
+            CacheCleanupTimer = new Timer((arg) => CleanCache(), null, 0, cleanupPeriodInSeconds * 1000);
         }
 
         /// <summary>

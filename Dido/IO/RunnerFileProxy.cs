@@ -49,9 +49,20 @@ namespace DidoNet.IO
         /// If a connection is not provided, the class instance API will pass-through to the local file-system.
         /// </summary>
         /// <param name="connection"></param>
-        internal RunnerFileProxy(Connection? connection, RunnerConfiguration? configuration = null)
+        /// <param name="configuration"></param>
+        /// <param name="applicationId"></param>
+        internal RunnerFileProxy(Connection? connection, RunnerConfiguration? configuration = null, string? applicationId = null)
         {
             CachePath = configuration?.FileCachePath;
+            if (!string.IsNullOrEmpty(CachePath) && !string.IsNullOrEmpty(applicationId))
+            {
+                CachePath = Path.Combine(CachePath, applicationId);
+            }
+            if (!string.IsNullOrEmpty(CachePath) && !Directory.Exists(CachePath))
+            {
+                Directory.CreateDirectory(CachePath);
+            }
+
             CacheMaxAge = configuration?.CacheMaxAge ?? TimeSpan.Zero;
             AvailableChannels = new SortedSet<ushort>(
                 Enumerable.Range(Constants.AppRunner_FileChannelStart, Constants.AppRunner_MaxFileChannels).Select(i => (ushort)i)
@@ -319,7 +330,7 @@ namespace DidoNet.IO
             {
                 throw new IOException($"Path '{relativePath}' must be a relative (not rooted) path.");
             }
-            if( relativePath.Contains(".."))
+            if (relativePath.Contains(".."))
             {
                 throw new IOException($"Path '{relativePath}' must be a strict relative path, and not contain any parent directory (../) notations.");
             }

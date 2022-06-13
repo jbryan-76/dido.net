@@ -48,7 +48,7 @@ namespace DidoNet.Test
         }
 
         /// <summary>
-        /// Implicitly tests cancelling Dido.RunLocalAsync when used in Debug mode.
+        /// Implicitly tests canceling Dido.RunLocalAsync when used in Debug mode.
         /// </summary>
         [Fact]
         public async void DebugRunLocalWithCancel()
@@ -130,7 +130,7 @@ namespace DidoNet.Test
         }
 
         /// <summary>
-        /// Implicitly tests cancelling Dido.RunLocalAsync when used in Release mode.
+        /// Implicitly tests canceling Dido.RunLocalAsync when used in Release mode.
         /// </summary>
         [Fact]
         public async void ReleaseRunLocalWithCancel()

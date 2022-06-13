@@ -71,6 +71,7 @@ namespace DidoNet.Test.Runner
             Assert.Equal(expectedResult, result);
 
             // cleanup
+            runnerServer.DeleteCache();
             runnerServer.Dispose();
         }
 
@@ -121,6 +122,7 @@ namespace DidoNet.Test.Runner
             reset.WaitOne();
 
             // cleanup
+            runnerServer.DeleteCache();
             runnerServer.Dispose();
         }
 
@@ -164,6 +166,7 @@ namespace DidoNet.Test.Runner
             });
 
             // cleanup
+            runnerServer.DeleteCache();
             runnerServer.Dispose();
         }
 
@@ -202,6 +205,7 @@ namespace DidoNet.Test.Runner
             }
 
             // cleanup
+            runnerServer.DeleteCache();
             runnerServer.Dispose();
         }
 
@@ -247,6 +251,7 @@ namespace DidoNet.Test.Runner
             Assert.Contains(message, ex.InnerException.Message);
 
             // cleanup
+            runnerServer.DeleteCache();
             runnerServer.Dispose();
         }
 
@@ -308,6 +313,7 @@ namespace DidoNet.Test.Runner
             Assert.Equal(expectedResult, result);
 
             // cleanup
+            runnerServer.DeleteCache();
             runnerServer.Dispose();
             mediatorServer.Dispose();
         }
@@ -327,11 +333,11 @@ namespace DidoNet.Test.Runner
             // it uses are not automatically included as packages within the unit test project,
             // and are instead resolved dynamically on demand as needed by the remote runner)
             var context = new AssemblyLoadContext(Guid.NewGuid().ToString(), true);
-            var testLibStream = await TestFixture.Configuration.ResolveLocalAssemblyAsync("Dido.TestLib, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null");
+            var testLibStream = (await TestFixture.Configuration.ResolveLocalAssemblyAsync("Dido.TestLib, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"))!;
             var testLibAssembly = context.LoadFromStream(testLibStream);
             testLibStream.Dispose();
-            var testLibDependencyStream = await TestFixture.Configuration.ResolveLocalAssemblyAsync("Dido.TestLibDependency, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null");
-            var testLibDependencyAssembly = context.LoadFromStream(testLibDependencyStream);
+            var testLibDependencyStream = (await TestFixture.Configuration.ResolveLocalAssemblyAsync("Dido.TestLibDependency, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"))!;
+            _ = context.LoadFromStream(testLibDependencyStream);
             testLibDependencyStream.Dispose();
             var sampleWorkerType = testLibAssembly.GetType("DidoNet.TestLib.SampleWorkerClass");
             var methodInfo = sampleWorkerType!.GetMethod("SimpleMemberMethod")!;
