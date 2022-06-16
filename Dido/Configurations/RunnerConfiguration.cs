@@ -71,6 +71,7 @@
         /// <summary>
         /// The relative or absolute path on the runner's local file-system where proxied application
         /// files and assemblies requested by an executing task are cached.
+        /// If not specified, a suitable default relative to the runner's executing path is used.
         /// </summary>
         public string CachePath { get; set; } = "cache";
 

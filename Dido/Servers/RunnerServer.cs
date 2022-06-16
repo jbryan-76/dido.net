@@ -86,6 +86,7 @@ namespace DidoNet
                 Configuration.MaxTasks = Math.Max(System.Environment.ProcessorCount, 1);
             }
 
+            // override the default runner instance id if a specific one was provided
             if (!string.IsNullOrEmpty(Configuration.Id))
             {
                 Id = Configuration.Id;
@@ -223,9 +224,12 @@ namespace DidoNet
                 return;
             }
 
-            // ensure the cache folders exist and are accessible
-            var assemblyDirInfo = Directory.CreateDirectory(Path.Combine(Configuration.CachePath, Id, "assemblies"));
-            var fileDirInfo = Directory.CreateDirectory(Path.Combine(Configuration.CachePath, Id, "files"));
+            // each runner should have an independent cache folder
+            var runnerSpecificCachePath = Path.Combine(Configuration.CachePath, Id);
+
+            // ensure the specific cache folders exist and are accessible
+            var assemblyDirInfo = Directory.CreateDirectory(Path.Combine(runnerSpecificCachePath, "assemblies"));
+            var fileDirInfo = Directory.CreateDirectory(Path.Combine(runnerSpecificCachePath, "files"));
 
             // update the configuration to use absolute paths
             Configuration.AssemblyCachePath = assemblyDirInfo.FullName;
@@ -276,12 +280,11 @@ namespace DidoNet
                     // create a secure connection to the endpoint
                     var connection = new Connection(client, cert);
 
-                    // TODO: if the connection is reconnecting to an existing runner,
-                    // TODO: find and update the worker
+                    // TODO: if the connection is reconnecting to an existing runner, find and update the worker
 
                     // the mediator uses an optimistic scheduling strategy, which means
                     // it will route traffic to runners based on the conditions known at the 
-                    // time of the decision, which may differ from the runner conditions by
+                    // time of the request, which may differ from the runner conditions by
                     // the time the application connects. 
                     // if this runner is "too busy" because it already has the maximum
                     // number of tasks running and its queue is full, send a "too busy" message

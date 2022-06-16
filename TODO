@@ -1,4 +1,3 @@
-- add caching and version checking for resolved assemblies
 - investigate a way to resolve/retrieve assemblies "in-line"; ie without throwing and restarting a whole task
 - enhance Run() configuration or parameters to support the application creating custom communication channels
   (and corresponding symmetric capability on the execution context)

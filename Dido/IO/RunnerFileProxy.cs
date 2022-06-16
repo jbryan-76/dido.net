@@ -54,10 +54,15 @@ namespace DidoNet.IO
         internal RunnerFileProxy(Connection? connection, RunnerConfiguration? configuration = null, string? applicationId = null)
         {
             CachePath = configuration?.FileCachePath;
+            
+            // update the cache path where necessary to ensure each application has its own
+            // folder to help prevent filename collisions
             if (!string.IsNullOrEmpty(CachePath) && !string.IsNullOrEmpty(applicationId))
             {
                 CachePath = Path.Combine(CachePath, applicationId);
             }
+            
+            // ensure the cache folder exists, if necessary
             if (!string.IsNullOrEmpty(CachePath) && !Directory.Exists(CachePath))
             {
                 Directory.CreateDirectory(CachePath);

@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Reflection;
 using System.Runtime.Loader;
 
@@ -48,9 +49,8 @@ namespace DidoNet
         /// </summary>
         private ConcurrentDictionary<string, Assembly> LoadedAssemblies { get; set; } = new ConcurrentDictionary<string, Assembly>();
 
-        // TODO: cache previously fetched assemblies to disk to avoid a network round trip
         /// <summary>
-        /// 
+        /// The local file-system path used to cache application assemblies used by the runner.
         /// </summary>
         public string? AssemblyCachePath { get; set; }
 
@@ -115,10 +115,26 @@ namespace DidoNet
                 return null;
             }
 
-            // TODO: next try the AssemblyCachePath
-            if (!string.IsNullOrEmpty(AssemblyCachePath))
+            var asmName = new AssemblyName(assemblyName);
+            var asmCachedFilename = $"{asmName.Name}.{asmName.Version}.{OSConfiguration.AssemblyExtension}";
+            var asmCachedPath = !string.IsNullOrEmpty(AssemblyCachePath)
+                ? Path.Combine(AssemblyCachePath, asmCachedFilename)
+                : null;
+
+            // next try the disk cache
+            if (File.Exists(asmCachedPath))
             {
-                var asmName = new AssemblyName(assemblyName);
+                // TODO: stronger confirmation the assembly matches?
+                var info = FileVersionInfo.GetVersionInfo(asmCachedPath);
+                if (info.FileVersion == asmName.Version?.ToString())
+                {
+                    using (var fs = File.Open(asmCachedPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+                    {
+                        asm = AssemblyContext.LoadFromStream(fs);
+                        LoadedAssemblies.TryAdd(assemblyName, asm);
+                        return asm;
+                    }
+                }
             }
 
             // finally try the remote resolver
@@ -131,14 +147,24 @@ namespace DidoNet
             {
                 return null;
             }
+
+            // cache the assembly to disk
+            if (!string.IsNullOrEmpty(asmCachedPath))
+            {
+                // after copying the assembly stream to disk, dispose it and 
+                // use the file stream instead (since the assembly stream may
+                // not be seekable)
+                var asmCachedFile = File.Create(asmCachedPath);
+                stream.CopyTo(asmCachedFile);
+                stream.Dispose();
+                asmCachedFile.Seek(0, SeekOrigin.Begin);
+                stream = asmCachedFile;
+            }
+
+            // load the assembly
             asm = AssemblyContext.LoadFromStream(stream);
             LoadedAssemblies.TryAdd(assemblyName, asm);
             stream.Dispose();
-
-            // TODO: cache the assembly to disk
-            if (!string.IsNullOrEmpty(AssemblyCachePath))
-            {
-            }
 
             return asm;
         }
