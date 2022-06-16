@@ -19,9 +19,16 @@
         {
             get
             {
-                return string.IsNullOrEmpty(ExceptionType) 
-                    ? null 
-                    : Activator.CreateInstance(Type.GetType(ExceptionType)!, ExceptionMessage) as Exception;
+                try
+                {
+                    return string.IsNullOrEmpty(ExceptionType)
+                        ? null
+                        : Activator.CreateInstance(Type.GetType(ExceptionType)!, ExceptionMessage) as Exception;
+                }
+                catch (Exception)
+                {
+                    return new InvalidOperationException($"Could not create exception of type '{ExceptionType}' with error message {ExceptionMessage}.");
+                }
             }
         }
 

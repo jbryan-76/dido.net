@@ -25,6 +25,15 @@ namespace DidoNet
         public RunnerConfiguration Configuration { get; private set; }
 
         /// <summary>
+        /// The runner server instance's specific cache path. Each server instance needs a unique cache path
+        /// to prevent file collisions.
+        /// </summary>
+        private string RunnerSpecificCachePath
+        {
+            get { return Path.Combine(Configuration.CachePath, Id); }
+        }
+
+        /// <summary>
         /// Indicates whether the runner has started and is running.
         /// </summary>
         private long IsRunning = 0;
@@ -182,6 +191,12 @@ namespace DidoNet
             WorkLoopThread?.Join();
             WorkLoopThread = null;
 
+            if (Configuration.DeleteCacheAtShutdown)
+            {
+                Logger.Info($"Deleting runner cache {Id}...");
+                DeleteCache();
+            }
+
             Logger.Info($"  Runner {Id} stopped");
         }
 
@@ -190,7 +205,7 @@ namespace DidoNet
         /// </summary>
         public void DeleteCache()
         {
-            Directory.Delete(Configuration.CachePath, true);
+            Directory.Delete(RunnerSpecificCachePath, true);
         }
 
         /// <summary>
@@ -204,7 +219,7 @@ namespace DidoNet
             }
 
             var now = DateTime.UtcNow;
-            foreach (var file in Directory.EnumerateFiles(Path.Combine(Configuration.CachePath, Id), "*", SearchOption.AllDirectories))
+            foreach (var file in Directory.EnumerateFiles(RunnerSpecificCachePath, "*", SearchOption.AllDirectories))
             {
                 var lastWrite = File.GetLastWriteTimeUtc(file);
                 if (now - lastWrite > Configuration.CacheMaxAge)
@@ -224,12 +239,9 @@ namespace DidoNet
                 return;
             }
 
-            // each runner should have an independent cache folder
-            var runnerSpecificCachePath = Path.Combine(Configuration.CachePath, Id);
-
             // ensure the specific cache folders exist and are accessible
-            var assemblyDirInfo = Directory.CreateDirectory(Path.Combine(runnerSpecificCachePath, "assemblies"));
-            var fileDirInfo = Directory.CreateDirectory(Path.Combine(runnerSpecificCachePath, "files"));
+            var assemblyDirInfo = Directory.CreateDirectory(Path.Combine(RunnerSpecificCachePath, "assemblies"));
+            var fileDirInfo = Directory.CreateDirectory(Path.Combine(RunnerSpecificCachePath, "files"));
 
             // update the configuration to use absolute paths
             Configuration.AssemblyCachePath = assemblyDirInfo.FullName;

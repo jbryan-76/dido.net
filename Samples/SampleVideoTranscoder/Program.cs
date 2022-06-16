@@ -5,7 +5,9 @@ class Program
     static void PrintUse()
     {
         var appName = Path.GetFileNameWithoutExtension(Process.GetCurrentProcess().MainModule.FileName);
-        Console.WriteLine($"Use: {appName} runner_host source_file destination_file");
+        Console.WriteLine($"Transcodes a source video file to a destination video file.");
+        Console.WriteLine($"Use: {appName} runner_host source_video_file destination_video_file");
+        Console.WriteLine($"NOTE: A Dido.Runner must be running at the indicated host with the sample dido-localhost certificate.");
     }
 
     static void CheckForFfmpeg()
@@ -39,7 +41,7 @@ class Program
             RunnerUri = new UriBuilder(args[0]).Uri
         };
 
-        Console.WriteLine($"Starting remote execution of a sample task on {conf.RunnerUri}...");
+        Console.WriteLine($"Starting remote execution of a sample transcoding task on {conf.RunnerUri}...");
 
         var task = await DidoNet.Dido.RunAsync((context) => Transcoder.Transcode(context, args[1], args[2]), conf);
         var duration = await task;

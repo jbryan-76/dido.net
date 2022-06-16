@@ -72,6 +72,9 @@
         /// The relative or absolute path on the runner's local file-system where proxied application
         /// files and assemblies requested by an executing task are cached.
         /// If not specified, a suitable default relative to the runner's executing path is used.
+        /// <para/>NOTE: Cached files for the runner will be stored in a subdirectory of the CachePath
+        /// named for the configured unique Id of the runner server instance. This is done to eliminate potential
+        /// collisions if multiple runner server instances are using the same root cache.
         /// </summary>
         public string CachePath { get; set; } = "cache";
 
@@ -80,6 +83,12 @@
         /// A timespan less than or equal to zero indicates cached files never expire.
         /// </summary>
         public TimeSpan CacheMaxAge { get; set; } = TimeSpan.Zero;
+
+        /// <summary>
+        /// Indicates whether the runner's specific cached files will be deleted when the runner server stops.
+        /// Default value is false.
+        /// </summary>
+        public bool DeleteCacheAtShutdown { get; set; } = false;
 
         /// <summary>
         /// A local file-system path used to cache application assemblies used by the runner.
