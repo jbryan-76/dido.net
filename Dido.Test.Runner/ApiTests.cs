@@ -105,6 +105,7 @@ namespace DidoNet.Test.Runner
                     MaxTries = 1,
                     RunnerUri = new Uri($"https://localhost:{port}"),
                     ExecutionMode = ExecutionModes.Remote,
+                    AssemblyCaching = AssemblyCachingPolicies.Always,
                     // use the unit test assembly resolver instead of the default implementation
                     ResolveLocalAssemblyAsync = (assemblyName) => TestFixture.AssemblyResolver.ResolveAssembly(TestFixture.Environment, assemblyName),
                     // bypass server cert validation since unit tests are using a base-64 self-signed cert
@@ -137,6 +138,7 @@ namespace DidoNet.Test.Runner
                     MaxTries = 1,
                     RunnerUri = new Uri($"https://localhost:{port}"),
                     ExecutionMode = ExecutionModes.Remote,
+                    AssemblyCaching = AssemblyCachingPolicies.Always,
                     // use an intentionally broken resolver:
                     // if the runner properly resolves assemblies using the cache, this delegate should never be invoked
                     ResolveLocalAssemblyAsync = (assemblyName) => throw new NotImplementedException(),

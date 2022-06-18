@@ -15,14 +15,12 @@ namespace DidoNet
 
         public void Read(Stream stream)
         {
-            int length = stream.ReadInt32BE();
-            Bytes = stream.ReadBytes(length);
+            Bytes = stream.ReadByteArray();
         }
 
         public void Write(Stream stream)
         {
-            stream.WriteInt32BE(Bytes?.Length ?? 0);
-            stream.Write(Bytes);
+            stream.WriteByteArray(Bytes);
         }
     }
 }

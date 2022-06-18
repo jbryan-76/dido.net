@@ -177,6 +177,17 @@ namespace DidoNet
         }
 
         /// <summary>
+        /// Read a byte array from a stream.
+        /// </summary>
+        /// <param name="stream"></param>
+        /// <param name="data"></param>
+        public static byte[] ReadByteArray(this Stream stream)
+        {
+            int length = stream.ReadInt32BE();
+            return length > 0 ? stream.ReadBytes(length) : new byte[0];
+        }
+
+        /// <summary>
         /// Read an array from a stream using the provided reader function.
         /// </summary>
         /// <param name="stream"></param>

@@ -39,16 +39,14 @@ namespace DidoNet.IO
         {
             base.Read(stream);
             Append = stream.ReadBoolean();
-            int length = stream.ReadInt32BE();
-            Bytes = stream.ReadBytes(length);
+            Bytes = stream.ReadByteArray();
         }
 
         public override void Write(Stream stream)
         {
             base.Write(stream);
             stream.WriteBoolean(Append);
-            stream.WriteInt32BE(Bytes?.Length ?? 0);
-            stream.Write(Bytes);
+            stream.WriteByteArray(Bytes);
         }
     }
 }

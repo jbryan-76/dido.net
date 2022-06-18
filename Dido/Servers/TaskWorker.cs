@@ -204,12 +204,20 @@ namespace DidoNet
                 Cancel = CancelSource.Token
             };
 
+            // update the assembly cache path where necessary to ensure each application has its own
+            // folder to help prevent collisions
+            var assemblyCachePath = Configuration.AssemblyCachePath;
+            if (!string.IsNullOrEmpty(assemblyCachePath) && !string.IsNullOrEmpty(request.ApplicationId))
+            {
+                assemblyCachePath = Path.Combine(assemblyCachePath, request.ApplicationId);
+            }
+
             // create the runtime environment
             using (var environment = new Environment
             {
                 ExecutionContext = context,
                 ResolveRemoteAssemblyAsync = new DefaultRemoteAssemblyResolver(AssembliesChannel).ResolveAssembly,
-                AssemblyCachePath = Configuration.AssemblyCachePath
+                AssemblyCachePath = assemblyCachePath
             })
 
             // decode and execute the requested expression

@@ -43,19 +43,14 @@ namespace DidoNet.IO
         {
             base.Read(stream);
             LastWriteTimeUtc = new DateTime(stream.ReadInt64BE(), DateTimeKind.Utc);
-            int length = stream.ReadInt32BE();
-            Hash = stream.ReadBytes(length);
+            Hash = stream.ReadByteArray();
         }
 
         public override void Write(Stream stream)
         {
             base.Write(stream);
             stream.WriteInt64BE(LastWriteTimeUtc.Ticks);
-            stream.WriteInt32BE(Hash.Length);
-            if (Hash.Length > 0)
-            {
-                stream.Write(Hash);
-            }
+            stream.WriteByteArray(Hash);
         }
     }
 }

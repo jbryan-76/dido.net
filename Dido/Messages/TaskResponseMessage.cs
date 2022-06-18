@@ -78,17 +78,12 @@ namespace DidoNet
 
         public void Read(Stream stream)
         {
-            ThreadHelpers.Debug($"starting to read response message");
-            int length = stream.ReadInt32BE();
-            ThreadHelpers.Debug($"response is {length} bytes");
-            Bytes = stream.ReadBytes(length);
-            ThreadHelpers.Debug($"got response");
+            Bytes = stream.ReadByteArray();
         }
 
         public void Write(Stream stream)
         {
-            stream.WriteInt32BE(Bytes.Length);
-            stream.Write(Bytes);
+            stream.WriteByteArray(Bytes);
         }
     }
 }

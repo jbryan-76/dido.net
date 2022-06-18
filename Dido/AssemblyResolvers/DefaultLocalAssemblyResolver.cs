@@ -2,6 +2,7 @@
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Runtime.Loader;
 using System.Threading.Tasks;
 
 namespace DidoNet
@@ -20,12 +21,20 @@ namespace DidoNet
         /// <returns></returns>
         public Task<Stream?> ResolveAssembly(string assemblyName)
         {
+            // check if the assembly is already loaded into the default context
+            // (this will be common for standard .NET assemblies, e.g. System)
+            var asm = AssemblyLoadContext.Default.Assemblies.FirstOrDefault(asm => asm.FullName == assemblyName);
+            if (asm != null && !string.IsNullOrEmpty(asm.Location))
+            {
+                Console.WriteLine($"Found {asm.Location}");
+                return Task.FromResult<Stream?>(File.Open(asm.Location, FileMode.Open, FileAccess.Read, FileShare.Read));
+            }
+
+            // next check if the assembly is in the application base directory
             // TODO: recursive?
-            // enumerate all the assembly files in the application directory
             var files = Directory
                 .EnumerateFiles(AppContext.BaseDirectory, $"*.{OSConfiguration.AssemblyExtension}")
                 .ToList();
-
             foreach (var file in files.ToArray())
             {
                 try

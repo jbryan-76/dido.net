@@ -182,6 +182,21 @@ namespace DidoNet
         }
 
         /// <summary>
+        /// Write the provided byte array to a stream.
+        /// </summary>
+        /// <param name="stream"></param>
+        /// <param name="data"></param>
+        public static void WriteByteArray(this Stream stream, byte[]? data)
+        {
+            int length = data?.Length ?? 0;
+            stream.WriteInt32BE(length);
+            if (length > 0)
+            {
+                WriteBytes(stream, data!);
+            }
+        }
+
+        /// <summary>
         /// Write the provided array to a stream using the provided writer action.
         /// </summary>
         /// <typeparam name="T"></typeparam>

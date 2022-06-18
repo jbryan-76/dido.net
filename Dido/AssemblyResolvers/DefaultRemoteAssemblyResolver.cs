@@ -32,6 +32,8 @@ namespace DidoNet
                     return Task.FromResult<Stream?>(new MemoryStream(response.Bytes));
 
                 case AssemblyErrorMessage error:
+                    return Task.FromResult<Stream?>(null);
+
                 default:
                     return Task.FromResult<Stream?>(null);
             }
