@@ -1,4 +1,8 @@
-﻿using System.Text;
+﻿using System;
+using System.IO;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace DidoNet
 {
@@ -219,11 +223,11 @@ namespace DidoNet
         public static async Task<byte?> TryReadByteAsync(this Stream stream, CancellationToken cancellationToken = default(CancellationToken))
         {
             var bytes = await stream.TryReadBytesAsync(1, cancellationToken);
-            return bytes == null ? null : bytes[0];
+            return bytes == null ? (byte?)null : bytes[0];
         }
 
         /// <summary>
-        /// Try to read a ushort value from a stream in network-byte-order (ie Big Endian).
+        /// Try to read a ushort value from a stream in network-byte-order (i.e. Big Endian).
         /// <para/>Note the stream must support Position and Length properties,
         /// and data is only read if enough bytes are available.
         /// </summary>
@@ -244,7 +248,7 @@ namespace DidoNet
         }
 
         /// <summary>
-        /// Try to read an int value from a stream in network-byte-order (ie Big Endian).
+        /// Try to read an int value from a stream in network-byte-order (i.e. Big Endian).
         /// <para/>Note the stream must support Position and Length properties,
         /// and data is only read if enough bytes are available.
         /// </summary>

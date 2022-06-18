@@ -1,5 +1,8 @@
-﻿using System.Collections.Concurrent;
+﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
+using System.IO;
+using System.Linq;
 
 namespace DidoNet.IO
 {

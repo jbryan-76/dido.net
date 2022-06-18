@@ -1,4 +1,6 @@
-﻿namespace DidoNet.IO
+﻿using System;
+
+namespace DidoNet.IO
 {
     internal class FileStartCacheMessage : FileTransferMessageBase
     {

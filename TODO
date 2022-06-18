@@ -1,4 +1,6 @@
-- investigate a way to resolve/retrieve assemblies "in-line"; ie without throwing and restarting a whole task
+- refactor servers into separate project
+- refactor communications into separate project
+- confirm runner is backwards compatible and can handle "old" assemblies
 - enhance Run() configuration or parameters to support the application creating custom communication channels
   (and corresponding symmetric capability on the execution context)
 - add progress support to execution context

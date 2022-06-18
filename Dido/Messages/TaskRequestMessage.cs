@@ -1,4 +1,7 @@
-﻿namespace DidoNet
+﻿using System.IO;
+using System.Threading;
+
+namespace DidoNet
 {
     internal class TaskRequestMessage : IMessage
     {

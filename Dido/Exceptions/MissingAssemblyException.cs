@@ -1,4 +1,6 @@
-﻿namespace DidoNet
+﻿using System;
+
+namespace DidoNet
 {
     /// <summary>
     /// Represents errors that occur when an attempt is made to load or resolve an assembly.

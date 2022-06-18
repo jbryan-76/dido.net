@@ -1,4 +1,8 @@
-﻿using System.Text;
+﻿using System;
+using System.IO;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace DidoNet
 {
@@ -15,7 +19,7 @@ namespace DidoNet
             {
                 return stream.WriteAsync(bytes, cancellationToken);
             }
-            return ValueTask.CompletedTask;
+            return new ValueTask(Task.CompletedTask);
         }
 
         /// <summary>

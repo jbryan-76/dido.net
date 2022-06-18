@@ -1,4 +1,5 @@
 ﻿using DidoNet.IO;
+using System.Threading;
 
 namespace DidoNet
 {

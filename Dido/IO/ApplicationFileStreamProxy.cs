@@ -1,4 +1,7 @@
-﻿namespace DidoNet.IO
+﻿using System;
+using System.IO;
+
+namespace DidoNet.IO
 {
     /// <summary>
     /// Encapsulates a file on the application's local file-system that is being accessed by a remotely

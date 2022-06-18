@@ -1,4 +1,6 @@
 ﻿using Newtonsoft.Json.Serialization;
+using System;
+using System.IO;
 using System.Reflection;
 
 namespace DidoNet
@@ -29,7 +31,10 @@ namespace DidoNet
         /// <returns></returns>
         public Type BindToType(string? assemblyName, string typeName)
         {
-            ArgumentNullException.ThrowIfNull(assemblyName, nameof(assemblyName));
+            if( string.IsNullOrEmpty(assemblyName) )
+            {
+                throw new ArgumentNullException(nameof(assemblyName));
+            }
             if (!Environment.TryGetLoadedAssembly(assemblyName, out var asm))
             {
                 throw new FileNotFoundException($"Could not resolve assembly '{assemblyName}' from current Environment.", assemblyName);

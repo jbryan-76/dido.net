@@ -1,4 +1,7 @@
-﻿namespace DidoNet
+﻿using System;
+using System.IO;
+
+namespace DidoNet
 {
     internal class AssemblyErrorMessage : IMessage
     {

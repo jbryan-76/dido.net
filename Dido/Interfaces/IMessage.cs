@@ -1,4 +1,6 @@
-﻿namespace DidoNet
+﻿using System.IO;
+
+namespace DidoNet
 {
     public interface IMessage
     {

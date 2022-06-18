@@ -1,4 +1,6 @@
-﻿namespace DidoNet
+﻿using System;
+
+namespace DidoNet
 {
     /// <summary>
     /// Represents errors that occur when two or more threads or contexts concurrently attempted 

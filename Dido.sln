@@ -36,7 +36,9 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Samples", "Samples", "{2AAA
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SampleVideoTranscoder", "Samples\SampleVideoTranscoder\SampleVideoTranscoder.csproj", "{C231DCDC-A2CF-44A6-B0CE-30C4702E0246}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SampleFileCompressor", "Samples\SampleFileCompressor\SampleFileCompressor.csproj", "{F9E1AD4F-2F77-4ED7-8C71-177C1FFB3104}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SampleFileCompressor", "Samples\SampleFileCompressor\SampleFileCompressor.csproj", "{F9E1AD4F-2F77-4ED7-8C71-177C1FFB3104}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SampleAppCore3.1", "Samples\SampleAppCore3.1\SampleAppCore3.1.csproj", "{F37DD8F4-669E-4D26-AE99-1D70C71DF04A}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -92,6 +94,10 @@ Global
 		{F9E1AD4F-2F77-4ED7-8C71-177C1FFB3104}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F9E1AD4F-2F77-4ED7-8C71-177C1FFB3104}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F9E1AD4F-2F77-4ED7-8C71-177C1FFB3104}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F37DD8F4-669E-4D26-AE99-1D70C71DF04A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F37DD8F4-669E-4D26-AE99-1D70C71DF04A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F37DD8F4-669E-4D26-AE99-1D70C71DF04A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F37DD8F4-669E-4D26-AE99-1D70C71DF04A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -100,6 +106,7 @@ Global
 		{DA3FAF0C-2339-45EB-9C38-01A294C44668} = {2AAA8A9A-09B0-4F9D-BC82-A3BD405B4372}
 		{C231DCDC-A2CF-44A6-B0CE-30C4702E0246} = {2AAA8A9A-09B0-4F9D-BC82-A3BD405B4372}
 		{F9E1AD4F-2F77-4ED7-8C71-177C1FFB3104} = {2AAA8A9A-09B0-4F9D-BC82-A3BD405B4372}
+		{F37DD8F4-669E-4D26-AE99-1D70C71DF04A} = {2AAA8A9A-09B0-4F9D-BC82-A3BD405B4372}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {AF57816A-4845-4060-B3FA-80F1D55C0588}

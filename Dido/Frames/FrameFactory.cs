@@ -1,4 +1,6 @@
-﻿namespace DidoNet
+﻿using System;
+
+namespace DidoNet
 {
     public static class FrameFactory
     {

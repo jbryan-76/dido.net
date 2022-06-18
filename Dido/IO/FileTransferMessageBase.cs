@@ -1,4 +1,7 @@
-﻿namespace DidoNet.IO
+﻿using System;
+using System.IO;
+
+namespace DidoNet.IO
 {
     internal class FileTransferMessageBase : FileMessageBase
     {

@@ -1,7 +1,9 @@
-﻿namespace DidoNet
+﻿using System;
+
+namespace DidoNet
 {
     /// <summary>
-    /// Represents errors that occur in a misconfigured or invalid configuration object.
+    /// Represents errors that occur in a mis-configured or invalid configuration object.
     /// </summary>
     public class InvalidConfigurationException : Exception
     {

@@ -1,4 +1,6 @@
-﻿namespace DidoNet
+﻿using System.IO;
+
+namespace DidoNet
 {
     internal class RunnerResponseMessage : IMessage
     {

@@ -1,4 +1,7 @@
-﻿namespace DidoNet
+﻿using System.IO;
+using System.Threading.Tasks;
+
+namespace DidoNet
 {
     public class DefaultRemoteAssemblyResolver
     {

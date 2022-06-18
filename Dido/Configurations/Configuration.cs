@@ -1,4 +1,9 @@
-﻿namespace DidoNet
+﻿using System;
+using System.IO;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace DidoNet
 {
     /// <summary>
     /// Configures the execution of a task.

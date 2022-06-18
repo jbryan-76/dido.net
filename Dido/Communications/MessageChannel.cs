@@ -1,4 +1,7 @@
-﻿namespace DidoNet
+﻿using System;
+using System.Threading.Tasks;
+
+namespace DidoNet
 {
     // TODO: create an interface for client/server communication that uses messages and allow apps to provide their own implementation?
 
@@ -40,7 +43,7 @@
             set
             {
                 MessageReceived = value;
-                Channel.OnDataAvailable = MessageReceived == null ? null : (channel) => DataReceived();
+                Channel.OnDataAvailable = MessageReceived == null ? (Channel.ChannelDataAvailableHandler?)null : (channel) => DataReceived();
             }
         }
 

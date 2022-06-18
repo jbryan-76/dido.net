@@ -1,4 +1,7 @@
-﻿namespace DidoNet.IO
+﻿using System;
+using System.IO;
+
+namespace DidoNet.IO
 {
     /// <summary>
     /// Provides a virtualized file stream that marshals IO requests over a connection to 

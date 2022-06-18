@@ -1,4 +1,6 @@
-﻿namespace DidoNet
+﻿using System;
+
+namespace DidoNet
 {
     /// <summary>
     /// Represents errors that occur in a data model where one or more fields or properties cannot be serialized.

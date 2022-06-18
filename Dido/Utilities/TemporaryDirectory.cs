@@ -1,4 +1,7 @@
-﻿namespace Dido.Utilities
+﻿using System;
+using System.IO;
+
+namespace Dido.Utilities
 {
     /// <summary>
     /// Manages a unique, temporary directory as a disposable resource.

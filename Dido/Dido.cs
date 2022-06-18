@@ -1,7 +1,11 @@
 ﻿using DidoNet.IO;
 using NLog;
+using System;
+using System.IO;
 using System.Linq.Expressions;
 using System.Runtime.Loader;
+using System.Threading;
+using System.Threading.Tasks;
 
 // generate self-signed certs automatically:
 // https://stackoverflow.com/questions/695802/using-ssl-and-sslstream-for-peer-to-peer-authentication
@@ -513,7 +517,7 @@ namespace DidoNet
                     // run the expression with the optional configured timeout and return its result
                     var result = await Task
                         .Run(() => func.Invoke(context))
-                        .WaitAsync(TimeSpan.FromMilliseconds(configuration.TimeoutInMs));
+                        .TimeoutAfter(TimeSpan.FromMilliseconds(configuration.TimeoutInMs));
                     cancellationToken.ThrowIfCancellationRequested();
                     return result;
                 }
@@ -561,7 +565,7 @@ namespace DidoNet
             // run the expression with the optional configured timeout and return its result
             var result = await Task
                 .Run(() => func.Invoke(context))
-                .WaitAsync(TimeSpan.FromMilliseconds(configuration.TimeoutInMs));
+                .TimeoutAfter(TimeSpan.FromMilliseconds(configuration.TimeoutInMs));
             cancellationToken.ThrowIfCancellationRequested();
             return result;
         }

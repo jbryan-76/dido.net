@@ -1,4 +1,7 @@
-﻿namespace DidoNet
+﻿using System;
+using System.Linq;
+
+namespace DidoNet
 {
     public class HeartbeatFrame : Frame
     {

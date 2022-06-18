@@ -1,4 +1,5 @@
-﻿using System.Linq.Expressions;
+﻿using System;
+using System.Linq.Expressions;
 using System.Reflection;
 
 namespace DidoNet
@@ -16,7 +17,7 @@ namespace DidoNet
         /// <exception cref="NotImplementedException"></exception>
         public static bool GetConstantValue(this MemberExpression exp, out Type? type, out object? value)
         {
-            if (exp.Expression is not ConstantExpression)
+            if (!(exp.Expression is ConstantExpression))
             {
                 type = null;
                 value = null;

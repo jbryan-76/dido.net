@@ -1,10 +1,15 @@
 ﻿using NLog;
+using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
+using System.Threading;
 
 namespace DidoNet
 {
@@ -242,9 +247,9 @@ namespace DidoNet
                 EndPoint.GetStream(),
                 false,
                 settings.ValidaionPolicy == ServerCertificateValidationPolicies._SKIP_
-                    ? BypassRemoteServerCertificateValidation
+                    ? (RemoteCertificateValidationCallback)BypassRemoteServerCertificateValidation
                     : settings.ValidaionPolicy == ServerCertificateValidationPolicies.RootCA
-                    ? ValidateRemoteServerCertificate
+                    ? (RemoteCertificateValidationCallback)ValidateRemoteServerCertificate
                     : (sender, certificate, chain, sslPolicyErrors) =>
                         ValidateRemoteServerCertificateThumbprint(sender, certificate, chain, sslPolicyErrors, settings.Thumbprint),
                 null
@@ -807,7 +812,10 @@ namespace DidoNet
         {
             Logger.Info("Validating remote certificate using thumb-print");
 
-            ArgumentNullException.ThrowIfNull(certificate, nameof(certificate));
+            if (certificate == null)
+            {
+                throw new ArgumentNullException(nameof(certificate));
+            }
 
             var cert2 = new X509Certificate2(certificate);
 

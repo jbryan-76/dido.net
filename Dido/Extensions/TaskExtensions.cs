@@ -1,4 +1,8 @@
-﻿namespace DidoNet
+﻿using System;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace DidoNet
 {
     public static class TaskExtensions
     {

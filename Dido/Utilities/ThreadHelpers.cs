@@ -1,4 +1,7 @@
-﻿namespace DidoNet
+﻿using System;
+using System.Threading;
+
+namespace DidoNet
 {
     internal class ThreadHelpers
     {

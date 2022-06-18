@@ -1,5 +1,10 @@
-﻿using System.Collections.Concurrent;
+﻿using System;
+using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using System.Text;
+using System.Threading.Tasks;
 
 namespace DidoNet.IO
 {
@@ -556,18 +561,6 @@ namespace DidoNet.IO
             {
                 return File.Open(path, mode, access, share);
             }
-        }
-
-        /// <summary>
-        /// Opens a file stream on the specified path and with the specified options.
-        /// <para/>NOTE: Only options Mode, Access, and Share are honored.
-        /// </summary>
-        /// <param name="path"></param>
-        /// <param name="options"></param>
-        /// <returns></returns>
-        public Stream Open(string path, FileStreamOptions options)
-        {
-            return Open(path, options.Mode, options.Access, options.Share);
         }
 
         /// <summary>

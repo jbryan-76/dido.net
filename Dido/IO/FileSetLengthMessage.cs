@@ -1,4 +1,6 @@
-﻿namespace DidoNet.IO
+﻿using System.IO;
+
+namespace DidoNet.IO
 {
     internal class FileSetLengthMessage : FileMessageBase
     {
