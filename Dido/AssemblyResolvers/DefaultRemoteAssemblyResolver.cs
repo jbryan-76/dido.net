@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using NLog;
+using System.IO;
 using System.Threading.Tasks;
 
 namespace DidoNet
@@ -6,6 +7,8 @@ namespace DidoNet
     public class DefaultRemoteAssemblyResolver
     {
         private MessageChannel Channel { get; set; }
+
+        private static ILogger Logger = LogManager.GetCurrentClassLogger();
 
         public DefaultRemoteAssemblyResolver(MessageChannel channel)
         {
@@ -23,6 +26,8 @@ namespace DidoNet
             // receive the response
             var message = Channel.ReceiveMessage();
 
+            Logger.Trace($"Received message: {message.GetType()}");
+
             switch (message)
             {
                 case AssemblyResponseMessage response:
@@ -32,6 +37,7 @@ namespace DidoNet
                     return Task.FromResult<Stream?>(new MemoryStream(response.Bytes));
 
                 case AssemblyErrorMessage error:
+                    Logger.Error(error.Error);
                     return Task.FromResult<Stream?>(null);
 
                 default:

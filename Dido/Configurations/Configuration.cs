@@ -41,9 +41,9 @@ namespace DidoNet
 
         /// <summary>
         /// The default mode that will be used for executing tasks when using Run() or RunAsync().
+        /// <para/>NOTE: if neither MediatorUri nor RunnerUri are defined, the execution mode will default to Local.
         /// </summary>
-        public ExecutionModes ExecutionMode { get; set; }
-            = ExecutionModes.Local;
+        public ExecutionModes ExecutionMode { get; set; } = ExecutionModes.Remote;
 
         /// <summary>
         /// The uri for the mediator service used to select the best available specific runner service
@@ -98,6 +98,16 @@ namespace DidoNet
 
         // TODO: provide an api to create custom MessageChannels so the application can optionally support interprocess communication
         //public MessageChannel MessageChannel { get; internal set; }
+
+        /// <summary>
+        /// The assembly caching policy the runner should use while executing a task.
+        /// </summary>
+        public AssemblyCachingPolicies AssemblyCaching { get; set; } = AssemblyCachingPolicies.Auto;
+
+        /// <summary>
+        /// The optional encryption key to use when caching assemblies on a remote runner.
+        /// </summary>
+        public string CachedAssemblyEncryptionKey { get; set; } = string.Empty;
 
         /// <summary>
         /// A local file-system path used in debug mode to cache proxied files requested by a remotely executing task.

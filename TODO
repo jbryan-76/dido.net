@@ -1,3 +1,5 @@
+- configure assembly caching from application (to make dev easier)
+- configure assembly encryption from application
 - refactor servers into separate project
 - refactor communications into separate project
 - confirm runner is backwards compatible and can handle "old" assemblies

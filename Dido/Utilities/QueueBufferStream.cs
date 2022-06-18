@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 
-namespace DidoNet
+namespace Dido.Utilities
 {
     /// <summary>
     /// A variable-length, thread-safe FIFO buffer that acts like a byte queue with Stream semantics:

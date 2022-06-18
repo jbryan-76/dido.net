@@ -1,5 +1,8 @@
-﻿using System;
+﻿using Dido.Utilities;
+using NLog;
+using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -53,10 +56,19 @@ namespace DidoNet
         /// </summary>
         private ConcurrentDictionary<string, Assembly> LoadedAssemblies { get; set; } = new ConcurrentDictionary<string, Assembly>();
 
+        private HashSet<string> RequestedSystemAssemblies { get; set; } = new HashSet<string>();
+
         /// <summary>
         /// The local file-system path used to cache application assemblies used by the runner.
         /// </summary>
         public string? AssemblyCachePath { get; set; }
+
+        /// <summary>
+        /// The optional encryption key to use when caching assemblies used by the runner.
+        /// </summary>
+        public string? CachedAssemblyEncryptionKey { get; set; }
+
+        private static ILogger Logger = LogManager.GetCurrentClassLogger();
 
         /// <summary>
         /// Initializes a new instance of the Environment class.
@@ -104,28 +116,57 @@ namespace DidoNet
         /// <exception cref="InvalidOperationException"></exception>
         internal Assembly? ResolveAssembly(string assemblyName)
         {
-            // check if the assembly is already loaded into the default context
+            Logger.Trace($"ResolveAssembly: finding {assemblyName}:");
+
+            var asmName = new AssemblyName(assemblyName);
+            Assembly? asm;
+
+            // first try the in-memory cache of loaded assemblies
+            Logger.Trace($"ResolveAssembly: Checking memory cache...");
+            if (LoadedAssemblies.TryGetValue(assemblyName, out asm) && asm != null)
+            {
+                Logger.Trace($"ResolveAssembly:  FOUND! {asm}");
+                return asm;
+            }
+
+            // special handling for CoreLib which can't be "overloaded" and which should be backwards compatible
+            // with any older application code
+            if (asmName.Name == "System.Private.CoreLib")
+            //if (asmName.Name!.StartsWith("System.Private"))
+            {
+                //if (!RequestedSystemAssemblies.Contains(assemblyName))
+                //{
+                //    // if this is the first time the assembly was requested, 
+                //    // allow it to go through normal 
+                //}
+                Logger.Trace($"finding system library: {asmName}");
+                asm = AssemblyLoadContext.Default.Assemblies.FirstOrDefault(asm => asm.GetName().Name == asmName.Name);
+                if (asm != null)
+                {
+                    Logger.Trace($"ResolveAssembly:  FOUND! {asm}");
+                    LoadedAssemblies.TryAdd(assemblyName, asm);
+                    return asm;
+                }
+            }
+
+            // next check if the assembly is already loaded into the default context
             // (this will be common for standard .NET assemblies, e.g. System)
-            var asm = AssemblyLoadContext.Default.Assemblies.FirstOrDefault(asm => asm.FullName == assemblyName);
+            Logger.Trace($"ResolveAssembly: Checking default context...");
+            asm = AssemblyLoadContext.Default.Assemblies.FirstOrDefault(asm => asm.FullName == assemblyName);
             if (asm != null)
             {
+                Logger.Trace($"ResolveAssembly:  FOUND! {asm}");
                 LoadedAssemblies.TryAdd(assemblyName, asm);
                 return asm;
             }
 
-            // next try the in-memory cache of loaded assemblies
-            if (LoadedAssemblies.TryGetValue(assemblyName, out asm) && asm != null)
-            {
-                return null;
-            }
-
-            var asmName = new AssemblyName(assemblyName);
             var asmCachedFilename = $"{asmName.Name}.{asmName.Version}.{OSConfiguration.AssemblyExtension}";
             var asmCachedPath = !string.IsNullOrEmpty(AssemblyCachePath)
                 ? Path.Combine(AssemblyCachePath, asmCachedFilename)
                 : null;
 
             // next try the disk cache
+            Logger.Trace($"ResolveAssembly: Checking disk cache...");
             if (File.Exists(asmCachedPath))
             {
                 // TODO: stronger confirmation the assembly matches?
@@ -134,8 +175,21 @@ namespace DidoNet
                 {
                     using (var fs = File.Open(asmCachedPath, FileMode.Open, FileAccess.Read, FileShare.Read))
                     {
-                        asm = AssemblyContext.LoadFromStream(fs);
+                        // TODO: decrypt the file if necessary
+                        if (!string.IsNullOrEmpty(CachedAssemblyEncryptionKey))
+                        {
+                            using (var membuf = new MemoryStream())
+                            {
+                                AES.Decrypt(fs, membuf, CachedAssemblyEncryptionKey);
+                                asm = AssemblyContext.LoadFromStream(membuf);
+                            }
+                        }
+                        else
+                        {
+                            asm = AssemblyContext.LoadFromStream(fs);
+                        }
                         LoadedAssemblies.TryAdd(assemblyName, asm);
+                        Logger.Trace($"ResolveAssembly:  FOUND! {asm}");
                         return asm;
                     }
                 }
@@ -146,29 +200,81 @@ namespace DidoNet
             {
                 throw new InvalidOperationException($"'{nameof(Environment.ResolveRemoteAssemblyAsync)}' is not defined on the current Environment parameter.");
             }
+            Logger.Trace($"ResolveAssembly: Checking remote...");
             var stream = ResolveRemoteAssemblyAsync(this, assemblyName).Result;
             if (stream == null)
             {
                 return null;
             }
 
-            // cache the assembly to disk
+            // if the underlying stream is not seekable, copy it to a memory stream
+            // so it can be read more than once below
+            if (!stream.CanSeek)
+            {
+                var tmp = new MemoryStream();
+                stream.CopyTo(tmp);
+                stream.Dispose();
+                tmp.Seek(0, SeekOrigin.Begin);
+                stream = tmp;
+            }
+
+            // cache the assembly to disk if necessary
             if (!string.IsNullOrEmpty(asmCachedPath))
             {
-                // after copying the assembly stream to disk, dispose it and 
-                // use the file stream instead (since the assembly stream may
-                // not be seekable)
-                var asmCachedFile = File.Create(asmCachedPath);
-                stream.CopyTo(asmCachedFile);
-                stream.Dispose();
-                asmCachedFile.Seek(0, SeekOrigin.Begin);
-                stream = asmCachedFile;
+                Directory.CreateDirectory(Path.GetDirectoryName(asmCachedPath));
+                using (var asmCachedFile = File.Create(asmCachedPath))
+                {
+                    // TODO: encrypt the file if necessary
+                    if (!string.IsNullOrEmpty(CachedAssemblyEncryptionKey))
+                    {
+                        AES.Encrypt(stream, asmCachedFile, CachedAssemblyEncryptionKey);
+                    }
+                    else
+                    {
+                        stream.CopyTo(asmCachedFile);
+                    }
+                }
+                stream.Seek(0, SeekOrigin.Begin);
             }
 
             // load the assembly
-            asm = AssemblyContext.LoadFromStream(stream);
-            LoadedAssemblies.TryAdd(assemblyName, asm);
-            stream.Dispose();
+            Logger.Trace($"ResolveAssembly:  got stream {stream.Length} bytes. loading...");
+            try
+            {
+                asm = AssemblyContext.LoadFromStream(stream);
+                Logger.Trace($"ResolveAssembly:  FOUND! {asm}");
+                LoadedAssemblies.TryAdd(assemblyName, asm);
+            }
+            catch (Exception ex)
+            {
+                Logger.Trace($"ResolveAssembly:  could not load assembly. possible runtime conflict");
+
+                //// next handle system libraries that could conflict with already loaded libraries
+                ////if (asmName.Name == "System.Private.CoreLib")
+                //if (asmName.Name!.StartsWith("System.Private"))
+                //{
+                //    if (!RequestedSystemAssemblies.Contains(assemblyName))
+                //    {
+                //        // if this is the first time the assembly was requested, 
+                //        // allow it to go through normal 
+                //    }
+                //    Logger.Trace($"finding system library: {asmName}");
+                //    //asm = AssemblyLoadContext.Default.Assemblies.FirstOrDefault(asm => asm.GetName().Name == asmName.Name);
+                //    //if (asm != null)
+                //    //{
+                //    //    Logger.Trace($"ResolveAssembly:  FOUND! {asm}");
+                //    //    LoadedAssemblies.TryAdd(assemblyName, asm);
+                //    //    return asm;
+                //    //}
+                //}
+
+                Logger.Error(ex);
+                return null;
+            }
+            finally
+            {
+                stream.Dispose();
+            }
 
             return asm;
         }

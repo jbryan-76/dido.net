@@ -75,7 +75,6 @@ namespace DidoNet.Test.Runner
             runnerServer.Dispose();
         }
 
-
         [Fact]
         public async void RunRemoteWithCachedAssemblies()
         {
@@ -155,6 +154,13 @@ namespace DidoNet.Test.Runner
                 // cleanup
                 runnerServer.DeleteCache();
             }
+        }
+
+
+        [Fact]
+        public async void RunRemoteWithEncryptedCachedAssemblies()
+        {
+            // TODO: 
         }
 
         /// <summary>

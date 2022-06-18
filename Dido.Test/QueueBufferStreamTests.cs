@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Dido.Utilities;
+using System;
 using System.Linq;
 using System.Threading;
 using Xunit;

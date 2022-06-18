@@ -1,4 +1,5 @@
-﻿using DidoNet.IO;
+﻿using Dido.Utilities;
+using DidoNet.IO;
 using NLog;
 using System;
 using System.IO;
@@ -69,7 +70,15 @@ namespace DidoNet
         {
             configuration ??= GlobalConfiguration ?? new Configuration();
 
-            switch (configuration.ExecutionMode)
+            // force the execution mode to local if no remote service is configured
+            var executionMode = configuration.ExecutionMode;
+            if (configuration.MediatorUri == null && configuration.RunnerUri == null && executionMode == ExecutionModes.Remote)
+            {
+                Logger.Warn($"Forcing execution mode to {nameof(ExecutionModes.Local)}: no mediator nor runner configured.");
+                executionMode = ExecutionModes.Local;
+            }
+
+            switch (executionMode)
             {
                 case ExecutionModes.Local:
                     return RunLocalAsync<Tprop>(expression, configuration, cancellationToken);
@@ -291,22 +300,30 @@ namespace DidoNet
                             }
 
                             // resolve the desired assembly and send it back
-                            using (var stream = await configuration.ResolveLocalAssemblyAsync(request.AssemblyName))
-                            using (var mem = new MemoryStream())
+                            try
                             {
-                                IMessage response;
-                                if (stream == null)
+                                using (var stream = await configuration.ResolveLocalAssemblyAsync(request.AssemblyName))
+                                using (var mem = new MemoryStream())
                                 {
-                                    response = new AssemblyErrorMessage(new FileNotFoundException($"Assembly '{request.AssemblyName}' could not be resolved."));
+                                    IMessage response;
+                                    if (stream == null)
+                                    {
+                                        response = new AssemblyErrorMessage(new FileNotFoundException($"Assembly '{request.AssemblyName}' could not be resolved."));
+                                    }
+                                    else
+                                    {
+                                        stream.CopyTo(mem);
+                                        response = new AssemblyResponseMessage(mem.ToArray());
+                                    }
+                                    ThreadHelpers.Debug($"dido: sending AssemblyResponseMessage");
+                                    channel.Send(response);
+                                    ThreadHelpers.Debug($"dido: AssemblyRequestMessage WROTE");
                                 }
-                                else
-                                {
-                                    stream.CopyTo(mem);
-                                    response = new AssemblyResponseMessage(mem.ToArray());
-                                }
-                                ThreadHelpers.Debug($"dido: sending AssemblyResponseMessage");
+                            }
+                            catch (Exception ex)
+                            {
+                                var response = new AssemblyErrorMessage(ex);
                                 channel.Send(response);
-                                ThreadHelpers.Debug($"dido: AssemblyRequestMessage WROTE");
                             }
                             break;
                         default:
@@ -330,7 +347,21 @@ namespace DidoNet
                 using (var stream = new MemoryStream())
                 {
                     await ExpressionSerializer.SerializeAsync(expression, stream);
-                    var requestMessage = new TaskRequestMessage(stream.ToArray(), configuration.Id, configuration.TimeoutInMs);
+                    var assemblyCaching = configuration.AssemblyCaching;
+                    if (assemblyCaching == AssemblyCachingPolicies.Auto)
+                    {
+#if DEBUG
+                        assemblyCaching = AssemblyCachingPolicies.Never;
+#else
+                        assemblyCaching = AssemblyCachingPolicies.Always;
+#endif
+                    }
+                    var requestMessage = new TaskRequestMessage(
+                        stream.ToArray(),
+                        configuration.Id,
+                        assemblyCaching,
+                        configuration.CachedAssemblyEncryptionKey,
+                        configuration.TimeoutInMs);
                     lock (tasksChannel)
                     {
                         tasksChannel.Send(requestMessage);

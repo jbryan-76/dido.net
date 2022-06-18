@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Threading;
 
-namespace DidoNet
+namespace Dido.Utilities
 {
     internal class ThreadHelpers
     {

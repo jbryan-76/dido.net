@@ -1,7 +1,8 @@
-﻿using System;
+﻿using DidoNet;
+using System;
 using System.Collections.Generic;
 
-namespace DidoNet
+namespace Dido.Utilities
 {
     public static class TypeChecks
     {

@@ -1,4 +1,5 @@
-﻿using NLog;
+﻿using Dido.Utilities;
+using NLog;
 using System;
 using System.IO;
 using System.Threading;
@@ -217,7 +218,7 @@ namespace DidoNet
             {
                 ExecutionContext = context,
                 ResolveRemoteAssemblyAsync = new DefaultRemoteAssemblyResolver(AssembliesChannel).ResolveAssembly,
-                AssemblyCachePath = assemblyCachePath
+                AssemblyCachePath = request.AssemblyCaching == AssemblyCachingPolicies.Always ? assemblyCachePath : null
             })
 
             // decode and execute the requested expression
