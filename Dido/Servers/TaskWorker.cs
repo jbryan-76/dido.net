@@ -218,7 +218,8 @@ namespace DidoNet
             {
                 ExecutionContext = context,
                 ResolveRemoteAssemblyAsync = new DefaultRemoteAssemblyResolver(AssembliesChannel).ResolveAssembly,
-                AssemblyCachePath = request.AssemblyCaching == AssemblyCachingPolicies.Always ? assemblyCachePath : null
+                AssemblyCachePath = request.AssemblyCaching == AssemblyCachingPolicies.Always ? assemblyCachePath : null,
+                CachedAssemblyEncryptionKey = request.CachedAssemblyEncryptionKey,
             })
 
             // decode and execute the requested expression

@@ -70,7 +70,7 @@ namespace DidoNet.Test.Common
             {
                 MaxTries = 1,
                 ExecutionMode = ExecutionModes.Local,
-                ResolveLocalAssemblyAsync = (assemblyName) => AssemblyResolver.ResolveAssembly(Environment, assemblyName)
+                ResolveLocalAssemblyAsync = (assemblyName) => AssemblyResolver.ResolveAssembly(Environment, assemblyName, out _)
             };
         }
 

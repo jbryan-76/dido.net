@@ -15,8 +15,10 @@ namespace DidoNet
             Channel = channel;
         }
 
-        public Task<Stream?> ResolveAssembly(Environment env, string assemblyName)
+        public Task<Stream?> ResolveAssembly(Environment env, string assemblyName, out string? error)
         {
+            error = null;
+
             // request the assembly from the application
             Channel.Send(new AssemblyRequestMessage(assemblyName));
 
@@ -36,8 +38,9 @@ namespace DidoNet
                     // TODO: use a different pattern. byte[] all the way?
                     return Task.FromResult<Stream?>(new MemoryStream(response.Bytes));
 
-                case AssemblyErrorMessage error:
-                    Logger.Error(error.Error);
+                case AssemblyErrorMessage err:
+                    Logger.Error(err.Error);
+                    error = err.Error;
                     return Task.FromResult<Stream?>(null);
 
                 default:

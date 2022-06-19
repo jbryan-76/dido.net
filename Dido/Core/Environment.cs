@@ -24,9 +24,11 @@ namespace DidoNet
         /// Signature for a method that resolves a provided assembly by name,
         /// returning a stream containing the assembly byte-code.
         /// </summary>
+        /// <param name="env"></param>
         /// <param name="assemblyName"></param>
+        /// <param name="error"></param>
         /// <returns></returns>
-        public delegate Task<Stream?> RemoteAssemblyResolver(Environment env, string assemblyName);
+        public delegate Task<Stream?> RemoteAssemblyResolver(Environment env, string assemblyName, out string? error);
 
         /// <summary>
         /// A delegate method for resolving remote runtime assemblies used by the host application.
@@ -107,9 +109,10 @@ namespace DidoNet
 
         /// <summary>
         /// Heuristically resolves and returns the given assembly as follows:
-        /// <para/>1) Checks all loaded assemblies (in both the Default and runner Environment AssemblyLoadContexts).
-        /// <para/>2) Checks any configured AssemblyCachePath.
-        /// <para/>3) Fetches with ResolveRemoteAssemblyAsync.
+        /// <para/>1) Checks the in-memory cache of previously loaded assemblies.
+        /// <para/>2) Checks all loaded assemblies (in both the Default and runner Environment AssemblyLoadContexts).
+        /// <para/>3) Checks any configured AssemblyCachePath.
+        /// <para/>4) Fetches with ResolveRemoteAssemblyAsync.
         /// </summary>
         /// <param name="assemblyName"></param>
         /// <returns></returns>
@@ -169,18 +172,22 @@ namespace DidoNet
             Logger.Trace($"ResolveAssembly: Checking disk cache...");
             if (File.Exists(asmCachedPath))
             {
-                // TODO: stronger confirmation the assembly matches?
-                var info = FileVersionInfo.GetVersionInfo(asmCachedPath);
-                if (info.FileVersion == asmName.Version?.ToString())
+                // TODO: should a stronger confirmation be used that the assembly matches other than
+                // TODO: the explicitly generated cache filename? if the file is encrypted it will 
+                // TODO: first need to be decrypted to even introspect it, which adds overhead
+                //var info = FileVersionInfo.GetVersionInfo(asmCachedPath);
+                //if (info.FileVersion == asmName.Version?.ToString())
+                try
                 {
                     using (var fs = File.Open(asmCachedPath, FileMode.Open, FileAccess.Read, FileShare.Read))
                     {
-                        // TODO: decrypt the file if necessary
+                        // decrypt the file if necessary
                         if (!string.IsNullOrEmpty(CachedAssemblyEncryptionKey))
                         {
                             using (var membuf = new MemoryStream())
                             {
                                 AES.Decrypt(fs, membuf, CachedAssemblyEncryptionKey);
+                                membuf.Seek(0, SeekOrigin.Begin);
                                 asm = AssemblyContext.LoadFromStream(membuf);
                             }
                         }
@@ -193,6 +200,13 @@ namespace DidoNet
                         return asm;
                     }
                 }
+                catch (Exception)
+                {
+                    // if the cached assembly could not be loaded, remove it and fall through to use
+                    // the remote resolver below
+                    File.Delete(asmCachedPath);
+                    LoadedAssemblies.Remove(assemblyName, out _);
+                }
             }
 
             // finally try the remote resolver
@@ -201,7 +215,11 @@ namespace DidoNet
                 throw new InvalidOperationException($"'{nameof(Environment.ResolveRemoteAssemblyAsync)}' is not defined on the current Environment parameter.");
             }
             Logger.Trace($"ResolveAssembly: Checking remote...");
-            var stream = ResolveRemoteAssemblyAsync(this, assemblyName).Result;
+            var stream = ResolveRemoteAssemblyAsync(this, assemblyName, out string? error).Result;
+            if (!string.IsNullOrEmpty(error))
+            {
+                throw new InvalidOperationException($"Fatal error while resolving remote assembly: {error}.");
+            }
             if (stream == null)
             {
                 return null;
@@ -221,10 +239,10 @@ namespace DidoNet
             // cache the assembly to disk if necessary
             if (!string.IsNullOrEmpty(asmCachedPath))
             {
-                Directory.CreateDirectory(Path.GetDirectoryName(asmCachedPath));
+                Directory.CreateDirectory(Path.GetDirectoryName(asmCachedPath)!);
                 using (var asmCachedFile = File.Create(asmCachedPath))
                 {
-                    // TODO: encrypt the file if necessary
+                    // encrypt the file if necessary
                     if (!string.IsNullOrEmpty(CachedAssemblyEncryptionKey))
                     {
                         AES.Encrypt(stream, asmCachedFile, CachedAssemblyEncryptionKey);
@@ -247,7 +265,7 @@ namespace DidoNet
             }
             catch (Exception ex)
             {
-                Logger.Trace($"ResolveAssembly:  could not load assembly. possible runtime conflict");
+                Logger.Trace($"ResolveAssembly:  could not load assembly: possible runtime conflict");
 
                 //// next handle system libraries that could conflict with already loaded libraries
                 ////if (asmName.Name == "System.Private.CoreLib")

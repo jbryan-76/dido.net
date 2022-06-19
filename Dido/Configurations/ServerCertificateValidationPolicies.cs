@@ -19,7 +19,7 @@
 
         /// <summary>
         /// Indicates the server's certificate is accepted as authentic without ANY independent verification.
-        /// <para/>WARNING: this parameter is to support more efficient development and testing, but should never
+        /// <para/>WARNING: this option is to support more efficient development and testing, but should never
         /// be used in production.
         /// </summary>
         _SKIP_,

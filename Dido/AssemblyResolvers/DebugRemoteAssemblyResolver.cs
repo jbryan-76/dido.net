@@ -28,8 +28,9 @@ namespace DidoNet
             AssemblySearchPath = assemblySearchPath;
         }
 
-        public Task<Stream?> ResolveAssembly(Environment env, string assemblyName)
+        public Task<Stream?> ResolveAssembly(Environment env, string assemblyName, out string? error)
         {
+            error = null;
             lock (LockObject)
             {
                 // see if the assembly is already in the cache

@@ -5,18 +5,28 @@ using System.Text;
 
 namespace Dido.Utilities
 {
+    /// <summary>
+    /// Provides methods for encrypting and decrypting data using AES ciphers.
+    /// </summary>
     public static class AES
     {
+        /// <summary>
+        /// Encrypt the provided data using the provided key.
+        /// </summary>
+        /// <param name="data"></param>
+        /// <param name="key"></param>
+        /// <returns></returns>
         public static string Encrypt(string data, string key)
         {
             return Convert.ToBase64String(Encrypt(Encoding.UTF8.GetBytes(data), key));
         }
 
-        public static string Decrypt(string cipher, string key)
-        {
-            return Encoding.UTF8.GetString(Decrypt(Convert.FromBase64String(cipher), key));
-        }
-
+        /// <summary>
+        /// Encrypt the provided data using the provided key.
+        /// </summary>
+        /// <param name="data"></param>
+        /// <param name="key"></param>
+        /// <returns></returns>
         public static byte[] Encrypt(byte[] data, string key)
         {
             using (var input = new MemoryStream(data))
@@ -27,11 +37,24 @@ namespace Dido.Utilities
             }
         }
 
+        /// <summary>
+        /// Encrypt the provided input stream to the provided output stream using the provided key.
+        /// </summary>
+        /// <param name="input"></param>
+        /// <param name="output"></param>
+        /// <param name="key"></param>
         public static void Encrypt(Stream input, Stream output, string key)
         {
             Encrypt(input, output, Encoding.UTF8.GetBytes(key));
         }
 
+        /// <summary>
+        /// Encrypt the provided input stream to the provided output stream using the provided key.
+        /// </summary>
+        /// <param name="input"></param>
+        /// <param name="output"></param>
+        /// <param name="key"></param>
+        /// <exception cref="ArgumentNullException"></exception>
         public static void Encrypt(Stream input, Stream output, byte[] key)
         {
             if (key == null || key.Length <= 0)
@@ -39,17 +62,13 @@ namespace Dido.Utilities
                 throw new ArgumentNullException(nameof(key));
             }
 
-            // use the sha256 hash of the key as the actual AES key so it is always 32 bytes
-            // (this matches the expected key size and allows for a key of any length from the caller)
+            // compute the SHA256 hash of the key to use as the secret key since it is always 32 bytes
             byte[] keyhash;
             using (var sha = SHA256.Create())
             {
                 keyhash = sha.ComputeHash(key);
             }
 
-            //byte[] encrypted;
-
-            //using (var aes = new AesCryptoServiceProvider())
             using (var aes = Aes.Create())
             {
                 aes.GenerateIV();
@@ -58,26 +77,35 @@ namespace Dido.Utilities
 
                 var encryptor = aes.CreateEncryptor(aes.Key, aes.IV);
 
-                //using (var msEncrypt = new MemoryStream())
+                // first output the initialization vector
+                output.WriteByte((byte)aes.IV.Length);
+                output.Write(aes.IV, 0, aes.IV.Length);
+
+                // then output the encrypted data
+                using (var csEncrypt = new CryptoStream(output, encryptor, CryptoStreamMode.Write))
                 {
-                    // prepend the encrypted output with the initialization vector
-                    output.WriteByte((byte)aes.IV.Length);
-                    output.Write(aes.IV, 0, aes.IV.Length);
-                    using (var csEncrypt = new CryptoStream(output, encryptor, CryptoStreamMode.Write))
-                    {
-                        input.CopyTo(csEncrypt);
-                        //using (var swEncrypt = new BinaryWriter(csEncrypt))
-                        //{
-                        //    swEncrypt.Write(data);
-                        //}
-                    }
-                    //encrypted = msEncrypt.ToArray();
+                    input.CopyTo(csEncrypt);
                 }
             }
-
-            //return encrypted;
         }
 
+        /// <summary>
+        /// Decrypt the provided cipher data using the provided key.
+        /// </summary>
+        /// <param name="cipher"></param>
+        /// <param name="key"></param>
+        /// <returns></returns>
+        public static string Decrypt(string cipher, string key)
+        {
+            return Encoding.UTF8.GetString(Decrypt(Convert.FromBase64String(cipher), key));
+        }
+
+        /// <summary>
+        /// Decrypt the provided cipher data using the provided key.
+        /// </summary>
+        /// <param name="data"></param>
+        /// <param name="key"></param>
+        /// <returns></returns>
         public static byte[] Decrypt(byte[] data, string key)
         {
             using (var input = new MemoryStream(data))
@@ -88,11 +116,24 @@ namespace Dido.Utilities
             }
         }
 
+        /// <summary>
+        /// Decrypt the provided input stream to the provided output stream using the provided key.
+        /// </summary>
+        /// <param name="input"></param>
+        /// <param name="output"></param>
+        /// <param name="key"></param>
         public static void Decrypt(Stream input, Stream output, string key)
         {
             Decrypt(input, output, Encoding.UTF8.GetBytes(key));
         }
 
+        /// <summary>
+        /// Decrypt the provided input stream to the provided output stream using the provided key.
+        /// </summary>
+        /// <param name="input"></param>
+        /// <param name="output"></param>
+        /// <param name="key"></param>
+        /// <exception cref="ArgumentNullException"></exception>
         public static void Decrypt(Stream input, Stream output, byte[] key)
         {
             if (key == null || key.Length <= 0)
@@ -100,40 +141,29 @@ namespace Dido.Utilities
                 throw new ArgumentNullException(nameof(key));
             }
 
-            // use the sha256 hash of the key which is always 32 bytes (matching the expected key size)
+            // compute the SHA256 hash of the key to use as the secret key since it is always 32 bytes
             byte[] keyhash;
             using (var sha = SHA256.Create())
             {
                 keyhash = sha.ComputeHash(key);
             }
 
-            //byte[] value = null;
-
-            //using (var aes = new AesCryptoServiceProvider())
             using (var aes = Aes.Create())
             {
-                //using (var msDecrypt = new MemoryStream(cipher))
+                // first extract the initialization vector
+                var ivLength = input.ReadByte();
+                var iv = new byte[ivLength];
+                input.Read(iv, 0, ivLength);
+
+                // then extract the decrypted data
+                aes.Key = keyhash;
+                aes.IV = iv;
+                var decryptor = aes.CreateDecryptor(aes.Key, aes.IV);
+                using (var csDecrypt = new CryptoStream(input, decryptor, CryptoStreamMode.Read))
                 {
-                    // extract the prepended initialization vector
-                    var ivLength = input.ReadByte();
-                    var iv = new byte[ivLength];
-                    input.Read(iv, 0, ivLength);
-
-                    aes.Key = keyhash;
-                    aes.IV = iv;
-
-                    var decryptor = aes.CreateDecryptor(aes.Key, aes.IV);
-                    using (var csDecrypt = new CryptoStream(output, decryptor, CryptoStreamMode.Read))
-                    //using (var srDecrypt = new BinaryReader(csDecrypt))
-                    {
-                        input.CopyTo(csDecrypt);
-                        //value = srDecrypt.ReadBytes(cipher.Length - ivLength);
-                    }
+                    csDecrypt.CopyTo(output);
                 }
             }
-
-            //return value;
         }
     }
-
 }
