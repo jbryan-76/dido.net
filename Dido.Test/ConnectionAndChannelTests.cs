@@ -108,6 +108,29 @@ namespace DidoNet.Test
                     }
                 }
             }
+
+            // confirm the disconnect handler is invoked
+            DisconnectionReasons clientReason = DisconnectionReasons.Unknown;
+            DisconnectionReasons serverReason = DisconnectionReasons.Unknown;
+            using (var clientServerConnection = await ClientServerConnection.CreateAsync(GetNextAvailablePort()))
+            {
+                clientServerConnection.ClientConnection.OnDisconnect = (connection, reason) =>
+                {
+                    clientReason = reason;
+                };
+                clientServerConnection.ServerConnection.OnDisconnect = (connection, reason) =>
+                {
+                    serverReason = reason;
+                };
+                clientServerConnection.ClientConnection.Disconnect();
+                var now = DateTime.UtcNow;
+                while (clientServerConnection.ServerConnection.IsConnected)
+                {
+                    Thread.Sleep(1);
+                }
+            }
+            Assert.Equal(DisconnectionReasons.RemoteDisconnect, serverReason);
+            Assert.Equal(DisconnectionReasons.LocalDisconnect, clientReason);
         }
 
         /// <summary>
@@ -118,6 +141,9 @@ namespace DidoNet.Test
         [Fact]
         public async void UnexpectedDisconnect()
         {
+            DisconnectionReasons clientReason = DisconnectionReasons.Unknown;
+            DisconnectionReasons serverReason = DisconnectionReasons.Unknown;
+
             // create a local client/server system and simulate an unexpected disconnect.
             // confirm the client gets implicitly disconnected and an aggregate
             // exception is thrown when the connection is disposed (since the underlying
@@ -126,6 +152,14 @@ namespace DidoNet.Test
             {
                 using (var clientServerConnection = await ClientServerConnection.CreateAsync(GetNextAvailablePort()))
                 {
+                    clientServerConnection.ClientConnection.OnDisconnect = (connection, reason) =>
+                    {
+                        clientReason = reason;
+                    };
+                    clientServerConnection.ServerConnection.OnDisconnect = (connection, reason) =>
+                    {
+                        serverReason = reason;
+                    };
                     clientServerConnection.ServerConnection.SimulateUnexpectedDisconnect();
                     while (clientServerConnection.ClientConnection.IsConnected)
                     {
@@ -133,6 +167,9 @@ namespace DidoNet.Test
                     }
                 }
             });
+
+            Assert.Equal(DisconnectionReasons.Dropped, serverReason);
+            Assert.Equal(DisconnectionReasons.Dropped, clientReason);
 
             // repeat the test from the other direction
             await Assert.ThrowsAsync<AggregateException>(async () =>

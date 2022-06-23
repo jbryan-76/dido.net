@@ -55,6 +55,13 @@ namespace DidoNet
         }
 
         /// <summary>
+        /// Signature for a method that is invoked when the connection closes for any reason.
+        /// </summary>
+        /// <param name="connection"></param>
+        /// <param name="reason"></param>
+        public delegate void DisconnectHandler(Connection connection, DisconnectionReasons reason);
+
+        /// <summary>
         /// Signature for a method that is invoked when a frame is transmitted or received. 
         /// </summary>
         /// <param name="frame"></param>
@@ -63,7 +70,7 @@ namespace DidoNet
         /// <summary>
         /// How long to wait between sending heartbeat frames.
         /// </summary>
-        public static int DefaultHeartbeatPeriodInSeconds = 60; // one minute
+        public static int DefaultHeartbeatPeriodInSeconds = 60;
 
         /// <summary>
         /// The optional name for the connection.
@@ -79,14 +86,21 @@ namespace DidoNet
         }
 
         /// <summary>
+        /// A handler invoked when the connection closes for any reason.
+        /// <para/>Note this handler is invoked from a different thread than the main application
+        /// and should finish quickly without throwing an exception.
+        /// </summary>
+        public DisconnectHandler? OnDisconnect { get; set; } = null;
+
+        /// <summary>
         /// Internal handler for unit tests to monitor received frames.
         /// </summary>
-        internal FrameMonitor? UnitTestReceiveFrameMonitor;
+        internal FrameMonitor? UnitTestReceiveFrameMonitor = null;
 
         /// <summary>
         /// Internal handler for unit tests to monitor transmitted frames.
         /// </summary>
-        internal FrameMonitor? UnitTestTransmitFrameMonitor;
+        internal FrameMonitor? UnitTestTransmitFrameMonitor = null;
 
         /// <summary>
         /// The underlying connection endpoint.
@@ -387,7 +401,12 @@ namespace DidoNet
             Flush();
 
             // signal all threads to stop
-            Interlocked.Exchange(ref Connected, 0);
+            var wasConnected = Interlocked.Exchange(ref Connected, 0);
+
+            if (wasConnected != 0)
+            {
+                OnDisconnect?.Invoke(this, DisconnectionReasons.LocalDisconnect);
+            }
 
             // wait for the threads to finish
             ReadThread!.Join(1000);
@@ -552,11 +571,19 @@ namespace DidoNet
                     ThreadHelpers.Yield();
                 }
             }
+            catch (IOException e)
+            {
+                WriteThreadException = e;
+                // force all thread termination on any error
+                Interlocked.Exchange(ref Connected, 0);
+                OnDisconnect?.Invoke(this, DisconnectionReasons.Dropped);
+            }
             catch (Exception e)
             {
                 WriteThreadException = e;
                 // force all threads to terminate on any error
                 Interlocked.Exchange(ref Connected, 0);
+                OnDisconnect?.Invoke(this, DisconnectionReasons.Error);
             }
         }
 
@@ -625,6 +652,7 @@ namespace DidoNet
                         // signal all threads to terminate
                         Interlocked.Exchange(ref Connected, 0);
                         Logger.Info($"Forcing disconnect: remote connection did not send a heartbeat for more than {2 * RemoteHeartbeatPeriodInSeconds} seconds");
+                        OnDisconnect?.Invoke(this, DisconnectionReasons.Unresponsive);
                         break;
                     }
 
@@ -649,6 +677,7 @@ namespace DidoNet
 
                         // signal all threads to terminate
                         Interlocked.Exchange(ref Connected, 0);
+                        OnDisconnect?.Invoke(this, DisconnectionReasons.RemoteDisconnect);
                         // NOTE: ignore disconnects for unit test monitoring
                     }
                     else if (frame is DebugFrame)
@@ -676,6 +705,7 @@ namespace DidoNet
                 ReadThreadException = e;
                 // force all thread termination on any error
                 Interlocked.Exchange(ref Connected, 0);
+                OnDisconnect?.Invoke(this, DisconnectionReasons.Dropped);
             }
             catch (Exception e)
             {
@@ -683,6 +713,7 @@ namespace DidoNet
                 ReadThreadException = e;
                 // force all thread termination on any error
                 Interlocked.Exchange(ref Connected, 0);
+                OnDisconnect?.Invoke(this, DisconnectionReasons.Error);
             }
         }
 

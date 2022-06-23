@@ -277,7 +277,6 @@ namespace DidoNet
                 var responseSource = new TaskCompletionSource<IMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
                 tasksChannel.OnMessageReceived = (message, channel) =>
                 {
-                    ThreadHelpers.Debug($"dido: received message {message.GetType()}");
                     responseSource.SetResult(message);
                 };
 
@@ -302,19 +301,17 @@ namespace DidoNet
                 // when the cancellation token is canceled, send a cancel message to the runner
                 cancellationToken.Register(() =>
                 {
-                    ThreadHelpers.Debug($"dido: sending cancel message");
                     tasksChannel.Send(new TaskCancelMessage());
                 });
 
                 // wait until a response is received
-                ThreadHelpers.Debug($"dido: waiting for response...");
                 Task.WaitAll(responseSource.Task);
                 var message = responseSource.Task.Result;
-                ThreadHelpers.Debug($"dido: got response; starting dispose...");
 
                 // yield the result
                 switch (message)
                 {
+                    // TODO: receive untethered runner+task id response and create a handle
                     case TaskResponseMessage response:
                         return response.GetResult<Tprop>();
                     case IErrorMessage error:

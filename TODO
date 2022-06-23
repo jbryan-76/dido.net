@@ -12,6 +12,9 @@
     case succeed:
        case task failed: the app will receive the error and can retry as needed
        case task nominal: the app can communicate normally
+  when starting an untethered task, return a "handle" object. use the handle to interact with the task: messages, stop/cancel.
+  later, the application can stop/start again, then "connect" to an existing untethered task via: runner uri/id and task id
+  and get back a handle.
 - explore supporting fire-and-forget tasks, also with dynamic reconnection? this would enable eg microservice patterns.
   however what does it mean for following use case?
     1) application starts an untethered microservice task

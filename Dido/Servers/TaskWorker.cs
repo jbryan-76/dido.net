@@ -70,10 +70,6 @@ namespace DidoNet
             Connection = connection;
             Configuration = configuration;
 
-            //// create communication channels to the application for: task communication, assemblies, files
-            //TasksChannel = new MessageChannel(Connection, Constants.AppRunner_TaskChannelId);
-            //AssembliesChannel = new MessageChannel(Connection, Constants.AppRunner_AssemblyChannelId);
-
             // TODO: add "tethering" configuration: what to do if the application connection breaks?
             // TODO: in "tethered" mode, the task should cancel.
             // TODO: in "untethered" mode, the task should continue. what if the task is long running? how to reconnect?
@@ -122,7 +118,8 @@ namespace DidoNet
                 TaskStarted = DateTime.UtcNow;
                 Logger.Trace($"Worker task {Id} starting");
 
-                // by design, the first message received on the tasks channel is the task request
+                // by design, the first message received on the tasks channel is the task request.
+                // receive it and execute it on a new thread
                 var request = tasksChannel.ReceiveMessage<TaskRequestMessage>();
                 var taskExecutionThread = new Thread(() => ExecuteTask(request));
                 taskExecutionThread.Start();
@@ -159,7 +156,7 @@ namespace DidoNet
         /// <param name="request"></param>
         private async void ExecuteTask(TaskRequestMessage request)
         {
-            // create channels to communicate to the application
+            // create communication channels to the application for: task communication, assemblies
             // TODO: what happens when the connection terminates? these will need to be recreated
             var tasksChannel = new MessageChannel(Connection, Constants.AppRunner_TaskChannelId);
             var assembliesChannel = new MessageChannel(Connection, Constants.AppRunner_AssemblyChannelId);

@@ -13,7 +13,8 @@
         static public int MaxFrameSize = 512 * 1024;
 
         public byte Type { get; set; }
-        
+
+        // TODO: switch to string channel ids instead of int16?
         public ushort Channel { get; set; }
         
         public int Length { get; set; }
