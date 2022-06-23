@@ -8,7 +8,7 @@ namespace DidoNet
     public class NotSerializableException : Exception
     {
         public NotSerializableException() { }
-        public NotSerializableException(string message) : base(message) { }
-        public NotSerializableException(string message, Exception innerException) : base(message, innerException) { }
+        public NotSerializableException(string? message) : base(message) { }
+        public NotSerializableException(string? message, Exception innerException) : base(message, innerException) { }
     }
 }

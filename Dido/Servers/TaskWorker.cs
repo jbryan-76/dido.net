@@ -14,7 +14,7 @@ namespace DidoNet
         /// <summary>
         /// The unique id of the worker.
         /// </summary>
-        public Guid Id { get; private set; } = Guid.NewGuid();
+        public string Id { get; private set; } = Guid.NewGuid().ToString();
 
         /// <summary>
         /// The connection to the remote application.
@@ -42,16 +42,6 @@ namespace DidoNet
         private Action<TaskWorker>? OnComplete { get; set; }
 
         /// <summary>
-        /// The communications channel for task-related messages between the runner and host application.
-        /// </summary>
-        private MessageChannel TasksChannel { get; set; }
-
-        /// <summary>
-        /// The communications channel for assembly-related messages between the runner and host application.
-        /// </summary>
-        private MessageChannel AssembliesChannel { get; set; }
-
-        /// <summary>
         /// Used to indicate when the task thread is complete.
         /// </summary>
         private AutoResetEvent TaskComplete { get; set; } = new AutoResetEvent(false);
@@ -75,18 +65,20 @@ namespace DidoNet
         /// Create a new worker to process application task requests on the provided connection.
         /// </summary>
         /// <param name="connection"></param>
-        public TaskWorker(Connection connection, RunnerConfiguration configuration)
+        public TaskWorker(Connection connection, RunnerConfiguration configuration, TaskTypeMessage taskTypeMessage)
         {
             Connection = connection;
             Configuration = configuration;
 
-            // create communication channels to the application for: task communication, assemblies, files
-            TasksChannel = new MessageChannel(Connection, Constants.AppRunner_TaskChannelId);
-            AssembliesChannel = new MessageChannel(Connection, Constants.AppRunner_AssemblyChannelId);
+            //// create communication channels to the application for: task communication, assemblies, files
+            //TasksChannel = new MessageChannel(Connection, Constants.AppRunner_TaskChannelId);
+            //AssembliesChannel = new MessageChannel(Connection, Constants.AppRunner_AssemblyChannelId);
 
             // TODO: add "tethering" configuration: what to do if the application connection breaks?
             // TODO: in "tethered" mode, the task should cancel.
             // TODO: in "untethered" mode, the task should continue. what if the task is long running? how to reconnect?
+            // TODO: in untethered mode, if the task fails it should wait for the application to reconnect only up to a
+            // TODO: maximum time, then simply die.
 
             // TODO: add option to "store" result in Mediator instead/in-addition to sending to application (to support "job mode")
         }
@@ -117,69 +109,37 @@ namespace DidoNet
             CancelSource.Dispose();
         }
 
+        // TODO: make this DoTetheredWork()?
         /// <summary>
         /// Set up, start, and manage the lifecycle of a task request from a single remote connected application.
         /// </summary>
         private void DoWork()
         {
+            var tasksChannel = new MessageChannel(Connection, Constants.AppRunner_TaskChannelId);
+
             try
             {
                 TaskStarted = DateTime.UtcNow;
-                Logger.Info($"Worker task {Id} starting");
+                Logger.Trace($"Worker task {Id} starting");
 
-                // keep a reference to the task execution thread to cleanup later
-                Thread? taskExecutionThread = null;
-
-                // set up a handler to process task-related messages.
-                // this handler runs in a separate thread
-                TasksChannel.OnMessageReceived = (message, channel) =>
-                {
-                    try
-                    {
-                        ThreadHelpers.Debug($"RUNNER: processing message {message.GetType().FullName}");
-
-                        switch (message)
-                        {
-                            // execute a task by running it in a separate thread
-                            case TaskRequestMessage request:
-                                taskExecutionThread = new Thread(() => ExecuteTask(request));
-                                taskExecutionThread.Start();
-                                break;
-
-                            // cancel the running task
-                            case TaskCancelMessage cancel:
-                                ThreadHelpers.Debug($"RUNNER canceling the worker");
-                                CancelSource.Cancel();
-                                break;
-
-                            default:
-                                throw new InvalidOperationException($"Unknown message type '{message.GetType()}'");
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        // handle all unexpected exceptions explicitly by notifying the application that an error occurred
-                        var errorMessage = new TaskErrorMessage(TaskErrorMessage.Categories.General, ex);
-                        ThreadHelpers.Debug($"RUNNER got error: {ex.ToString()}");
-                        TasksChannel.Send(errorMessage);
-                        CancelSource.Cancel();
-                        TaskComplete.Set();
-                    }
-                };
+                // by design, the first message received on the tasks channel is the task request
+                var request = tasksChannel.ReceiveMessage<TaskRequestMessage>();
+                var taskExecutionThread = new Thread(() => ExecuteTask(request));
+                taskExecutionThread.Start();
 
                 // block until the task completes or fails
-                ThreadHelpers.Debug($"RUNNER: waiting for the task to finish");
                 TaskComplete.WaitOne();
-                ThreadHelpers.Debug($"RUNNER: task finished, joining");
-                taskExecutionThread?.Join();
-                ThreadHelpers.Debug($"RUNNER: task complete");
+
+                // cleanup
+                taskExecutionThread.Join();
             }
             catch (Exception ex)
             {
                 // handle all unexpected exceptions explicitly by notifying the application that an error occurred
-                var errorMessage = new TaskErrorMessage(TaskErrorMessage.Categories.General, ex);
-                TasksChannel.Send(errorMessage);
-                // TODO: log it?
+                tasksChannel.Send(new TaskErrorMessage(TaskErrorMessage.Categories.General, ex));
+                CancelSource.Cancel();
+                TaskComplete.Set();
+                Logger.Trace($"Worker task {Id} failed: {ex}");
             }
             finally
             {
@@ -189,12 +149,48 @@ namespace DidoNet
             }
         }
 
+        // TODO: the channels and connection could spontaneously disconnect if the application terminates.
+        // TODO: for tethered tasks, this worker should abort.
+        // TODO: for untethered tasks, use of a channel should be postponed until connection is re-established
+
         /// <summary>
         /// Executes the given task.
         /// </summary>
         /// <param name="request"></param>
         private async void ExecuteTask(TaskRequestMessage request)
         {
+            // create channels to communicate to the application
+            // TODO: what happens when the connection terminates? these will need to be recreated
+            var tasksChannel = new MessageChannel(Connection, Constants.AppRunner_TaskChannelId);
+            var assembliesChannel = new MessageChannel(Connection, Constants.AppRunner_AssemblyChannelId);
+
+            // set up a handler to process other task-related messages.
+            // NOTE: this handler runs in a separate thread
+            tasksChannel.OnMessageReceived = (message, channel) =>
+            {
+                try
+                {
+                    switch (message)
+                    {
+                        // cancel the running task
+                        case TaskCancelMessage cancel:
+                            CancelSource.Cancel();
+                            break;
+
+                        default:
+                            throw new UnhandledMessageException(message);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    // handle all unexpected exceptions explicitly by notifying the application that an error occurred
+                    var errorMessage = new TaskErrorMessage(TaskErrorMessage.Categories.General, ex);
+                    channel.Send(errorMessage);
+                    CancelSource.Cancel();
+                    TaskComplete.Set();
+                }
+            };
+
             // create the execution context that is available to the expression while it's running
             var context = new ExecutionContext
             {
@@ -206,37 +202,37 @@ namespace DidoNet
             };
 
             // update the assembly cache path where necessary to ensure each application has its own
-            // folder to help prevent collisions
+            // folder to prevent file collisions
             var assemblyCachePath = Configuration.AssemblyCachePath;
             if (!string.IsNullOrEmpty(assemblyCachePath) && !string.IsNullOrEmpty(request.ApplicationId))
             {
                 assemblyCachePath = Path.Combine(assemblyCachePath, request.ApplicationId);
             }
 
-            // create the runtime environment
+            // create the runtime environment, then decode and execute the requested expression
             using (var environment = new Environment
             {
                 ExecutionContext = context,
-                ResolveRemoteAssemblyAsync = new DefaultRemoteAssemblyResolver(AssembliesChannel).ResolveAssembly,
+                ResolveRemoteAssemblyAsync = new DefaultRemoteAssemblyResolver(assembliesChannel).ResolveAssembly,
                 AssemblyCachePath = request.AssemblyCaching == AssemblyCachingPolicies.Always ? assemblyCachePath : null,
                 CachedAssemblyEncryptionKey = request.CachedAssemblyEncryptionKey,
             })
-
-            // decode and execute the requested expression
-            using (var stream = new MemoryStream(request.Bytes))
             {
                 Func<ExecutionContext, object>? expression = null;
 
+                // deserialize the expression
                 try
                 {
-                    // deserialize the expression
-                    expression = await ExpressionSerializer.DeserializeAsync<object>(stream, environment);
+                    using (var stream = new MemoryStream(request.Bytes))
+                    {
+                        expression = await ExpressionSerializer.DeserializeAsync<object>(stream, environment);
+                    }
                 }
                 catch (Exception ex)
                 {
                     // catch and report deserialization errors
                     var errorMessage = new TaskErrorMessage(TaskErrorMessage.Categories.Deserialization, ex);
-                    TasksChannel.Send(errorMessage);
+                    tasksChannel.Send(errorMessage);
                     // indicate to the main thread that the task is done
                     TaskComplete.Set();
                     return;
@@ -245,11 +241,11 @@ namespace DidoNet
                 Timer? timeout = null;
                 try
                 {
+                    // TODO: untethered tasks can't timeout
                     // set up a timer if necessary to cancel the task if it times out
                     long didTimeout = 0;
                     if (request.TimeoutInMs > 0)
                     {
-                        ThreadHelpers.Debug($"RUNNER: timeout in {request.TimeoutInMs}ms");
                         timeout = new Timer((arg) =>
                         {
                             // try to cancel the task
@@ -261,9 +257,7 @@ namespace DidoNet
                             // let the application know immediately the task did not complete due to a timeout
                             // (this way if the task does not cancel soon at least the application
                             // can start a retry)
-                            ThreadHelpers.Debug($"RUNNER: sending timeout message");
-                            TasksChannel.Send(new TaskTimeoutMessage());
-                            ThreadHelpers.Debug($"RUNNER: timeout message sent");
+                            tasksChannel.Send(new TaskTimeoutMessage());
 
                             // indicate the timeout message was sent
                             Interlocked.Exchange(ref didTimeout, 2);
@@ -272,9 +266,7 @@ namespace DidoNet
 
                     // execute the task by invoking the expression.
                     // the task will run for as long as necessary.
-                    ThreadHelpers.Debug($"RUNNER: starting task");
                     var result = expression?.Invoke(environment.ExecutionContext);
-                    ThreadHelpers.Debug($"RUNNER: finished task");
 
                     // dispose the timeout now (if it exists) to prevent it from triggering
                     // accidentally if the task already completed successfully
@@ -292,9 +284,7 @@ namespace DidoNet
 
                         // otherwise send the result back to the application
                         var resultMessage = new TaskResponseMessage(result);
-                        ThreadHelpers.Debug($"RUNNER: sending result message");
-                        TasksChannel.Send(resultMessage);
-                        ThreadHelpers.Debug($"RUNNER: result message sent");
+                        tasksChannel.Send(resultMessage);
                     }
                     else
                     {
@@ -312,13 +302,13 @@ namespace DidoNet
                 catch (OperationCanceledException)
                 {
                     // catch and report cancellations
-                    TasksChannel.Send(new TaskCancelMessage());
+                    tasksChannel.Send(new TaskCancelMessage());
                 }
                 catch (Exception ex)
                 {
                     // catch and report invocation errors
                     var errorMessage = new TaskErrorMessage(TaskErrorMessage.Categories.Invocation, ex);
-                    TasksChannel.Send(errorMessage);
+                    tasksChannel.Send(errorMessage);
                 }
                 finally
                 {

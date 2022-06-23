@@ -5,7 +5,6 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Linq.Expressions;
-using System.Runtime.Loader;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -13,27 +12,84 @@ namespace DidoNet
 {
     internal static class ExpressionSerializer
     {
+        public static async Task<byte[]> SerializeAsync<TResult>(Expression<Func<ExecutionContext, TResult>> expression, ExpressionSerializeSettings? settings = null)
+        {
+            using (var stream = new MemoryStream())
+            {
+                await SerializeAsync(expression, stream, settings);
+                return stream.ToArray();
+            }
+        }
+
         public static Task SerializeAsync<TResult>(Expression<Func<ExecutionContext, TResult>> expression, Stream stream, ExpressionSerializeSettings? settings = null)
         {
+            if (expression == null)
+            {
+                throw new ArgumentNullException(nameof(expression));
+            }
+            if (stream == null)
+            {
+                throw new ArgumentNullException(nameof(stream));
+            }
+
             var node = Encode(expression);
             Serialize(node, stream, settings);
             return Task.CompletedTask;
         }
 
-        // TODO: use byte[] instead of stream? by design these expressions are not supposed to get super huge
+        /// <summary>
+        /// Deserialize an expression from a byte array, using the provided environment
+        /// to resolve any required assemblies and load them into the proper runtime assembly
+        /// context.
+        /// <para/>NOTE the byte array must be created with SerializeAsync().
+        /// </summary>
+        /// <typeparam name="TResult"></typeparam>
+        /// <param name="data"></param>
+        /// <param name="env"></param>
+        /// <param name="settings"></param>
+        /// <returns></returns>
+        public static Task<Func<ExecutionContext, TResult>> DeserializeAsync<TResult>(byte[] data, Environment env, ExpressionSerializeSettings? settings = null)
+        {
+            using (var stream = new MemoryStream(data))
+            {
+                return DeserializeAsync<TResult>(stream, env, settings);
+            }
+        }
+
         public static Task<Func<ExecutionContext, TResult>> DeserializeAsync<TResult>(Stream stream, Environment env, ExpressionSerializeSettings? settings = null)
         {
+            if (stream == null)
+            {
+                throw new ArgumentNullException(nameof(stream));
+            }
+            if (env == null)
+            {
+                throw new ArgumentNullException(nameof(env));
+            }
             var node = Deserialize(stream, settings);
             return DecodeAsync<TResult>(node, env);
         }
 
         public static Node Encode<TResult>(Expression<Func<ExecutionContext, TResult>> expression)
         {
+            if (expression == null)
+            {
+                throw new ArgumentNullException(nameof(expression));
+            }
             return EncodeFromExpression(expression);
         }
 
         public static async Task<Func<ExecutionContext, TResult>> DecodeAsync<TResult>(Node node, Environment env)
         {
+            if (node == null)
+            {
+                throw new ArgumentNullException(nameof(node));
+            }
+            if (env == null)
+            {
+                throw new ArgumentNullException(nameof(env));
+            }
+
             // deserialize the encoded expression tree, which by design will be a lambda expression
             var state = new ExpressionVisitorState();
             var exp = await DecodeToExpressionAsync(node, env, state);
@@ -52,6 +108,15 @@ namespace DidoNet
 
         public static void Serialize(Node node, Stream stream, ExpressionSerializeSettings? settings = null)
         {
+            if (node == null)
+            {
+                throw new ArgumentNullException(nameof(node));
+            }
+            if (stream == null)
+            {
+                throw new ArgumentNullException(nameof(stream));
+            }
+
             settings = settings ?? new ExpressionSerializeSettings();
 
             switch (settings.Format)
@@ -82,6 +147,11 @@ namespace DidoNet
 
         public static Node Deserialize(Stream stream, ExpressionSerializeSettings? settings = null)
         {
+            if (stream == null)
+            {
+                throw new ArgumentNullException(nameof(stream));
+            }
+
             settings = settings ?? new ExpressionSerializeSettings();
 
             switch (settings.Format)

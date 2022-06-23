@@ -24,12 +24,12 @@ namespace DidoNet.Test
             return (int)Interlocked.Increment(ref NextPort);
         }
 
-        public ConnectionAndChannelTests(ITestOutputHelper output)
-        {
-            //var converter = new OutputConverter(output);
-            //var converter = new OutputConverter(output, "OUTPUT.txt");
-            //Console.SetOut(converter);
-        }
+        //public ConnectionAndChannelTests(ITestOutputHelper output)
+        //{
+        //    //var converter = new OutputConverter(output);
+        //    var converter = new OutputConverter(output, "OUTPUT.txt");
+        //    Console.SetOut(converter);
+        //}
 
         [Fact]
         public async void ClientServerCommunication()
@@ -78,10 +78,10 @@ namespace DidoNet.Test
         [Fact]
         public async void Disconnect()
         {
-            // create a local client/server system
+            // create a local client/server system and disconnect the server explicitly
+            // and confirm the client gets implicitly disconnected
             using (var clientServerConnection = await ClientServerConnection.CreateAsync(GetNextAvailablePort()))
             {
-                // disconnect the server explicitly and confirm the client gets implicitly disconnected
                 clientServerConnection.ServerConnection.Disconnect();
                 var now = DateTime.UtcNow;
                 while (clientServerConnection.ClientConnection.IsConnected)
@@ -89,7 +89,7 @@ namespace DidoNet.Test
                     Thread.Sleep(1);
                     if ((DateTime.UtcNow - now) >= TimeSpan.FromSeconds(1))
                     {
-                        throw new TimeoutException("Connection did not terminate within the alotted time.");
+                        throw new TimeoutException("Connection did not terminate within the allotted time.");
                     }
                 }
             }
@@ -104,10 +104,48 @@ namespace DidoNet.Test
                     Thread.Sleep(1);
                     if ((DateTime.UtcNow - now) >= TimeSpan.FromSeconds(1))
                     {
-                        throw new TimeoutException("Connection did not terminate within the alotted time.");
+                        throw new TimeoutException("Connection did not terminate within the allotted time.");
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// NOTE NOTE NOTE NOTE NOTE:
+        /// <para/>This test can nondeterministically take a long time to finish depending on when the underlying
+        /// network stream either times out after a disconnect, or a missed heartbeat frame terminates the connection.
+        /// </summary>
+        [Fact]
+        public async void UnexpectedDisconnect()
+        {
+            // create a local client/server system and simulate an unexpected disconnect.
+            // confirm the client gets implicitly disconnected and an aggregate
+            // exception is thrown when the connection is disposed (since the underlying
+            // network stream could not be used for reading/writing)
+            await Assert.ThrowsAsync<AggregateException>(async () =>
+            {
+                using (var clientServerConnection = await ClientServerConnection.CreateAsync(GetNextAvailablePort()))
+                {
+                    clientServerConnection.ServerConnection.SimulateUnexpectedDisconnect();
+                    while (clientServerConnection.ClientConnection.IsConnected)
+                    {
+                        Thread.Sleep(1);
+                    }
+                }
+            });
+
+            // repeat the test from the other direction
+            await Assert.ThrowsAsync<AggregateException>(async () =>
+            {
+                using (var clientServerConnection = await ClientServerConnection.CreateAsync(GetNextAvailablePort()))
+                {
+                    clientServerConnection.ClientConnection.SimulateUnexpectedDisconnect();
+                    while (clientServerConnection.ServerConnection.IsConnected)
+                    {
+                        Thread.Sleep(1);
+                    }
+                }
+            });
         }
 
         [Fact]

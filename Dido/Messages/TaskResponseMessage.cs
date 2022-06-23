@@ -1,4 +1,5 @@
 ﻿using Newtonsoft.Json;
+using System;
 using System.IO;
 using System.Threading.Tasks;
 
@@ -73,6 +74,28 @@ namespace DidoNet
                     //}
                 }
                 return _result;
+            }
+        }
+
+        public T GetResult<T>()
+        {
+            // _result will always be a non-task value.
+            // if the desired type is a Task, wrap the result in a properly typed
+            // Task so it can be awaited.
+            var intendedType = typeof(T);
+            if (intendedType.IsGenericType && intendedType.GetGenericTypeDefinition() == typeof(Task<>))
+            {
+                // convert the result to the expected generic task type
+                var resultGenericType = intendedType.GenericTypeArguments[0];
+                var resultValue = Convert.ChangeType(Result, resultGenericType);
+                // then construct a Task.FromResult using the expected generic type
+                var method = typeof(Task).GetMethod(nameof(Task.FromResult), System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public);
+                method = method!.MakeGenericMethod(resultGenericType);
+                return (T)method!.Invoke(null, new[] { resultValue })!;
+            }
+            else
+            {
+                return (T)Convert.ChangeType(Result, typeof(T));
             }
         }
 

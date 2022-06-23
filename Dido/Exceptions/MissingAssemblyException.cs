@@ -8,7 +8,7 @@ namespace DidoNet
     public class MissingAssemblyException : Exception
     {
         public MissingAssemblyException() { }
-        public MissingAssemblyException(string message) : base(message) { }
-        public MissingAssemblyException(string message, Exception innerException) : base(message, innerException) { }
+        public MissingAssemblyException(string? message) : base(message) { }
+        public MissingAssemblyException(string? message, Exception innerException) : base(message, innerException) { }
     }
 }

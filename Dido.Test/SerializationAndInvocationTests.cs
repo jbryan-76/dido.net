@@ -50,7 +50,7 @@ namespace DidoNet.Test
         {
             // serialize a lambda expression invoking a member method
             FakeArgument = 111;
-            var bytes = await Dido.SerializeAsync((context) => FakeObject.SimpleMemberMethod(FakeArgument));
+            var bytes = await ExpressionSerializer.SerializeAsync((context) => FakeObject.SimpleMemberMethod(FakeArgument));
             // save the serialized model
             var path = Path.Combine(TestFixture.SharedTestDataPath, TestFixture.MemberMethodFile);
             File.WriteAllBytes(path, bytes);
@@ -61,7 +61,7 @@ namespace DidoNet.Test
 
             // serialize a lambda expression invoking a static method
             FakeArgument = 222;
-            bytes = await Dido.SerializeAsync((context) => SampleWorkerClass.SimpleStaticMethod(FakeArgument));
+            bytes = await ExpressionSerializer.SerializeAsync((context) => SampleWorkerClass.SimpleStaticMethod(FakeArgument));
             // save the serialized model
             path = Path.Combine(TestFixture.SharedTestDataPath, TestFixture.StaticMethodFile);
             File.WriteAllBytes(path, bytes);
@@ -79,7 +79,7 @@ namespace DidoNet.Test
                 MyDateTimeOffset = new DateTimeOffset(new DateTime(2000, 2, 2, 2, 2, 2)),
                 MyInt = 42
             };
-            bytes = await Dido.SerializeAsync((context) => FakeObject.MemberMethodWithDependency(DependencyModel));
+            bytes = await ExpressionSerializer.SerializeAsync((context) => FakeObject.MemberMethodWithDependency(DependencyModel));
             // save the serialized model
             path = Path.Combine(TestFixture.SharedTestDataPath, TestFixture.DependencyMethodFile);
             File.WriteAllBytes(path, bytes);
@@ -100,8 +100,8 @@ namespace DidoNet.Test
             FakeArgument = 456;
 
             // serialize, deserialize, execute, and verify
-            var data = await Dido.SerializeAsync((context) => FakeObject.SimpleMemberMethod(FakeArgument));
-            var lambda = await Dido.DeserializeAsync<int>(data, TestFixture.Environment);
+            var data = await ExpressionSerializer.SerializeAsync((context) => FakeObject.SimpleMemberMethod(FakeArgument));
+            var lambda = await ExpressionSerializer.DeserializeAsync<int>(data, TestFixture.Environment);
             var result = lambda.Invoke(TestFixture.Environment.ExecutionContext);
             Assert.Equal(FakeArgument, result);
         }
@@ -118,8 +118,8 @@ namespace DidoNet.Test
             int arg = 123;
 
             // serialize, deserialize, execute, and verify
-            var data = await Dido.SerializeAsync((context) => obj.SimpleMemberMethod(arg));
-            var lambda = await Dido.DeserializeAsync<int>(data, TestFixture.Environment);
+            var data = await ExpressionSerializer.SerializeAsync((context) => obj.SimpleMemberMethod(arg));
+            var lambda = await ExpressionSerializer.DeserializeAsync<int>(data, TestFixture.Environment);
             var result = lambda.Invoke(TestFixture.Environment.ExecutionContext);
             Assert.Equal(arg, result);
         }
@@ -243,8 +243,8 @@ namespace DidoNet.Test
         public async void TestStaticMethod()
         {
             FakeArgument = 456;
-            var data = await Dido.SerializeAsync((context) => SampleWorkerClass.SimpleStaticMethod(FakeArgument));
-            var lambda = await Dido.DeserializeAsync<int>(data, TestFixture.Environment);
+            var data = await ExpressionSerializer.SerializeAsync((context) => SampleWorkerClass.SimpleStaticMethod(FakeArgument));
+            var lambda = await ExpressionSerializer.DeserializeAsync<int>(data, TestFixture.Environment);
             var result = lambda.Invoke(TestFixture.Environment.ExecutionContext);
 
             Assert.Equal(FakeArgument, result);
@@ -267,8 +267,8 @@ namespace DidoNet.Test
                     MyDateTimeOffset = DateTimeOffset.Now,
                 }
             };
-            var data = await Dido.SerializeAsync((context) => FakeObject.MemberMethodWithDependency(depModel));
-            var lambda = await Dido.DeserializeAsync<string>(data, TestFixture.Environment);
+            var data = await ExpressionSerializer.SerializeAsync((context) => FakeObject.MemberMethodWithDependency(depModel));
+            var lambda = await ExpressionSerializer.DeserializeAsync<string>(data, TestFixture.Environment);
             var actualResult = lambda.Invoke(TestFixture.Environment.ExecutionContext);
             var expectedResult = FakeObject.MemberMethodWithDependency(depModel);
             Assert.Equal(expectedResult, actualResult);
@@ -281,8 +281,8 @@ namespace DidoNet.Test
         [Fact]
         public async void TestMemberMethodWithDependency()
         {
-            var data = await Dido.SerializeAsync((context) => FakeObject.MemberMethodWithDependency(DependencyModel));
-            var lambda = await Dido.DeserializeAsync<string>(data, TestFixture.Environment);
+            var data = await ExpressionSerializer.SerializeAsync((context) => FakeObject.MemberMethodWithDependency(DependencyModel));
+            var lambda = await ExpressionSerializer.DeserializeAsync<string>(data, TestFixture.Environment);
             var actualResult = lambda.Invoke(TestFixture.Environment.ExecutionContext);
             var expectedResult = FakeObject.MemberMethodWithDependency(DependencyModel);
             Assert.Equal(expectedResult, actualResult);
@@ -297,8 +297,8 @@ namespace DidoNet.Test
         {
             string closureVal = "hello world";
 
-            var data = await Dido.SerializeAsync((context) => Foo(context, 23, closureVal));
-            var lambda = await Dido.DeserializeAsync<string>(data, TestFixture.Environment);
+            var data = await ExpressionSerializer.SerializeAsync((context) => Foo(context, 23, closureVal));
+            var lambda = await ExpressionSerializer.DeserializeAsync<string>(data, TestFixture.Environment);
             var actualResult = lambda.Invoke(TestFixture.Environment.ExecutionContext);
             var expectedResult = Foo(TestFixture.Environment.ExecutionContext, 23, closureVal);
             Assert.Equal(expectedResult, actualResult);
@@ -344,14 +344,14 @@ namespace DidoNet.Test
             var lambda = Expression.Lambda<Func<ExecutionContext, int>>(bodyEx, contextParamEx);
 
             // serialize both lambdas and confirm they match
-            var expectedData2 = await Dido.SerializeAsync(expectedLambda);
-            var actualData2 = await Dido.SerializeAsync(lambda);
+            var expectedData2 = await ExpressionSerializer.SerializeAsync(expectedLambda);
+            var actualData2 = await ExpressionSerializer.SerializeAsync(lambda);
             Assert.True(System.Linq.Enumerable.SequenceEqual(expectedData2, actualData2));
 
             // deserialize and execute both lambdas and confirm the results match
-            var expectedMethod2 = await Dido.DeserializeAsync<int>(expectedData2, TestFixture.Environment);
+            var expectedMethod2 = await ExpressionSerializer.DeserializeAsync<int>(expectedData2, TestFixture.Environment);
             var expectedResult2 = expectedMethod2.Invoke(TestFixture.Environment.ExecutionContext);
-            var actualMethod2 = await Dido.DeserializeAsync<int>(actualData2, TestFixture.Environment);
+            var actualMethod2 = await ExpressionSerializer.DeserializeAsync<int>(actualData2, TestFixture.Environment);
             var actualResult2 = actualMethod2.Invoke(TestFixture.Environment.ExecutionContext);
             Assert.Equal(expectedResult2, actualResult2);
         }

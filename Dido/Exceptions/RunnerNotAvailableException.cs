@@ -8,7 +8,7 @@ namespace DidoNet
     public class RunnerNotAvailableException : Exception
     {
         public RunnerNotAvailableException() { }
-        public RunnerNotAvailableException(string message) : base(message) { }
-        public RunnerNotAvailableException(string message, Exception innerException) : base(message, innerException) { }
+        public RunnerNotAvailableException(string? message) : base(message) { }
+        public RunnerNotAvailableException(string? message, Exception innerException) : base(message, innerException) { }
     }
 }

@@ -1,14 +1,15 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
 
 namespace DidoNet
 {
-    internal class RunnerBusyMessage : IMessage
+    internal class RunnerBusyMessage : IErrorMessage
     {
         public string Message { get; set; } = string.Empty;
 
-        public RunnerBusyMessage()
-        //: this("The runner is busy: all task slots are full and the task queue is either full or disabled.")
-        { }
+        public Exception Exception { get { return new RunnerBusyException(Message); } }
+
+        public RunnerBusyMessage() { }
 
         public RunnerBusyMessage(string message)
         {

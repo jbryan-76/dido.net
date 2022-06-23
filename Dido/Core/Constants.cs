@@ -18,22 +18,28 @@ namespace DidoNet
 
         #region Application <-> Runner channels
         /// <summary>
+        /// The channel number for the channel transporting control messages between
+        /// an Application and a Runner.
+        /// </summary>
+        internal static readonly ushort AppRunner_ControlChannelId = 20;
+
+        /// <summary>
         /// The channel number for the channel transporting task requests and results between
         /// an Application and a Runner.
         /// </summary>
-        internal static readonly ushort AppRunner_TaskChannelId = 20;
+        internal static readonly ushort AppRunner_TaskChannelId = 21;
 
         /// <summary>
         /// The channel number for the channel transporting assemblies between
         /// an Application and a Runner.
         /// </summary>
-        internal static readonly ushort AppRunner_AssemblyChannelId = 21;
+        internal static readonly ushort AppRunner_AssemblyChannelId = 22;
 
         /// <summary>
         /// The channel number for the channel transporting file requests from
         /// a Runner to an Application.
         /// </summary>
-        internal static readonly ushort AppRunner_FileChannelId = 22;
+        internal static readonly ushort AppRunner_FileChannelId = 23;
 
         /// <summary>
         /// The first channel number for channels transporting files between
@@ -43,6 +49,9 @@ namespace DidoNet
 
         internal static readonly ushort AppRunner_MaxFileChannels = 1024;
 
+        /// <summary>
+        /// The first channel number for application-defined custom channels.
+        /// </summary>
         internal static readonly ushort AppRunner_CustomChannelStart = 2000;
 
         internal static readonly ushort AppRunner_MaxCustomChannels = 1024;

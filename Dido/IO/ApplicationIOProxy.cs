@@ -258,7 +258,7 @@ namespace DidoNet.IO
                     break;
 
                 default:
-                    throw new InvalidOperationException($"Unknown message type '{message.GetType()}'");
+                    throw new UnhandledMessageException(message);
             }
         }
     }

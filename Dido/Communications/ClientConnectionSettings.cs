@@ -1,6 +1,8 @@
 ﻿namespace DidoNet
 {
-
+    /// <summary>
+    /// Configuration settings for connecting to a remote client.
+    /// </summary>
     public class ClientConnectionSettings
     {
         /// <summary>

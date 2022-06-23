@@ -67,7 +67,7 @@ namespace DidoNet
         /// <summary>
         /// The set of all active workers that are processing tasks.
         /// </summary>
-        private ConcurrentDictionary<Guid, TaskWorker> ActiveWorkers = new ConcurrentDictionary<Guid, TaskWorker>();
+        private ConcurrentDictionary<string, TaskWorker> ActiveWorkers = new ConcurrentDictionary<string, TaskWorker>();
 
         /// <summary>
         /// The set of workers that have completed processing tasks and need to be disposed.
@@ -289,16 +289,37 @@ namespace DidoNet
                     }
                 }
 
-                // if there are any pending connections, accept them
+                // if there are any pending connections...
                 if (listener.Pending())
                 {
-                    // block and wait for the next incoming connection
+                    // ...accept the next one
                     var client = listener.AcceptTcpClient();
 
                     // create a secure connection to the endpoint
                     var connection = new Connection(client, cert);
 
+                    // receive the initial task detail message
+                    TaskTypeMessage taskTypeMessage = new TaskTypeMessage();
+                    using (var controlChannel = new MessageChannel(connection, Constants.AppRunner_ControlChannelId))
+                    {
+                        taskTypeMessage = controlChannel.ReceiveMessage<TaskTypeMessage>();
+                    }
+
                     // TODO: if the connection is reconnecting to an existing runner, find and update the worker
+                    if (taskTypeMessage.TaskType == TaskTypeMessage.TaskTypes.Untethered
+                        && !string.IsNullOrEmpty(taskTypeMessage.TaskId))
+                    {
+                        if (ActiveWorkers.TryGetValue(taskTypeMessage.TaskId, out var worker))
+                        {
+                            // TODO: update the worker connection
+                            // TODO: send something back to the application
+                        }
+                        else
+                        {
+                            // TODO: if an active worker could not be found, that means it's done (or failed).
+                            // TODO: send something back to the application
+                        }
+                    }
 
                     // the mediator uses an optimistic scheduling strategy, which means
                     // it will route traffic to runners based on the conditions known at the 
@@ -320,7 +341,7 @@ namespace DidoNet
                     else
                     {
                         // otherwise create a worker...
-                        var worker = new TaskWorker(connection, Configuration);
+                        var worker = new TaskWorker(connection, Configuration, taskTypeMessage);
 
                         if (ActiveWorkers.Count < Configuration.MaxTasks
                             && QueuedWorkers.Count == 0)

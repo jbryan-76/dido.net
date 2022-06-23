@@ -1,14 +1,15 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
 
 namespace DidoNet
 {
-    internal class TaskCancelMessage : IMessage
+    internal class TaskCancelMessage : IErrorMessage
     {
         public string Message { get; set; } = string.Empty;
 
-        public TaskCancelMessage()
-        //: this("The task was canceled.")
-        { }
+        public Exception Exception { get { return new OperationCanceledException(Message); } }
+
+        public TaskCancelMessage() { }
 
         public TaskCancelMessage(string message)
         {

@@ -8,7 +8,7 @@ namespace DidoNet
     public class RunnerBusyException : Exception
     {
         public RunnerBusyException() { }
-        public RunnerBusyException(string message) : base(message) { }
-        public RunnerBusyException(string message, Exception innerException) : base(message, innerException) { }
+        public RunnerBusyException(string? message) : base(message) { }
+        public RunnerBusyException(string? message, Exception innerException) : base(message, innerException) { }
     }
 }

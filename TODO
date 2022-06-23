@@ -1,8 +1,3 @@
-- configure assembly caching from application (to make dev easier)
-- configure assembly encryption from application
-- refactor servers into separate project
-- refactor communications into separate project
-- confirm runner is backwards compatible and can handle "old" assemblies
 - enhance Run() configuration or parameters to support the application creating custom communication channels
   (and corresponding symmetric capability on the execution context)
 - add progress support to execution context
@@ -12,6 +7,11 @@
 - create jobs system with mediator, including configurable optional persistence
 - explore task "tethering": what should a task running on a runner do when the application connection terminates
   unexpectedly? also terminate? keep going and store result on a mediator? can we support re-establishing a connection?
+  when an app tries reconnecting to an untethered task:
+    case fail: the app will need to start the task over
+    case succeed:
+       case task failed: the app will receive the error and can retry as needed
+       case task nominal: the app can communicate normally
 - explore supporting fire-and-forget tasks, also with dynamic reconnection? this would enable eg microservice patterns.
   however what does it mean for following use case?
     1) application starts an untethered microservice task

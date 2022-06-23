@@ -8,6 +8,4 @@ namespace DidoNet
 
         void Read(Stream stream);
     }
-
-    // TODO: make an abstract base Message class too with support for a message version?
 }

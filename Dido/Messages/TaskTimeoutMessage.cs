@@ -1,14 +1,15 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
 
 namespace DidoNet
 {
-    internal class TaskTimeoutMessage : IMessage
+    internal class TaskTimeoutMessage : IErrorMessage
     {
         public string Message { get; set; } = string.Empty;
 
-        public TaskTimeoutMessage()
-        //: this("The task did not complete in the allotted time.")
-        { }
+        public Exception Exception { get { return new TimeoutException(Message); } }
+
+        public TaskTimeoutMessage() { }
 
         public TaskTimeoutMessage(string message)
         {

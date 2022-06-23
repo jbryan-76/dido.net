@@ -4,7 +4,6 @@ using NLog;
 using System;
 using System.IO;
 using System.Linq.Expressions;
-using System.Runtime.Loader;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -53,6 +52,9 @@ namespace DidoNet
         /// </summary>
         public static Configuration? GlobalConfiguration = null;
 
+        /// <summary>
+        /// The class logger instance.
+        /// </summary>
         private static ILogger Logger = LogManager.GetCurrentClassLogger();
 
         /// <summary>
@@ -208,9 +210,14 @@ namespace DidoNet
                     catch (Exception e) when (e is TimeoutException || e is RunnerBusyException)
                     {
                         // don't retry forever
-                        if (configuration.MaxTries > 0 && tries == configuration.MaxTries)
+                        if (configuration.MaxTries > 0 && tries >= configuration.MaxTries)
                         {
                             throw;
+                        }
+                        else
+                        {
+                            // exponential back-off: roughly [100, 700, 3000, 10000] ms
+                            ThreadHelpers.Yield((int)Math.Pow(100, Math.Sqrt(Math.Max(tries, 4))));
                         }
                     }
                 }
@@ -236,7 +243,8 @@ namespace DidoNet
             Configuration configuration,
             CancellationToken cancellationToken)
         {
-            var runnerUri = configuration.RunnerUri;
+            // choose a runner to execute the expression
+            Uri runnerUri = SelectRunner(configuration);
 
             var connectionSettings = new ClientConnectionSettings
             {
@@ -244,234 +252,76 @@ namespace DidoNet
                 Thumbprint = configuration.ServerCertificateThumbprint
             };
 
-            // if there is a mediator configured but no runner, ask the mediator to choose a runner
-            if (configuration.MediatorUri != null && runnerUri == null)
-            {
-                // open a connection to the mediator
-                using (var mediatorConnection =
-                    new Connection(configuration.MediatorUri.Host, configuration.MediatorUri.Port, null, connectionSettings))
-                {
-                    // create the communications channel and request an available runner from the mediator
-                    var applicationChannel = new MessageChannel(mediatorConnection, Constants.MediatorApp_ChannelId);
-                    applicationChannel.Send(new RunnerRequestMessage(configuration.RunnerOSPlatforms, configuration.RunnerLabel, configuration.RunnerTags));
-
-                    // receive and process the response
-                    var message = applicationChannel.ReceiveMessage(configuration.MediatorTimeout);
-                    switch (message)
-                    {
-                        case RunnerResponseMessage response:
-                            runnerUri = new Uri(response.Endpoint);
-                            break;
-
-                        case RunnerNotAvailableMessage notAvailable:
-                            throw new RunnerNotAvailableException();
-
-                        default:
-                            throw new InvalidOperationException($"Unknown message type '{message.GetType()}'");
-                    }
-                }
-            }
-
             // create a secure connection to the remote runner
             using (var runnerConnection = new Connection(runnerUri!.Host, runnerUri.Port, null, connectionSettings))
             {
-                // TODO: refactor below channel+handler into separate classes to handle all the business logic
-
                 Logger.Trace($"Executing expression via {nameof(RunRemoteAsync)} to {runnerUri}");
 
-                // create communication channels to the runner for: task messages, assemblies
+                // create communication channels to the runner for: control messages, task messages, assembly messages
+                var controlChannel = new MessageChannel(runnerConnection, Constants.AppRunner_ControlChannelId);
                 var tasksChannel = new MessageChannel(runnerConnection, Constants.AppRunner_TaskChannelId);
                 var assembliesChannel = new MessageChannel(runnerConnection, Constants.AppRunner_AssemblyChannelId);
+
+                // inform the runner about what kind of task will be executed
+                controlChannel.Send(new TaskTypeMessage(TaskTypeMessage.TaskTypes.Tethered));
 
                 // create a proxy to handle file-system IO requests from the expression executing on the runner
                 var ioProxy = new ApplicationIOProxy(runnerConnection);
 
                 // handle assembly messages
-                assembliesChannel.OnMessageReceived = async (message, channel) =>
-                {
-                    switch (message)
-                    {
-                        case AssemblyRequestMessage request:
-                            if (string.IsNullOrEmpty(request.AssemblyName))
-                            {
-                                var response = new AssemblyErrorMessage(new ArgumentNullException(nameof(AssemblyRequestMessage.AssemblyName)));
-                                channel.Send(response);
-                                return;
-                            }
+                assembliesChannel.OnMessageReceived = (message, channel) => HandleAssemblyMessages(configuration, message, channel);
 
-                            // resolve the desired assembly and send it back
-                            try
-                            {
-                                using (var stream = await configuration.ResolveLocalAssemblyAsync(request.AssemblyName))
-                                using (var mem = new MemoryStream())
-                                {
-                                    IMessage response;
-                                    if (stream == null)
-                                    {
-                                        response = new AssemblyErrorMessage(new FileNotFoundException($"Assembly '{request.AssemblyName}' could not be resolved."));
-                                    }
-                                    else
-                                    {
-                                        stream.CopyTo(mem);
-                                        response = new AssemblyResponseMessage(mem.ToArray());
-                                    }
-                                    ThreadHelpers.Debug($"dido: sending AssemblyResponseMessage");
-                                    channel.Send(response);
-                                    ThreadHelpers.Debug($"dido: AssemblyRequestMessage WROTE");
-                                }
-                            }
-                            catch (Exception ex)
-                            {
-                                var response = new AssemblyErrorMessage(ex);
-                                channel.Send(response);
-                            }
-                            break;
-                        default:
-                            throw new InvalidOperationException($"Unknown message type '{message.GetType()}'");
-                    }
-                };
-
-                // handle task messages
+                // after kicking off the task request below, exactly one response message is expected back,
+                // which is received in this handler and attached to a TaskCompletionSource to be awaited
+                // below and then processed
                 var responseSource = new TaskCompletionSource<IMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
                 tasksChannel.OnMessageReceived = (message, channel) =>
                 {
-                    // TODO: switch messages instead?
                     ThreadHelpers.Debug($"dido: received message {message.GetType()}");
-                    // after kicking off the task request below, exactly one response message is expected back,
-                    // which is received in this handler and attached to the response source to be awaited
-                    // below and then processed
                     responseSource.SetResult(message);
                 };
 
-                // kickoff the task by serializing the expression and transmitting it to the remote runner
-                using (var stream = new MemoryStream())
+                // kickoff the remote task by serializing the expression and transmitting it to the runner
+                var assemblyCaching = configuration.AssemblyCaching;
+                if (assemblyCaching == AssemblyCachingPolicies.Auto)
                 {
-                    await ExpressionSerializer.SerializeAsync(expression, stream);
-                    var assemblyCaching = configuration.AssemblyCaching;
-                    if (assemblyCaching == AssemblyCachingPolicies.Auto)
-                    {
 #if DEBUG
-                        assemblyCaching = AssemblyCachingPolicies.Never;
+                    assemblyCaching = AssemblyCachingPolicies.Never;
 #else
-                        assemblyCaching = AssemblyCachingPolicies.Always;
+                    assemblyCaching = AssemblyCachingPolicies.Always;
 #endif
-                    }
-                    var requestMessage = new TaskRequestMessage(
-                        stream.ToArray(),
-                        configuration.Id,
-                        assemblyCaching,
-                        configuration.CachedAssemblyEncryptionKey,
-                        configuration.TimeoutInMs);
-                    lock (tasksChannel)
-                    {
-                        tasksChannel.Send(requestMessage);
-                    }
                 }
+                var requestMessage = new TaskRequestMessage(
+                    await ExpressionSerializer.SerializeAsync(expression),
+                    configuration.Id,
+                    assemblyCaching,
+                    configuration.CachedAssemblyEncryptionKey,
+                    configuration.TimeoutInMs);
+                tasksChannel.Send(requestMessage);
 
                 // when the cancellation token is canceled, send a cancel message to the runner
                 cancellationToken.Register(() =>
                 {
                     ThreadHelpers.Debug($"dido: sending cancel message");
-                    lock (tasksChannel)
-                    {
-                        tasksChannel.Send(new TaskCancelMessage());
-                    }
+                    tasksChannel.Send(new TaskCancelMessage());
                 });
 
-                // now wait until a response is received
-
+                // wait until a response is received
                 ThreadHelpers.Debug($"dido: waiting for response...");
                 Task.WaitAll(responseSource.Task);
                 var message = responseSource.Task.Result;
                 ThreadHelpers.Debug($"dido: got response; starting dispose...");
 
-                // cleanup the connection
-                runnerConnection.Dispose();
-                ThreadHelpers.Debug($"dido: disposed");
-
                 // yield the result
                 switch (message)
                 {
                     case TaskResponseMessage response:
-                        // the runner will always return a non-task value.
-                        // if the expression return type is a Task, wrap the result in a properly typed
-                        // Task so it can be awaited.
-                        var resultType = typeof(Tprop);
-                        if (resultType.IsGenericType && resultType.GetGenericTypeDefinition() == typeof(Task<>))
-                        {
-                            // convert the result to the expected generic task type
-                            var resultGenericType = resultType.GenericTypeArguments[0];
-                            var resultValue = Convert.ChangeType(response.Result, resultGenericType);
-                            // then construct a Task.FromResult using the expected generic type
-                            var method = typeof(Task).GetMethod(nameof(Task.FromResult), System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public);
-                            method = method!.MakeGenericMethod(resultGenericType);
-                            return (Tprop)method!.Invoke(null, new[] { resultValue })!;
-                        }
-                        else
-                        {
-                            return (Tprop)Convert.ChangeType(response.Result, typeof(Tprop));
-                        }
-                    case TaskErrorMessage error:
-                        switch (error.Category)
-                        {
-                            case TaskErrorMessage.Categories.General:
-                                throw new TaskGeneralException("Error while executing remote expression", error.Exception);
-                            case TaskErrorMessage.Categories.Deserialization:
-                                throw new TaskDeserializationException("Error while executing remote expression", error.Exception);
-                            case TaskErrorMessage.Categories.Invocation:
-                                throw new TaskInvocationException("Error while executing remote expression", error.Exception);
-                            default:
-                                throw new InvalidOperationException($"Task error category {error.Category} is unknown");
-                        }
-                    case TaskTimeoutMessage timeout:
-                        throw string.IsNullOrEmpty(timeout.Message) ? new TimeoutException() : new TimeoutException(timeout.Message);
-                    case TaskCancelMessage cancel:
-                        throw string.IsNullOrEmpty(cancel.Message) ? new OperationCanceledException() : new OperationCanceledException(cancel.Message);
-                    case RunnerBusyMessage busy:
-                        throw string.IsNullOrEmpty(busy.Message) ? new RunnerBusyException() : new RunnerBusyException(busy.Message);
+                        return response.GetResult<Tprop>();
+                    case IErrorMessage error:
+                        throw error.Exception;
                     default:
-                        throw new InvalidOperationException($"Unknown message type '{message.GetType()}'");
+                        throw new UnhandledMessageException(message);
                 }
-            }
-        }
-
-        /// <summary>
-        /// Serialize the given expression to a byte array. The resulting array
-        /// can either be stored or transmitted, and later deserialized and executed.
-        /// </summary>
-        /// <typeparam name="Tprop"></typeparam>
-        /// <param name="expression"></param>
-        /// <returns></returns>
-        /// <exception cref="InvalidOperationException"></exception>
-        public static async Task<byte[]> SerializeAsync<Tprop>(Expression<Func<ExecutionContext, Tprop>> expression)
-        {
-            if (expression == null)
-            {
-                throw new ArgumentNullException(nameof(expression));
-            }
-
-            using (var stream = new MemoryStream())
-            {
-                await ExpressionSerializer.SerializeAsync(expression, stream);
-                return stream.ToArray();
-            }
-        }
-
-        /// <summary>
-        /// Deserialize an expression from a byte array, using the provided environment
-        /// to resolve any required assemblies and load them into the proper runtime assembly
-        /// context.
-        /// <para/>NOTE the byte array must be created with SerializeAsync().
-        /// </summary>
-        /// <typeparam name="Tprop"></typeparam>
-        /// <param name="data"></param>
-        /// <param name="env"></param>
-        /// <returns></returns>
-        public static Task<Func<ExecutionContext, Tprop>> DeserializeAsync<Tprop>(byte[] data, Environment env)
-        {
-            using (var stream = new MemoryStream(data))
-            {
-                return ExpressionSerializer.DeserializeAsync<Tprop>(stream, env);
             }
         }
 
@@ -542,8 +392,8 @@ namespace DidoNet
 
                     // to adequately test end-to-end processing and the current configuration,
                     // serialize and deserialize the expression
-                    var data = await SerializeAsync(expression);
-                    var func = await DeserializeAsync<Tprop>(data, env);
+                    var data = await ExpressionSerializer.SerializeAsync(expression);
+                    var func = await ExpressionSerializer.DeserializeAsync<Tprop>(data, env);
 
                     // run the expression with the optional configured timeout and return its result
                     var result = await Task
@@ -599,6 +449,103 @@ namespace DidoNet
                 .TimeoutAfter(TimeSpan.FromMilliseconds(configuration.TimeoutInMs));
             cancellationToken.ThrowIfCancellationRequested();
             return result;
+        }
+
+        /// <summary>
+        /// Selects a suitable remote runner to execute a task based on the provided configuration.
+        /// </summary>
+        /// <param name="configuration"></param>
+        /// <returns></returns>
+        /// <exception cref="RunnerNotAvailableException"></exception>
+        /// <exception cref="UnhandledMessageException"></exception>
+        internal static Uri SelectRunner(Configuration configuration)
+        {
+            // prefer the explicitly provided runner...
+            var runnerUri = configuration.RunnerUri;
+
+            // ...however if no runner is configured but a mediator is, ask the mediator to choose a runner
+            if (runnerUri == null && configuration.MediatorUri != null)
+            {
+                var connectionSettings = new ClientConnectionSettings
+                {
+                    ValidaionPolicy = configuration.ServerCertificateValidationPolicy,
+                    Thumbprint = configuration.ServerCertificateThumbprint
+                };
+                // open a connection to the mediator
+                using (var mediatorConnection =
+                    new Connection(configuration.MediatorUri.Host, configuration.MediatorUri.Port, null, connectionSettings))
+                {
+                    // create the communications channel and request an available runner from the mediator
+                    var applicationChannel = new MessageChannel(mediatorConnection, Constants.MediatorApp_ChannelId);
+                    applicationChannel.Send(new RunnerRequestMessage(configuration.RunnerOSPlatforms, configuration.RunnerLabel, configuration.RunnerTags));
+
+                    // receive and process the response
+                    var message = applicationChannel.ReceiveMessage(configuration.MediatorTimeout);
+                    switch (message)
+                    {
+                        case RunnerResponseMessage response:
+                            runnerUri = new Uri(response.Endpoint);
+                            break;
+
+                        case RunnerNotAvailableMessage notAvailable:
+                            throw new RunnerNotAvailableException();
+
+                        default:
+                            throw new UnhandledMessageException(message);
+                    }
+                }
+            }
+
+            return runnerUri!;
+        }
+
+        /// <summary>
+        /// Processes messages received on the assemblies channel.
+        /// </summary>
+        /// <param name="configuration"></param>
+        /// <param name="message"></param>
+        /// <param name="channel"></param>
+        /// <exception cref="UnhandledMessageException"></exception>
+        internal static async void HandleAssemblyMessages(Configuration configuration, IMessage message, MessageChannel channel)
+        {
+            switch (message)
+            {
+                // resolve a requested assembly and send it back
+                case AssemblyRequestMessage request:
+                    if (string.IsNullOrEmpty(request.AssemblyName))
+                    {
+                        var response = new AssemblyErrorMessage(new ArgumentNullException(nameof(AssemblyRequestMessage.AssemblyName)));
+                        channel.Send(response);
+                        return;
+                    }
+
+                    try
+                    {
+                        var stream = await configuration.ResolveLocalAssemblyAsync(request.AssemblyName);
+                        if (stream == null)
+                        {
+                            channel.Send(new AssemblyErrorMessage(
+                                new FileNotFoundException($"Assembly '{request.AssemblyName}' could not be resolved."))
+                            );
+                        }
+                        else
+                        {
+                            using (stream)
+                            using (var mem = new MemoryStream())
+                            {
+                                stream.CopyTo(mem);
+                                channel.Send(new AssemblyResponseMessage(mem.ToArray()));
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        channel.Send(new AssemblyErrorMessage(ex));
+                    }
+                    break;
+                default:
+                    throw new UnhandledMessageException(message);
+            }
         }
     }
 }

@@ -91,7 +91,7 @@ namespace DidoNet
         /// <summary>
         /// The underlying connection endpoint.
         /// </summary>
-        private readonly TcpClient? EndPoint = null;
+        private TcpClient? EndPoint = null;
 
         /// <summary>
         /// The underlying secure socket stream.
@@ -231,6 +231,7 @@ namespace DidoNet
         /// Create a new secure connection in a client role using the provided endpoint,
         /// which is connected to the provided target host server (for proper and secure encryption,
         /// the target host server must match the server's certificate/credentials).
+        /// <para/>Note ownership of "endpoint" is transferred to the new connection object and will be disposed with the connection.
         /// </summary>
         /// <param name="endpoint">The TcpClient connected to the remote server endpoint.</param>
         /// <param name="targetHost">The host name of the remote server which is used as part of SSL to authenticate the connection.</param>
@@ -326,6 +327,7 @@ namespace DidoNet
                 SecureStream?.Dispose();
                 ReadBuffer.Dispose();
                 HeartbeatTimer?.Dispose();
+                EndPoint?.Dispose();
             }
 
             GC.SuppressFinalize(this);
@@ -349,7 +351,8 @@ namespace DidoNet
         /// <summary>
         /// Block and wait for all in-flight data to finish transmitting, 
         /// and all channels to empty of pending data.
-        /// <para/>This is useful to call in testing before disposing the connection.
+        /// <para/>This is useful to call in testing before disposing the connection to ensure
+        /// all inbound or outbound content has flushed.
         /// </summary>
         public void WaitWhileInUse()
         {
@@ -380,7 +383,7 @@ namespace DidoNet
                 }
             }
 
-            // wait for any remaining flushed channel data to be sent
+            // wait for any remaining channel data to be sent
             Flush();
 
             // signal all threads to stop
@@ -429,6 +432,15 @@ namespace DidoNet
             return GetChannelInternal(channelNumber);
         }
 
+        internal void SimulateUnexpectedDisconnect()
+        {
+            // TODO: closing the endpoint will not always result in an exceptional condition
+            // TODO: in the readloop or writeloop
+
+            EndPoint?.Close();
+            EndPoint = null;
+        }
+
         /// <summary>
         /// Removes but DOES NOT DISPOSE the given channel.
         /// </summary>
@@ -461,7 +473,7 @@ namespace DidoNet
 
         /// <summary>
         /// Blocks until all queued frames are transmitted.
-        /// <para/>Note if another thread is continually enqueuing frames this method
+        /// <para/>Note if another thread is continuously enqueuing frames this method
         /// may not return, so use with care.
         /// </summary>
         internal void Flush()
@@ -563,11 +575,11 @@ namespace DidoNet
                 // exit the loop when either this object or the remote side disconnects.
                 if (ReadStream.CanTimeout)
                 {
+                    // TODO: explore the best value to use
                     ReadStream.ReadTimeout = 100;
                 }
 
-                // TODO: how big should this buffer be?
-                // empirically it appears that 32k is standard for the underlying network classes
+                // TODO: how big should this buffer be? empirically it appears that 32k is standard for the underlying network classes
                 byte[] data = new byte[32 * 1024];
                 while (Interlocked.Read(ref Connected) == 1)
                 {
@@ -587,7 +599,10 @@ namespace DidoNet
                         // if the stream read times out, just ignore:
                         // that is expected if the other end of the connection is not sending any data
                         var socketException = e.InnerException as SocketException;
-                        if (socketException != null && socketException.SocketErrorCode == SocketError.TimedOut)
+                        if (socketException != null
+                            && socketException.SocketErrorCode == SocketError.TimedOut
+                            && EndPoint != null
+                            && EndPoint.Connected)
                         {
                             // NOTE it is an anti-pattern to use exception handling to control 
                             // "normal" expected program flow, but in this case there is no way to
@@ -609,7 +624,7 @@ namespace DidoNet
                     {
                         // signal all threads to terminate
                         Interlocked.Exchange(ref Connected, 0);
-                        Logger.Info($"Forcing disconnect: remote connection was idle for more than {2 * RemoteHeartbeatPeriodInSeconds} seconds");
+                        Logger.Info($"Forcing disconnect: remote connection did not send a heartbeat for more than {2 * RemoteHeartbeatPeriodInSeconds} seconds");
                         break;
                     }
 
@@ -655,9 +670,10 @@ namespace DidoNet
                     }
                 }
             }
-            catch (IOException)
+            catch (IOException e)
             {
                 Logger.Info("Client disconnected - closing the connection.");
+                ReadThreadException = e;
                 // force all thread termination on any error
                 Interlocked.Exchange(ref Connected, 0);
             }

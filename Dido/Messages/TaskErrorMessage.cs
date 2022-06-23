@@ -3,7 +3,7 @@ using System.IO;
 
 namespace DidoNet
 {
-    internal class TaskErrorMessage : IMessage
+    internal class TaskErrorMessage : IErrorMessage
     {
         public enum Categories
         {
@@ -18,19 +18,30 @@ namespace DidoNet
 
         public string ExceptionMessage { get; private set; } = string.Empty;
 
-        public Exception? Exception
+        public Exception Exception
         {
             get
             {
+                Exception exception;
                 try
                 {
-                    return string.IsNullOrEmpty(ExceptionType)
-                        ? null
-                        : Activator.CreateInstance(Type.GetType(ExceptionType)!, ExceptionMessage) as Exception;
+                    exception = Activator.CreateInstance(Type.GetType(ExceptionType)!, ExceptionMessage) as Exception ?? new Exception();
                 }
                 catch (Exception)
                 {
-                    return new InvalidOperationException($"Could not create exception of type '{ExceptionType}' with error message {ExceptionMessage}.");
+                    exception = new InvalidOperationException($"Could not create exception of type '{ExceptionType}' with error message {ExceptionMessage}.");
+                }
+
+                switch (Category)
+                {
+                    case TaskErrorMessage.Categories.General:
+                        return new TaskGeneralException("Error while executing remote expression", exception);
+                    case TaskErrorMessage.Categories.Deserialization:
+                        throw new TaskDeserializationException("Error while executing remote expression", exception);
+                    case TaskErrorMessage.Categories.Invocation:
+                        throw new TaskInvocationException("Error while executing remote expression", exception);
+                    default:
+                        throw new InvalidOperationException($"Task error category {Category} is unknown");
                 }
             }
         }

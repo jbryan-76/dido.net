@@ -9,7 +9,7 @@ namespace DidoNet
     public class ResourceNotAvailableException : Exception
     {
         public ResourceNotAvailableException() { }
-        public ResourceNotAvailableException(string message) : base(message) { }
-        public ResourceNotAvailableException(string message, Exception innerException) : base(message, innerException) { }
+        public ResourceNotAvailableException(string? message) : base(message) { }
+        public ResourceNotAvailableException(string? message, Exception innerException) : base(message, innerException) { }
     }
 }
