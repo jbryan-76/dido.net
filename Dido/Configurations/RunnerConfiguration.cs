@@ -9,9 +9,9 @@ namespace DidoNet
     {
         /// <summary>
         /// The unique id of the server instance.
-        /// If not provided, a random unique id will be assigned for each Runner server when it starts.
+        /// If not provided, a random unique id is used.
         /// </summary>
-        public string? Id { get; set; } = string.Empty;
+        public string Id { get; set; } = Guid.NewGuid().ToString();
 
         /// <summary>
         /// The optional label for the runner. 

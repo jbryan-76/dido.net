@@ -372,6 +372,35 @@ namespace DidoNet.Test
         }
 
         [Fact]
+        public async void MessageChannelExceptionAfterDisconnect()
+        {
+            await Assert.ThrowsAsync<AggregateException>(async () =>
+            {
+                // create a local client/server system
+                using (var clientServerConnection = await ClientServerConnection.CreateAsync(GetNextAvailablePort()))
+                {
+                    // create both sides of a logical channel for the client and server to communicate
+                    var messageChannel1ClientSide = new MessageChannel(clientServerConnection.ClientConnection, 1);
+                    var messageChannel1ServerSide = new MessageChannel(clientServerConnection.ServerConnection, 1);
+
+                    // try to receive a message from the client to the server in a thread...
+                    var task = Task.Run(() =>
+                    {
+                        var receivedMessage = messageChannel1ServerSide.ReceiveMessage<TestMessage>();
+                    });
+
+                    // ...but force a disconnect of the client...
+                    clientServerConnection.ClientConnection.SimulateUnexpectedDisconnect();
+
+                    // ...and confirm the thread stops on its own with an exception
+                    await task;
+                    Assert.NotNull(task.Exception);
+                }
+                // finally, disposing the connection will throw because of the abnormal disconnect
+            });
+        }
+
+        [Fact]
         public async void MessageChannels()
         {
             // create a local client/server system

@@ -21,11 +21,6 @@ namespace DidoNet
     public class RunnerServer : IDisposable
     {
         /// <summary>
-        /// The unique id of the server instance.
-        /// </summary>
-        public string Id { get; private set; } = Guid.NewGuid().ToString();
-
-        /// <summary>
         /// The current configuration of the runner.
         /// </summary>
         public RunnerConfiguration Configuration { get; private set; }
@@ -36,7 +31,7 @@ namespace DidoNet
         /// </summary>
         private string RunnerSpecificCachePath
         {
-            get { return Path.Combine(Configuration.CachePath, Id); }
+            get { return Path.Combine(Configuration.CachePath, Configuration.Id); }
         }
 
         /// <summary>
@@ -101,12 +96,6 @@ namespace DidoNet
                 Configuration.MaxTasks = Math.Max(System.Environment.ProcessorCount, 1);
             }
 
-            // override the default runner instance id if a specific one was provided
-            if (!string.IsNullOrEmpty(Configuration.Id))
-            {
-                Id = Configuration.Id;
-            }
-
             InitCache();
         }
 
@@ -133,7 +122,7 @@ namespace DidoNet
         {
             ip ??= IPAddress.Any;
 
-            Logger.Info($"Starting runner {Id} listening at {ip}:{port}");
+            Logger.Info($"Starting runner {Configuration.Id} listening at {ip}:{port}");
 
             // update the configured endpoint applications should use to connect,
             // if one was not provided
@@ -162,8 +151,10 @@ namespace DidoNet
                     Configuration.MaxTasks, Configuration.MaxQueue, Configuration.Label, Configuration.Tags));
                 MediatorChannel.Send(new RunnerStatusMessage(RunnerStates.Starting, 0, 0));
 
+                // TODO: receive an error back and kill the runner if the runner id is not unique in the mediator
+
                 // TODO: start an infrequent (eg 60s) heartbeat to mediator to update status and environment stats (eg cpu, ram)?
-                Logger.Info($"Runner {Id} using mediator = {Configuration.MediatorUri}");
+                Logger.Info($"Runner {Configuration.Id} using mediator = {Configuration.MediatorUri}");
             }
 
             // listen for incoming connections
@@ -185,7 +176,7 @@ namespace DidoNet
         /// </summary>
         public void Stop()
         {
-            Logger.Info($"Stopping runner {Id}...");
+            Logger.Info($"Stopping runner {Configuration.Id}...");
 
             // inform the mediator that this runner is stopping
             MediatorChannel?.Send(new RunnerStatusMessage(RunnerStates.Stopping, 0, 0));
@@ -199,11 +190,11 @@ namespace DidoNet
 
             if (Configuration.DeleteCacheAtShutdown)
             {
-                Logger.Info($"Deleting runner cache {Id}...");
+                Logger.Info($"Deleting runner cache {Configuration.Id}...");
                 DeleteCache();
             }
 
-            Logger.Info($"  Runner {Id} stopped");
+            Logger.Info($"  Runner {Configuration.Id} stopped");
         }
 
         /// <summary>

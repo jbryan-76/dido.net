@@ -18,11 +18,6 @@ namespace DidoNet
     public class MediatorServer
     {
         /// <summary>
-        /// The unique id of the mediator instance.
-        /// </summary>
-        public string Id { get; private set; } = Guid.NewGuid().ToString();
-
-        /// <summary>
         /// The current configuration of the mediator.
         /// </summary>
         public MediatorConfiguration Configuration { get; private set; }
@@ -91,7 +86,7 @@ namespace DidoNet
         {
             ip = ip ?? IPAddress.Any;
 
-            Logger.Info($"Starting mediator {Id} listening at {ip}:{port}");
+            Logger.Info($"Starting mediator {Configuration.Id} listening at {ip}:{port}");
 
             // listen for incoming connections
             var listener = new TcpListener(ip, port);
@@ -108,7 +103,7 @@ namespace DidoNet
         /// </summary>
         public void Stop()
         {
-            Logger.Info($"Stopping mediator {Id}...");
+            Logger.Info($"Stopping mediator {Configuration.Id}...");
 
             // signal the work thread to stop
             Interlocked.Exchange(ref IsRunning, 0);
@@ -121,7 +116,7 @@ namespace DidoNet
             DisconnectAndCleanupActiveClients();
             CleanupCompletedClients();
 
-            Logger.Info($"  Mediator {Id} stopped");
+            Logger.Info($"  Mediator {Configuration.Id} stopped");
         }
 
         /// <summary>
