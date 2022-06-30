@@ -26,6 +26,8 @@ namespace DidoNet
         /// </summary>
         private RunnerConfiguration Configuration { get; set; }
 
+        private TaskTypeMessage.TaskTypes TaskType { get; set; }
+
         /// <summary>
         /// The main thread for the worker.
         /// </summary>
@@ -49,7 +51,7 @@ namespace DidoNet
         /// <summary>
         /// The class logger instance.
         /// </summary>
-        private ILogger Logger = LogManager.GetCurrentClassLogger();
+        private readonly ILogger Logger = LogManager.GetCurrentClassLogger();
 
         /// <summary>
         /// Timestamp for when a task starts.
@@ -69,6 +71,7 @@ namespace DidoNet
         {
             Connection = connection;
             Configuration = configuration;
+            TaskType = taskTypeMessage.TaskType;
 
             // TODO: add "tethering" configuration: what to do if the application connection breaks?
             // TODO: in "tethered" mode, the task should cancel.
@@ -103,6 +106,7 @@ namespace DidoNet
             WorkThread?.Join(1000);
             Connection.Dispose();
             CancelSource.Dispose();
+            TaskComplete.Dispose();
         }
 
         // TODO: make this DoTetheredWork()?
@@ -261,38 +265,70 @@ namespace DidoNet
                         }, null, request.TimeoutInMs, Timeout.Infinite);
                     }
 
-                    // execute the task by invoking the expression.
-                    // the task will run for as long as necessary.
-                    var result = expression?.Invoke(environment.ExecutionContext);
-
-                    // dispose the timeout now (if it exists) to prevent it from triggering
-                    // accidentally if the task already completed successfully
-                    timeout?.Dispose();
-                    timeout = null;
-
-                    // if the task did not timeout, continue processing
-                    // (otherwise a timeout message was already sent)
-                    if (Interlocked.Read(ref didTimeout) == 0)
+                    tasksChannel.Send(new TaskIdMessage
                     {
-                        // if a cancellation was requested, the result can't be trusted,
-                        // so ensure a cancellation exception is thrown
-                        // (it will be handled in the catch block below)
-                        CancelSource.Token.ThrowIfCancellationRequested();
+                        RunnerId = Configuration.Id,
+                        TaskId = Id
+                    });
 
-                        // otherwise send the result back to the application
-                        var resultMessage = new TaskResponseMessage(result);
-                        tasksChannel.Send(resultMessage);
-                    }
-                    else
+                    // for untethered tasks, notify the application that the task is starting
+                    //if (TaskType == TaskTypeMessage.TaskTypes.Untethered)
+                    //{
+                    //    tasksChannel.Send(new TaskIdMessage
+                    //    {
+                    //        RunnerId = Configuration.Id,
+                    //        TaskId = Id
+                    //    });
+
+                    //    // execute the task by invoking the expression.
+                    //    // the task will run for as long as necessary.
+                    //    var result = expression?.Invoke(environment.ExecutionContext);
+
+                    //    // send a default response message to indicate the task has finished
+                    //    tasksChannel.Send(new TaskResponseMessage());
+                    //}
+                    //else
                     {
-                        // otherwise handle a rare edge-case where the task completes before
-                        // the timeout message finishes sending (since that message is sent in
-                        // a pool thread managed by the Timer), in which case delay here
-                        // until the message is sent (to prevent the underlying stream from
-                        // closing while the message is still writing to it).
-                        while (Interlocked.Read(ref didTimeout) == 1)
+                        // TODO:???
+                        //tasksChannel.Send(new TaskIdMessage
+                        //{
+                        //    RunnerId = Configuration.Id,
+                        //    TaskId = Id
+                        //});
+
+                        // execute the task by invoking the expression.
+                        // the task will run for as long as necessary.
+                        var result = expression?.Invoke(environment.ExecutionContext);
+
+                        // dispose the timeout now (if it exists) to prevent it from triggering
+                        // accidentally if the task already completed successfully
+                        timeout?.Dispose();
+                        timeout = null;
+
+                        // if the task did not timeout, continue processing
+                        // (otherwise a timeout message was already sent)
+                        if (Interlocked.Read(ref didTimeout) == 0)
                         {
-                            ThreadHelpers.Yield();
+                            // if a cancellation was requested, the result can't be trusted,
+                            // so ensure a cancellation exception is thrown
+                            // (it will be handled in the catch block below)
+                            CancelSource.Token.ThrowIfCancellationRequested();
+
+                            // otherwise send the result back to the application
+                            var resultMessage = new TaskResponseMessage(result);
+                            tasksChannel.Send(resultMessage);
+                        }
+                        else
+                        {
+                            // otherwise handle a rare edge-case where the task completes before
+                            // the timeout message finishes sending (since that message is sent in
+                            // a pool thread managed by the Timer), in which case delay here
+                            // until the message is sent (to prevent the underlying stream from
+                            // closing while the message is still writing to it).
+                            while (Interlocked.Read(ref didTimeout) == 1)
+                            {
+                                ThreadHelpers.Yield();
+                            }
                         }
                     }
                 }
@@ -318,5 +354,12 @@ namespace DidoNet
             }
         }
 
+        private void TrySendTaskMessage()
+        {
+            // create the task channel on the connection
+            // try to send a message on task channel
+            // if not connected return false and queue message
+            // else send and return true
+        }
     }
 }

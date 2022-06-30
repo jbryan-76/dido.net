@@ -96,6 +96,8 @@ namespace DidoNet
             Channel.Dispose();
         }
 
+        // TODO: add SendAsync
+
         /// <summary>
         /// Write the given message to the underlying channel.
         /// </summary>
@@ -154,6 +156,8 @@ namespace DidoNet
         //    });
         //    return source.Task;
         //}
+
+        // TODO: add ReceiveMessageAsync
 
         /// <summary>
         /// Block and receive a message from the underlying channel.

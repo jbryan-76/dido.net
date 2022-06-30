@@ -311,6 +311,7 @@ namespace DidoNet.Test
 
                 // block here until the message is received
                 reset.WaitOne();
+                reset.Dispose();
 
                 // confirm the messages match
                 Assert.NotNull(receivedMessage);
@@ -649,6 +650,7 @@ namespace DidoNet.Test
 
                 // block until the message is received
                 reset.WaitOne();
+                reset.Dispose();
 
                 Assert.Equal(testMessage.MyIntValue, receivedMessage!.MyIntValue);
                 Assert.Equal(testMessage.MyStringValue, receivedMessage.MyStringValue);

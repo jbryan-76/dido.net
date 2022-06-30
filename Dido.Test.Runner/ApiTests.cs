@@ -285,6 +285,7 @@ namespace DidoNet.Test.Runner
 
             // block here until the result is received
             reset.WaitOne();
+            reset.Dispose();
 
             // cleanup
             runnerServer.DeleteCache();
@@ -416,6 +417,152 @@ namespace DidoNet.Test.Runner
             Assert.Contains(message, ex.InnerException.Message);
 
             // cleanup
+            runnerServer.DeleteCache();
+            runnerServer.Dispose();
+        }
+
+        static class HandleTestsSampleClass
+        {
+            public static bool ThrowException()
+            {
+                Thread.Sleep(250);
+                throw new InvalidOperationException();
+            }
+
+            public static string ReturnArgument(string arg)
+            {
+                Thread.Sleep(250);
+                return arg;
+            }
+        }
+
+        [Fact]
+        public async void StartRemote()
+        {
+            // create and start a secure localhost loopback runner server that can execute serialized expressions
+            var runnerServer = new RunnerServer();
+            int port = GetNextAvailablePort();
+            runnerServer.Start(TestSelfSignedCert.ServerCertificate, port, IPAddress.Loopback);
+
+            // create configuration to use the loopback server
+            var configuration = new Configuration
+            {
+                MaxTries = 1,
+                RunnerUri = new Uri($"https://localhost:{port}"),
+                ExecutionMode = ExecutionModes.Remote,
+                // use the unit test assembly resolver instead of the default implementation
+                ResolveLocalAssemblyAsync = (assemblyName) => TestFixture.AssemblyResolver.ResolveAssembly(TestFixture.Environment, assemblyName, out _),
+                // bypass server cert validation since unit tests are using a base-64 self-signed cert
+                ServerCertificateValidationPolicy = ServerCertificateValidationPolicies._SKIP_
+            };
+
+            // start executing a lambda expression using the remote runner server
+            var expected = Guid.NewGuid().ToString();
+            var handle = await Dido.StartRemoteAsync(
+                (context) => HandleTestsSampleClass.ReturnArgument(expected),
+                configuration);
+
+            // wait for the remote task to complete
+            handle.WaitUntilFinished();
+
+            // confirm the handle state
+            Assert.True(handle.IsFinished);
+            Assert.Null(handle.Error);
+            Assert.Equal(expected, handle.Result);
+
+            // cleanup
+            handle.Dispose();
+            runnerServer.DeleteCache();
+            runnerServer.Dispose();
+        }
+
+        //[Fact]
+        public async void StartRemoteWithContinue()
+        {
+            // create and start a secure localhost loopback runner server that can execute serialized expressions
+            var runnerServer = new RunnerServer();
+            int port = GetNextAvailablePort();
+            runnerServer.Start(TestSelfSignedCert.ServerCertificate, port, IPAddress.Loopback);
+
+            // create configuration to use the loopback server
+            var configuration = new Configuration
+            {
+                MaxTries = 1,
+                RunnerUri = new Uri($"https://localhost:{port}"),
+                ExecutionMode = ExecutionModes.Remote,
+                // use the unit test assembly resolver instead of the default implementation
+                ResolveLocalAssemblyAsync = (assemblyName) => TestFixture.AssemblyResolver.ResolveAssembly(TestFixture.Environment, assemblyName, out _),
+                // bypass server cert validation since unit tests are using a base-64 self-signed cert
+                ServerCertificateValidationPolicy = ServerCertificateValidationPolicies._SKIP_
+            };
+
+            // start executing a lambda expression using the remote runner server
+            var expected = Guid.NewGuid().ToString();
+            var cancel = new CancellationTokenSource();
+            var handle = await Dido.StartRemoteAsync(
+                (context) => HandleTestsSampleClass.ReturnArgument(expected),
+                configuration, 
+                cancel.Token);
+
+            var runnerId = handle.RunnerId;
+            var taskId = handle.TaskId;
+
+            // dispose the handle to simulate the application stopping while the runner keeps going
+            handle.Dispose();
+
+            // simulate application downtime
+            Thread.Sleep(1000);
+
+            // reconnect to the runner and wait for the task to complete
+            handle = await Dido.ContinueRemoteAsync(runnerId, taskId, configuration);
+            handle.WaitUntilFinished();
+
+            // confirm the handle state
+            Assert.True(handle.IsFinished);
+            Assert.Null(handle.Error);
+            Assert.Equal(expected, handle.Result);
+
+            // cleanup
+            handle.Dispose();
+            runnerServer.DeleteCache();
+            runnerServer.Dispose();
+        }
+
+        [Fact]
+        public async void StartRemoteWithError()
+        {
+            // create and start a secure localhost loopback runner server that can execute serialized expressions
+            var runnerServer = new RunnerServer();
+            int port = GetNextAvailablePort();
+            runnerServer.Start(TestSelfSignedCert.ServerCertificate, port, IPAddress.Loopback);
+
+            // create configuration to use the loopback server
+            var configuration = new Configuration
+            {
+                MaxTries = 1,
+                RunnerUri = new Uri($"https://localhost:{port}"),
+                ExecutionMode = ExecutionModes.Remote,
+                // use the unit test assembly resolver instead of the default implementation
+                ResolveLocalAssemblyAsync = (assemblyName) => TestFixture.AssemblyResolver.ResolveAssembly(TestFixture.Environment, assemblyName, out _),
+                // bypass server cert validation since unit tests are using a base-64 self-signed cert
+                ServerCertificateValidationPolicy = ServerCertificateValidationPolicies._SKIP_
+            };
+
+            // start executing a lambda expression using the remote runner server
+            var handle = await Dido.StartRemoteAsync(
+                (context) => HandleTestsSampleClass.ThrowException(),
+                configuration);
+
+            // wait for the remote task to complete
+            handle.WaitUntilFinished();
+
+            // confirm the handle state
+            Assert.True(handle.IsFinished);
+            Assert.NotNull(handle.Error);
+            Assert.Null(handle.Result);
+
+            // cleanup
+            handle.Dispose();
             runnerServer.DeleteCache();
             runnerServer.Dispose();
         }

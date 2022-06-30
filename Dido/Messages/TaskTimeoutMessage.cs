@@ -3,6 +3,9 @@ using System.IO;
 
 namespace DidoNet
 {
+    /// <summary>
+    /// A message sent from a runner to an application when a task times out before completing.
+    /// </summary>
     internal class TaskTimeoutMessage : IErrorMessage
     {
         public string Message { get; set; } = string.Empty;

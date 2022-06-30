@@ -69,7 +69,7 @@ namespace DidoNet
         /// </summary>
         public string? CachedAssemblyEncryptionKey { get; set; }
 
-        private static ILogger Logger = LogManager.GetCurrentClassLogger();
+        private static readonly ILogger Logger = LogManager.GetCurrentClassLogger();
 
         /// <summary>
         /// Initializes a new instance of the Environment class.

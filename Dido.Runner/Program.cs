@@ -234,7 +234,7 @@ namespace DidoNet.Runner.Windows
 
         protected ServerConfiguration? ServerConfig;
 
-        private ILogger logger = NLog.LogManager.GetCurrentClassLogger();
+        private readonly ILogger logger = NLog.LogManager.GetCurrentClassLogger();
     }
 
     class Program

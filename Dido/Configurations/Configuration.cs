@@ -120,6 +120,23 @@ namespace DidoNet
         public TimeSpan MediatorTimeout { get; set; } = TimeSpan.FromSeconds(10);
 
         /// <summary>
+        /// Gets the actual assembly caching policy to use, interpreting the 'Auto' option as necessary.
+        /// </summary>
+        /// <returns></returns>
+        internal AssemblyCachingPolicies GetActualAssemblyCachingPolicy()
+        {
+            if (AssemblyCaching == AssemblyCachingPolicies.Auto)
+            {
+#if DEBUG
+                return AssemblyCachingPolicies.Never;
+#else
+                return AssemblyCachingPolicies.Always;
+#endif
+            }
+            return AssemblyCaching;
+        }
+
+        /// <summary>
         /// Get a default application id derived from the entry assembly name and version.
         /// </summary>
         /// <returns></returns>

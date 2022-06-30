@@ -37,6 +37,31 @@ namespace DidoNet
             return Task.CompletedTask;
         }
 
+        //public static async Task<byte[]> SerializeAsync(Expression<Action<ExecutionContext>> expression, ExpressionSerializeSettings? settings = null)
+        //{
+        //    using (var stream = new MemoryStream())
+        //    {
+        //        await SerializeAsync(expression, stream, settings);
+        //        return stream.ToArray();
+        //    }
+        //}
+
+        //public static Task SerializeAsync(Expression<Action<ExecutionContext>> expression, Stream stream, ExpressionSerializeSettings? settings = null)
+        //{
+        //    if (expression == null)
+        //    {
+        //        throw new ArgumentNullException(nameof(expression));
+        //    }
+        //    if (stream == null)
+        //    {
+        //        throw new ArgumentNullException(nameof(stream));
+        //    }
+
+        //    var node = Encode(expression);
+        //    Serialize(node, stream, settings);
+        //    return Task.CompletedTask;
+        //}
+
         /// <summary>
         /// Deserialize an expression from a byte array, using the provided environment
         /// to resolve any required assemblies and load them into the proper runtime assembly
@@ -70,6 +95,28 @@ namespace DidoNet
             return DecodeAsync<TResult>(node, env);
         }
 
+        //public static Task<Action<ExecutionContext>> DeserializeAsync(byte[] data, Environment env, ExpressionSerializeSettings? settings = null)
+        //{
+        //    using (var stream = new MemoryStream(data))
+        //    {
+        //        return DeserializeAsync(stream, env, settings);
+        //    }
+        //}
+
+        //public static Task<Action<ExecutionContext>> DeserializeAsync(Stream stream, Environment env, ExpressionSerializeSettings? settings = null)
+        //{
+        //    if (stream == null)
+        //    {
+        //        throw new ArgumentNullException(nameof(stream));
+        //    }
+        //    if (env == null)
+        //    {
+        //        throw new ArgumentNullException(nameof(env));
+        //    }
+        //    var node = Deserialize(stream, settings);
+        //    return DecodeAsync(node, env);
+        //}
+
         public static Node Encode<TResult>(Expression<Func<ExecutionContext, TResult>> expression)
         {
             if (expression == null)
@@ -78,6 +125,15 @@ namespace DidoNet
             }
             return EncodeFromExpression(expression);
         }
+
+        //public static Node Encode(Expression<Action<ExecutionContext>> expression)
+        //{
+        //    if (expression == null)
+        //    {
+        //        throw new ArgumentNullException(nameof(expression));
+        //    }
+        //    return EncodeFromExpression(expression);
+        //}
 
         public static async Task<Func<ExecutionContext, TResult>> DecodeAsync<TResult>(Node node, Environment env)
         {
@@ -105,6 +161,26 @@ namespace DidoNet
             // finally, compile the lambda into an invocation function and cast it to the proper return type
             return (Func<ExecutionContext, TResult>)lambda.Compile();
         }
+
+        //public static async Task<Action<ExecutionContext>> DecodeAsync(Node node, Environment env)
+        //{
+        //    if (node == null)
+        //    {
+        //        throw new ArgumentNullException(nameof(node));
+        //    }
+        //    if (env == null)
+        //    {
+        //        throw new ArgumentNullException(nameof(env));
+        //    }
+
+        //    // deserialize the encoded expression tree, which by design will be a lambda expression
+        //    var state = new ExpressionVisitorState();
+        //    var exp = await DecodeToExpressionAsync(node, env, state);
+        //    var lambda = (LambdaExpression)exp;
+
+        //    // compile the lambda into an invokable function and cast it to the proper return type
+        //    return (Action<ExecutionContext>)lambda.Compile();
+        //}
 
         public static void Serialize(Node node, Stream stream, ExpressionSerializeSettings? settings = null)
         {
@@ -274,6 +350,7 @@ namespace DidoNet
                 case NewExpression exp:
                     throw new NotImplementedException();
                 case ParameterExpression exp:
+                    // TODO: throw if a ref or out parameter is used
                     return new ParameterNode
                     {
                         ExpressionType = exp.NodeType,

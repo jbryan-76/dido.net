@@ -55,14 +55,13 @@ namespace DidoNet
         /// <summary>
         /// The class logger instance.
         /// </summary>
-        private static ILogger Logger = LogManager.GetCurrentClassLogger();
+        private static readonly ILogger Logger = LogManager.GetCurrentClassLogger();
 
         /// <summary>
         /// Execute the provided expression as a task and return its result.
         /// </summary>
         /// <typeparam name="Tprop"></typeparam>
         /// <param name="expression">The expression to execute.</param>
-        /// <param name="executionMode">An optional execution mode to override the currently configured mode.</param>
         /// <returns></returns>
         /// <exception cref="InvalidOperationException"></exception>
         public static Task<Tprop> RunAsync<Tprop>(
@@ -182,11 +181,6 @@ namespace DidoNet
             Configuration configuration,
             CancellationToken? cancellationToken = null)
         {
-            if (configuration.MediatorUri == null && configuration.RunnerUri == null)
-            {
-                throw new InvalidConfigurationException($"Configuration error: At least one of {nameof(Configuration.MediatorUri)} or {nameof(Configuration.RunnerUri)} must be set to a valid value.");
-            }
-
             // create an (unused) cancellation token source if no cancellation token has been provided
             CancellationTokenSource? source = null;
             if (cancellationToken == null)
@@ -203,7 +197,16 @@ namespace DidoNet
                     ++tries;
                     try
                     {
-                        return await DoRunRemoteAsync(expression, configuration, cancellationToken.Value);
+                        using (var handle = await StartRemoteAsync(
+                            expression,
+                            configuration,
+                            cancellationToken.Value))
+                        {
+                            handle.WaitUntilFinished();
+                            handle.ThrowIfError();
+                            return handle.GetResult<Tprop>();
+                        }
+                        //return await DoRunRemoteAsync(expression, configuration, cancellationToken.Value);
                     }
                     // only retry if the exception is a TimeoutException or RunnerBusyException
                     // (otherwise the exception is for a different error and should bubble up)
@@ -229,98 +232,280 @@ namespace DidoNet
         }
 
         /// <summary>
-        /// Execute the provided expression as a task in a remote environment.
+        /// Execute the provided expression as a task and return its result.
         /// </summary>
         /// <typeparam name="Tprop"></typeparam>
-        /// <param name="expression"></param>
+        /// <param name="expression">The expression to execute.</param>
         /// <returns></returns>
-        /// <exception cref="TaskGeneralException"></exception>
-        /// <exception cref="TaskDeserializationException"></exception>
-        /// <exception cref="TaskInvocationException"></exception>
         /// <exception cref="InvalidOperationException"></exception>
-        private static async Task<Tprop> DoRunRemoteAsync<Tprop>(
+        public static Task<ITaskHandle> StartAsync<Tprop>(
             Expression<Func<ExecutionContext, Tprop>> expression,
-            Configuration configuration,
-            CancellationToken cancellationToken)
+            Configuration? configuration = null,
+            CancellationToken? cancellationToken = null)
         {
-            // choose a runner to execute the expression
-            Uri runnerUri = SelectRunner(configuration);
+            configuration ??= GlobalConfiguration ?? new Configuration();
 
-            var connectionSettings = new ClientConnectionSettings
+            // force the execution mode to local if no remote service is configured
+            var executionMode = configuration.ExecutionMode;
+            if (configuration.MediatorUri == null && configuration.RunnerUri == null && executionMode == ExecutionModes.Remote)
             {
-                ValidaionPolicy = configuration.ServerCertificateValidationPolicy,
-                Thumbprint = configuration.ServerCertificateThumbprint
-            };
+                Logger.Warn($"Forcing execution mode to {nameof(ExecutionModes.Local)}: no mediator nor runner configured.");
+                executionMode = ExecutionModes.Local;
+            }
 
-            // create a secure connection to the remote runner
-            using (var runnerConnection = new Connection(runnerUri!.Host, runnerUri.Port, null, connectionSettings))
+            switch (executionMode)
             {
-                Logger.Trace($"Executing expression via {nameof(RunRemoteAsync)} to {runnerUri}");
-
-                // create communication channels to the runner for: control messages, task messages, assembly messages
-                var controlChannel = new MessageChannel(runnerConnection, Constants.AppRunner_ControlChannelId);
-                var tasksChannel = new MessageChannel(runnerConnection, Constants.AppRunner_TaskChannelId);
-                var assembliesChannel = new MessageChannel(runnerConnection, Constants.AppRunner_AssemblyChannelId);
-
-                // inform the runner about what kind of task will be executed
-                controlChannel.Send(new TaskTypeMessage(TaskTypeMessage.TaskTypes.Tethered));
-
-                // create a proxy to handle file-system IO requests from the expression executing on the runner
-                var ioProxy = new ApplicationIOProxy(runnerConnection);
-
-                // handle assembly messages
-                assembliesChannel.OnMessageReceived = (message, channel) => HandleAssemblyMessages(configuration, message, channel);
-
-                // after kicking off the task request below, exactly one response message is expected back,
-                // which is received in this handler and attached to a TaskCompletionSource to be awaited
-                // below and then processed
-                var responseSource = new TaskCompletionSource<IMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
-                tasksChannel.OnMessageReceived = (message, channel) =>
-                {
-                    responseSource.SetResult(message);
-                };
-
-                // kickoff the remote task by serializing the expression and transmitting it to the runner
-                var assemblyCaching = configuration.AssemblyCaching;
-                if (assemblyCaching == AssemblyCachingPolicies.Auto)
-                {
+                case ExecutionModes.Local:
+                    return StartLocalAsync(expression, configuration, cancellationToken);
+                case ExecutionModes.DebugLocal:
 #if DEBUG
-                    assemblyCaching = AssemblyCachingPolicies.Never;
+                    return StartLocalAsync(expression, configuration, cancellationToken);
 #else
-                    assemblyCaching = AssemblyCachingPolicies.Always;
+                    return StartRemoteAsync(expression, configuration, cancellationToken);
 #endif
-                }
-                var requestMessage = new TaskRequestMessage(
-                    await ExpressionSerializer.SerializeAsync(expression),
-                    configuration.Id,
-                    assemblyCaching,
-                    configuration.CachedAssemblyEncryptionKey,
-                    configuration.TimeoutInMs);
-                tasksChannel.Send(requestMessage);
-
-                // when the cancellation token is canceled, send a cancel message to the runner
-                cancellationToken.Register(() =>
-                {
-                    tasksChannel.Send(new TaskCancelMessage());
-                });
-
-                // wait until a response is received
-                Task.WaitAll(responseSource.Task);
-                var message = responseSource.Task.Result;
-
-                // yield the result
-                switch (message)
-                {
-                    // TODO: receive untethered runner+task id response and create a handle
-                    case TaskResponseMessage response:
-                        return response.GetResult<Tprop>();
-                    case IErrorMessage error:
-                        throw error.Exception;
-                    default:
-                        throw new UnhandledMessageException(message);
-                }
+                case ExecutionModes.Remote:
+                    return StartRemoteAsync(expression, configuration, cancellationToken);
+                default:
+                    return Task.FromException<ITaskHandle>(new InvalidOperationException($"Illegal or unknown value for '{nameof(configuration.ExecutionMode)}': {configuration.ExecutionMode}"));
             }
         }
+
+        public static Task<ITaskHandle> ContinueAsync<Tprop>(
+            string runnerId, string taskId,
+            Configuration? configuration = null,
+            CancellationToken? cancellationToken = null)
+        {
+            configuration ??= GlobalConfiguration ?? new Configuration();
+
+            // force the execution mode to local if no remote service is configured
+            var executionMode = configuration.ExecutionMode;
+            if (configuration.MediatorUri == null && configuration.RunnerUri == null && executionMode == ExecutionModes.Remote)
+            {
+                Logger.Warn($"Forcing execution mode to {nameof(ExecutionModes.Local)}: no mediator nor runner configured.");
+                executionMode = ExecutionModes.Local;
+            }
+
+            switch (executionMode)
+            {
+                case ExecutionModes.Local:
+                    return ContinueLocalAsync(runnerId, taskId, configuration, cancellationToken);
+                case ExecutionModes.DebugLocal:
+#if DEBUG
+                    return ContinueLocalAsync(runnerId, taskId, configuration, cancellationToken);
+#else
+                    return StartRemoteAsync(expression, configuration, cancellationToken);
+#endif
+                case ExecutionModes.Remote:
+                    return ContinueRemoteAsync(runnerId, taskId, configuration, cancellationToken);
+                default:
+                    return Task.FromException<ITaskHandle>(new InvalidOperationException($"Illegal or unknown value for '{nameof(configuration.ExecutionMode)}': {configuration.ExecutionMode}"));
+            }
+        }
+
+        internal static Task<ITaskHandle> StartLocalAsync<Tprop>(
+            Expression<Func<ExecutionContext, Tprop>> expression,
+            Configuration? configuration = null,
+            CancellationToken? cancellationToken = null)
+        {
+            configuration ??= GlobalConfiguration ?? new Configuration();
+
+            // create an (unused) cancellation token source if no cancellation token has been provided
+            CancellationTokenSource? source = null;
+            if (cancellationToken == null)
+            {
+                source = new CancellationTokenSource();
+                cancellationToken = source.Token;
+            }
+
+            try
+            {
+#if (DEBUG)
+                return DebugStartLocalAsync(expression, configuration, cancellationToken.Value);
+#else
+                return ReleaseStartLocalAsync(expression, configuration, cancellationToken.Value);
+#endif
+            }
+            finally
+            {
+                source?.Dispose();
+            }
+        }
+
+        internal static Task<ITaskHandle> ContinueLocalAsync(
+            string runnerId, string taskId,
+            Configuration? configuration = null,
+            CancellationToken? cancellationToken = null)
+        {
+            configuration ??= GlobalConfiguration ?? new Configuration();
+
+            // create an (unused) cancellation token source if no cancellation token has been provided
+            CancellationTokenSource? source = null;
+            if (cancellationToken == null)
+            {
+                source = new CancellationTokenSource();
+                cancellationToken = source.Token;
+            }
+
+            try
+            {
+#if (DEBUG)
+                return DebugContinueLocalAsync(runnerId, taskId, configuration, cancellationToken.Value);
+#else
+                return ReleaseContinueLocalAsync(expression, configuration, cancellationToken.Value);
+#endif
+            }
+            finally
+            {
+                source?.Dispose();
+            }
+        }
+
+        internal static async Task<ITaskHandle> StartRemoteAsync<Tprop>(
+            Expression<Func<ExecutionContext, Tprop>> expression,
+            Configuration configuration,
+            CancellationToken? cancellationToken = null)
+        {
+            // create an (unused) cancellation token source if no cancellation token has been provided
+            CancellationTokenSource? source = null;
+            if (cancellationToken == null)
+            {
+                source = new CancellationTokenSource();
+                cancellationToken = source.Token;
+            }
+
+            var handle = new RemoteTaskHandle();
+            await handle.StartAsync(expression, configuration, cancellationToken.Value);
+            return handle;
+        }
+
+        internal static async Task<ITaskHandle> ContinueRemoteAsync(
+            string runnerId, string taskId,
+            Configuration configuration,
+            CancellationToken? cancellationToken = null)
+        {
+            // create an (unused) cancellation token source if no cancellation token has been provided
+            CancellationTokenSource? source = null;
+            if (cancellationToken == null)
+            {
+                source = new CancellationTokenSource();
+                cancellationToken = source.Token;
+            }
+
+            // TODO: reconnect to the runner 
+
+            throw new NotImplementedException();
+            return new RemoteTaskHandle();
+        }
+
+        ///// <summary>
+        ///// Execute the provided expression as a task in a remote environment.
+        ///// </summary>
+        ///// <typeparam name="Tprop"></typeparam>
+        ///// <param name="expression"></param>
+        ///// <returns></returns>
+        ///// <exception cref="TaskGeneralException"></exception>
+        ///// <exception cref="TaskDeserializationException"></exception>
+        ///// <exception cref="TaskInvocationException"></exception>
+        ///// <exception cref="InvalidOperationException"></exception>
+        //private static async Task<Tprop> DoRunRemoteAsync<Tprop>(
+        //    Expression<Func<ExecutionContext, Tprop>> expression,
+        //    Configuration configuration,
+        //    CancellationToken cancellationToken)
+        //{
+        //    using (var handle = await StartRemoteAsync(
+        //        expression,
+        //        configuration,
+        //        cancellationToken))
+        //    {
+        //        handle.WaitUntilFinished();
+        //        handle.ThrowIfError();
+        //        return handle.GetResult<Tprop>();
+        //    }
+
+        //    //// choose a runner to execute the expression
+        //    //var runnerUri = Helpers.SelectRunner(configuration);
+
+        //    //var connectionSettings = new ClientConnectionSettings
+        //    //{
+        //    //    ValidaionPolicy = configuration.ServerCertificateValidationPolicy,
+        //    //    Thumbprint = configuration.ServerCertificateThumbprint
+        //    //};
+
+        //    //// create a secure connection to the remote runner
+        //    //using (var runnerConnection = new Connection(runnerUri!.Host, runnerUri.Port, null, connectionSettings))
+        //    //{
+        //    //    Logger.Trace($"Executing expression via {nameof(RunRemoteAsync)} to {runnerUri}");
+
+        //    //    // create communication channels to the runner for: control messages, task messages, assembly messages
+        //    //    var controlChannel = new MessageChannel(runnerConnection, Constants.AppRunner_ControlChannelId);
+        //    //    var tasksChannel = new MessageChannel(runnerConnection, Constants.AppRunner_TaskChannelId);
+        //    //    var assembliesChannel = new MessageChannel(runnerConnection, Constants.AppRunner_AssemblyChannelId);
+
+        //    //    // inform the runner about what kind of task will be executed
+        //    //    controlChannel.Send(new TaskTypeMessage(TaskTypeMessage.TaskTypes.Tethered));
+
+        //    //    // create a proxy to handle file-system IO requests from the expression executing on the runner
+        //    //    var ioProxy = new ApplicationIOProxy(runnerConnection);
+
+        //    //    // handle assembly messages
+        //    //    assembliesChannel.OnMessageReceived = (message, channel) => Helpers.HandleAssemblyMessages(configuration, message, channel);
+
+        //    //    //// after kicking off the task request below, exactly one response message is expected back,
+        //    //    //// which is received in this handler and attached to a TaskCompletionSource to be awaited
+        //    //    //// below and then processed
+        //    //    //var responseSource = new TaskCompletionSource<IMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+        //    //    //tasksChannel.OnMessageReceived = (message, channel) =>
+        //    //    //{
+        //    //    //    responseSource.SetResult(message);
+        //    //    //};
+
+        //    //    // kickoff the remote task by serializing the expression and transmitting it to the runner
+        //    //    var requestMessage = new TaskRequestMessage(
+        //    //        await ExpressionSerializer.SerializeAsync(expression),
+        //    //        configuration.Id,
+        //    //        configuration.GetActualAssemblyCachingPolicy(),
+        //    //        configuration.CachedAssemblyEncryptionKey,
+        //    //        configuration.TimeoutInMs);
+        //    //    tasksChannel.Send(requestMessage);
+
+        //    //    // when the cancellation token is triggered, send a cancel message to the runner
+        //    //    cancellationToken.Register(() =>
+        //    //    {
+        //    //        tasksChannel.Send(new TaskCancelMessage());
+        //    //    });
+
+        //    //    // the runner will send one message before the task is started. synchronously wait for that message
+        //    //    var message = tasksChannel.ReceiveMessage();
+        //    //    switch (message)
+        //    //    {
+        //    //        case TaskIdMessage taskId:
+        //    //            // TODO:??
+        //    //            break;
+        //    //        case IErrorMessage error:
+        //    //            throw error.Exception;
+        //    //        default:
+        //    //            throw new UnhandledMessageException(message);
+        //    //    }
+
+        //    //    //// wait until a response is received
+        //    //    //Task.WaitAll(responseSource.Task);
+        //    //    //var message = responseSource.Task.Result;
+
+        //    //    // then the runner will send another message when the task completes
+        //    //    message = tasksChannel.ReceiveMessage();
+
+        //    //    // yield the result
+        //    //    switch (message)
+        //    //    {
+        //    //        case TaskResponseMessage response:
+        //    //            return response.GetResult<Tprop>();
+        //    //        case IErrorMessage error:
+        //    //            throw error.Exception;
+        //    //        default:
+        //    //            throw new UnhandledMessageException(message);
+        //    //    }
+        //    //}
+        //}
 
         /// <summary>
         /// For debugging only: perform local mode execution of the provided expression but
@@ -371,7 +556,7 @@ namespace DidoNet
             {
                 Cancel = cancellationToken,
                 ExecutionMode = ExecutionModes.Local,
-                // in debug local mode, use a loopback connection to ensure all IO works as expected
+                // in debug local mode, use the loopback connection to ensure all IO works as expected
                 // when the expression is executed remotely
                 File = new RunnerFileProxy(runnerLoopbackConnection, runnerConfig),
                 Directory = new RunnerDirectoryProxy(runnerLoopbackConnection, runnerConfig)
@@ -388,7 +573,7 @@ namespace DidoNet
                     // TODO: should this use a proxy RunnerServer too (like the unit tests), or is that overkill?
 
                     // to adequately test end-to-end processing and the current configuration,
-                    // serialize and deserialize the expression
+                    // serialize and deserialize the expression to simulate transmission to a remote runner
                     var data = await ExpressionSerializer.SerializeAsync(expression);
                     var func = await ExpressionSerializer.DeserializeAsync<Tprop>(data, env);
 
@@ -449,100 +634,150 @@ namespace DidoNet
         }
 
         /// <summary>
-        /// Selects a suitable remote runner to execute a task based on the provided configuration.
+        /// For debugging only: perform local mode execution of the provided expression but
+        /// include serialization and deserialization steps to confirm the expression obeys
+        /// all serialization requirements and all assemblies can be resolved and loaded into
+        /// a temporary AssemblyLoadContext.
         /// </summary>
-        /// <param name="configuration"></param>
+        /// <typeparam name="Tprop"></typeparam>
+        /// <param name="expression"></param>
         /// <returns></returns>
-        /// <exception cref="RunnerNotAvailableException"></exception>
-        /// <exception cref="UnhandledMessageException"></exception>
-        internal static Uri SelectRunner(Configuration configuration)
+        internal static async Task<ITaskHandle> DebugStartLocalAsync<Tprop>(
+            Expression<Func<ExecutionContext, Tprop>> expression,
+            Configuration configuration,
+            CancellationToken cancellationToken)
         {
-            // prefer the explicitly provided runner...
-            var runnerUri = configuration.RunnerUri;
+            Logger.Trace($"Executing expression via {nameof(DebugRunLocalAsync)}");
 
-            // ...however if no runner is configured but a mediator is, ask the mediator to choose a runner
-            if (runnerUri == null && configuration.MediatorUri != null)
+            // to adequately test end-to-end processing and the current configuration,
+            // use a degenerate loopback connection for file channel messages
+            var loopback = new Connection.LoopbackProxy();
+            var appLoopbackConnection = new Connection(loopback, Connection.LoopbackProxy.Role.Client);
+            var runnerLoopbackConnection = new Connection(loopback, Connection.LoopbackProxy.Role.Server);
+            var ioProxy = new ApplicationIOProxy(appLoopbackConnection);
+
+            string cachePath;
+            string? tempCacheFolder = null;
+            if (string.IsNullOrEmpty(configuration.DebugCachePath))
             {
-                var connectionSettings = new ClientConnectionSettings
+                tempCacheFolder = Path.GetTempFileName();
+                if (File.Exists(tempCacheFolder))
                 {
-                    ValidaionPolicy = configuration.ServerCertificateValidationPolicy,
-                    Thumbprint = configuration.ServerCertificateThumbprint
-                };
-                // open a connection to the mediator
-                using (var mediatorConnection =
-                    new Connection(configuration.MediatorUri.Host, configuration.MediatorUri.Port, null, connectionSettings))
-                {
-                    // create the communications channel and request an available runner from the mediator
-                    var applicationChannel = new MessageChannel(mediatorConnection, Constants.MediatorApp_ChannelId);
-                    applicationChannel.Send(new RunnerRequestMessage(configuration.RunnerOSPlatforms, configuration.RunnerLabel, configuration.RunnerTags));
-
-                    // receive and process the response
-                    var message = applicationChannel.ReceiveMessage(configuration.MediatorTimeout);
-                    switch (message)
-                    {
-                        case RunnerResponseMessage response:
-                            runnerUri = new Uri(response.Endpoint);
-                            break;
-
-                        case RunnerNotAvailableMessage notAvailable:
-                            throw new RunnerNotAvailableException();
-
-                        default:
-                            throw new UnhandledMessageException(message);
-                    }
+                    File.Delete(tempCacheFolder);
                 }
+                Directory.CreateDirectory(tempCacheFolder);
+                cachePath = tempCacheFolder;
+            }
+            else
+            {
+                cachePath = configuration.DebugCachePath;
             }
 
-            return runnerUri!;
+            var runnerConfig = new RunnerConfiguration
+            {
+                FileCachePath = Path.Combine(cachePath, "files")
+            };
+
+            var context = new ExecutionContext
+            {
+                Cancel = cancellationToken,
+                ExecutionMode = ExecutionModes.Local,
+                // in debug local mode, use the loopback connection to ensure all IO works as expected
+                // when the expression is executed remotely
+                File = new RunnerFileProxy(runnerLoopbackConnection, runnerConfig),
+                Directory = new RunnerDirectoryProxy(runnerLoopbackConnection, runnerConfig)
+            };
+
+            try
+            {
+                using (var env = new Environment
+                {
+                    ExecutionContext = context,
+                    ResolveRemoteAssemblyAsync = new DebugRemoteAssemblyResolver(AppContext.BaseDirectory).ResolveAssembly
+                })
+                {
+                    // TODO: should this use a proxy RunnerServer too (like the unit tests), or is that overkill?
+
+                    // to adequately test end-to-end processing and the current configuration,
+                    // serialize and deserialize the expression to simulate transmission to a remote runner
+                    var data = await ExpressionSerializer.SerializeAsync(expression);
+                    var func = await ExpressionSerializer.DeserializeAsync<Tprop>(data, env);
+
+                    //// run the expression with the optional configured timeout and return its result
+                    //var result = await Task
+                    //    .Run(() => func.Invoke(context))
+                    //    .TimeoutAfter(TimeSpan.FromMilliseconds(configuration.TimeoutInMs));
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    throw new NotImplementedException();
+                    //return new RemoteTaskHandle();
+                }
+            }
+            finally
+            {
+                runnerLoopbackConnection.Dispose();
+                appLoopbackConnection.Dispose();
+                loopback.Dispose();
+
+                if (Directory.Exists(tempCacheFolder))
+                {
+                    Directory.Delete(tempCacheFolder, true);
+                }
+            }
         }
 
         /// <summary>
-        /// Processes messages received on the assemblies channel.
+        /// Optimized for release builds: perform local mode execution of the provided expression
+        /// by directly compiling and invoking it.
         /// </summary>
-        /// <param name="configuration"></param>
-        /// <param name="message"></param>
-        /// <param name="channel"></param>
-        /// <exception cref="UnhandledMessageException"></exception>
-        internal static async void HandleAssemblyMessages(Configuration configuration, IMessage message, MessageChannel channel)
+        /// <typeparam name="Tprop"></typeparam>
+        /// <param name="expression"></param>
+        /// <returns></returns>
+        internal static async Task<ITaskHandle> ReleaseStartLocalAsync<Tprop>(
+            Expression<Func<ExecutionContext, Tprop>> expression,
+            Configuration configuration,
+            CancellationToken cancellationToken)
         {
-            switch (message)
-            {
-                // resolve a requested assembly and send it back
-                case AssemblyRequestMessage request:
-                    if (string.IsNullOrEmpty(request.AssemblyName))
-                    {
-                        var response = new AssemblyErrorMessage(new ArgumentNullException(nameof(AssemblyRequestMessage.AssemblyName)));
-                        channel.Send(response);
-                        return;
-                    }
+            Logger.Trace($"Executing expression via {nameof(ReleaseRunLocalAsync)}");
 
-                    try
-                    {
-                        var stream = await configuration.ResolveLocalAssemblyAsync(request.AssemblyName);
-                        if (stream == null)
-                        {
-                            channel.Send(new AssemblyErrorMessage(
-                                new FileNotFoundException($"Assembly '{request.AssemblyName}' could not be resolved."))
-                            );
-                        }
-                        else
-                        {
-                            using (stream)
-                            using (var mem = new MemoryStream())
-                            {
-                                stream.CopyTo(mem);
-                                channel.Send(new AssemblyResponseMessage(mem.ToArray()));
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        channel.Send(new AssemblyErrorMessage(ex));
-                    }
-                    break;
-                default:
-                    throw new UnhandledMessageException(message);
-            }
+            var context = new ExecutionContext
+            {
+                Cancel = cancellationToken,
+                ExecutionMode = ExecutionModes.Local,
+                // in release local mode, pass-through file and directory IO directly to the local file-system
+                File = new RunnerFileProxy(null),
+                Directory = new RunnerDirectoryProxy(null)
+            };
+
+            // when executing locally in release mode, simply compile and invoke the expression,
+            // bypassing all internal (de)serialization and validation checks
+            var func = expression.Compile();
+
+            // run the expression with the optional configured timeout and return its result
+            //var result = await Task
+            //    .Run(() => func.Invoke(context))
+            //    .TimeoutAfter(TimeSpan.FromMilliseconds(configuration.TimeoutInMs));
+            cancellationToken.ThrowIfCancellationRequested();
+
+            throw new NotImplementedException();
+            //return new RemoteTaskHandle();
         }
+
+        internal static async Task<ITaskHandle> DebugContinueLocalAsync(
+            string runnerId, string taskId,
+            Configuration configuration,
+            CancellationToken cancellationToken)
+        {
+            throw new NotImplementedException();
+        }
+
+        internal static async Task<ITaskHandle> ReleaseContinueLocalAsync(
+            string runnerId, string taskId,
+            Configuration configuration,
+            CancellationToken cancellationToken)
+        {
+            throw new NotImplementedException();
+        }
+
     }
 }
