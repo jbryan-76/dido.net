@@ -21,7 +21,7 @@ namespace DidoNet
     {
         /// <summary>
         /// Represents a single bi-directional loop-back data stream that can be used to simulate network
-        /// connections for testing purposes. The same instance should be used to construct a pair of
+        /// connections for testing purposes. A single instance of a loop-back proxy should be used to construct a pair of
         /// Connections, with one designated as a Client and one as a Server.
         /// </summary>
         public class LoopbackProxy : IDisposable

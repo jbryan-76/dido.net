@@ -524,7 +524,7 @@ namespace DidoNet
             Logger.Trace($"Executing expression via {nameof(DebugRunLocalAsync)}");
 
             // to adequately test end-to-end processing and the current configuration,
-            // use a degenerate loopback connection for file channel messages
+            // use a degenerate loop-back connection for file channel messages
             var loopback = new Connection.LoopbackProxy();
             var appLoopbackConnection = new Connection(loopback, Connection.LoopbackProxy.Role.Client);
             var runnerLoopbackConnection = new Connection(loopback, Connection.LoopbackProxy.Role.Server);
@@ -556,7 +556,7 @@ namespace DidoNet
             {
                 Cancel = cancellationToken,
                 ExecutionMode = ExecutionModes.Local,
-                // in debug local mode, use the loopback connection to ensure all IO works as expected
+                // in debug local mode, use the loop-back connection to ensure all IO works as expected
                 // when the expression is executed remotely
                 File = new RunnerFileProxy(runnerLoopbackConnection, runnerConfig),
                 Directory = new RunnerDirectoryProxy(runnerLoopbackConnection, runnerConfig)
@@ -650,7 +650,7 @@ namespace DidoNet
             Logger.Trace($"Executing expression via {nameof(DebugRunLocalAsync)}");
 
             // to adequately test end-to-end processing and the current configuration,
-            // use a degenerate loopback connection for file channel messages
+            // use a degenerate loop-back connection for file channel messages
             var loopback = new Connection.LoopbackProxy();
             var appLoopbackConnection = new Connection(loopback, Connection.LoopbackProxy.Role.Client);
             var runnerLoopbackConnection = new Connection(loopback, Connection.LoopbackProxy.Role.Server);
@@ -682,7 +682,7 @@ namespace DidoNet
             {
                 Cancel = cancellationToken,
                 ExecutionMode = ExecutionModes.Local,
-                // in debug local mode, use the loopback connection to ensure all IO works as expected
+                // in debug local mode, use the loop-back connection to ensure all IO works as expected
                 // when the expression is executed remotely
                 File = new RunnerFileProxy(runnerLoopbackConnection, runnerConfig),
                 Directory = new RunnerDirectoryProxy(runnerLoopbackConnection, runnerConfig)

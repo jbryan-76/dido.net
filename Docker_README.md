@@ -2,8 +2,10 @@
 ` docker build -f Dockerfile.Runner.build -t dido.runner . `
 
 ### Create Dido.Runner image from existing binaries
-` dotnet publish -c Release `
-` docker build -f Dockerfile.Runner.pack -t dido.runner . `
+```
+dotnet publish -c Release
+docker build -f Dockerfile.Runner.pack -t dido.runner . 
+```
 
 ### Run a Dido.Runner image, forwarding the default dido port (4940)
 ` docker run -d -p 4940:4940 dido.runner ` 

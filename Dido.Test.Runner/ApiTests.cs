@@ -34,7 +34,7 @@ namespace DidoNet.Test.Runner
         }
 
         /// <summary>
-        /// Performs an end-to-end test of Dido.RemoteExecuteAsync using a local loopback server.
+        /// Performs an end-to-end test of Dido.RemoteExecuteAsync using a local loop-back server.
         /// </summary>
         [Fact]
         public async void RunRemote()
@@ -47,12 +47,12 @@ namespace DidoNet.Test.Runner
             var expectedResult = lambda.Compile().Invoke(TestFixture.Environment.ExecutionContext!);
             Assert.Equal(testArgument, expectedResult);
 
-            // create and start a secure localhost loopback runner server that can execute serialized expressions
+            // create and start a secure localhost loop-back runner server that can execute serialized expressions
             var runnerServer = new RunnerServer();
             int port = GetNextAvailablePort();
             runnerServer.Start(TestSelfSignedCert.ServerCertificate, port, IPAddress.Loopback);
 
-            // create configuration to use the loopback server
+            // create configuration to use the loop-back server
             var configuration = new Configuration
             {
                 MaxTries = 1,
@@ -88,7 +88,7 @@ namespace DidoNet.Test.Runner
             var expectedResult = lambda.Compile().Invoke(TestFixture.Environment.ExecutionContext!);
             Assert.Equal(testArgument, expectedResult);
 
-            // create and start a secure localhost loopback runner server that can execute serialized expressions,
+            // create and start a secure localhost loop-back runner server that can execute serialized expressions,
             // and assign it a specific id
             using (var runnerServer = new RunnerServer(new RunnerConfiguration
             {
@@ -98,7 +98,7 @@ namespace DidoNet.Test.Runner
                 int port = GetNextAvailablePort();
                 runnerServer.Start(TestSelfSignedCert.ServerCertificate, port, IPAddress.Loopback);
 
-                // create configuration to use the loopback server
+                // create configuration to use the loop-back server
                 var configuration = new Configuration
                 {
                     MaxTries = 1,
@@ -131,7 +131,7 @@ namespace DidoNet.Test.Runner
                 int port = GetNextAvailablePort();
                 runnerServer.Start(TestSelfSignedCert.ServerCertificate, port, IPAddress.Loopback);
 
-                // create configuration to use the loopback server
+                // create configuration to use the loop-back server
                 var configuration = new Configuration
                 {
                     MaxTries = 1,
@@ -170,7 +170,7 @@ namespace DidoNet.Test.Runner
             var expectedResult = lambda.Compile().Invoke(TestFixture.Environment.ExecutionContext!);
             Assert.Equal(testArgument, expectedResult);
 
-            // create and start a secure localhost loopback runner server that can execute serialized expressions,
+            // create and start a secure localhost loop-back runner server that can execute serialized expressions,
             // and assign it a specific id
             using (var runnerServer = new RunnerServer(new RunnerConfiguration
             {
@@ -180,7 +180,7 @@ namespace DidoNet.Test.Runner
                 int port = GetNextAvailablePort();
                 runnerServer.Start(TestSelfSignedCert.ServerCertificate, port, IPAddress.Loopback);
 
-                // create configuration to use the loopback server
+                // create configuration to use the loop-back server
                 var configuration = new Configuration
                 {
                     MaxTries = 1,
@@ -214,7 +214,7 @@ namespace DidoNet.Test.Runner
                 int port = GetNextAvailablePort();
                 runnerServer.Start(TestSelfSignedCert.ServerCertificate, port, IPAddress.Loopback);
 
-                // create configuration to use the loopback server
+                // create configuration to use the loop-back server
                 var configuration = new Configuration
                 {
                     MaxTries = 1,
@@ -241,7 +241,7 @@ namespace DidoNet.Test.Runner
         }
 
         /// <summary>
-        /// Performs an end-to-end test of Dido.RemoteExecuteAsync using a local loopback server.
+        /// Performs an end-to-end test of Dido.RemoteExecuteAsync using a local loop-back server.
         /// </summary>
         [Fact]
         public async void RunRemoteWithDeferredResultHandling()
@@ -254,12 +254,12 @@ namespace DidoNet.Test.Runner
             var expectedResult = lambda.Compile().Invoke(TestFixture.Environment.ExecutionContext!);
             Assert.Equal(testArgument, expectedResult);
 
-            // create and start a secure localhost loopback runner server that can execute serialized expressions
+            // create and start a secure localhost loop-back runner server that can execute serialized expressions
             var runnerServer = new RunnerServer();
             int port = GetNextAvailablePort();
             runnerServer.Start(TestSelfSignedCert.ServerCertificate, port, IPAddress.Loopback);
 
-            // create configuration to use the loopback server
+            // create configuration to use the loop-back server
             var configuration = new Configuration
             {
                 MaxTries = 1,
@@ -307,12 +307,12 @@ namespace DidoNet.Test.Runner
         [Fact]
         public async void RunRemoteWithTimeout()
         {
-            // create and start a secure localhost loopback runner server that can execute serialized expressions
+            // create and start a secure localhost loop-back runner server that can execute serialized expressions
             var runnerServer = new RunnerServer();
             int port = GetNextAvailablePort();
             runnerServer.Start(TestSelfSignedCert.ServerCertificate, port, IPAddress.Loopback);
 
-            // create configuration to use the loopback server and to timeout after a half second
+            // create configuration to use the loop-back server and to timeout after a half second
             var configuration = new Configuration
             {
                 MaxTries = 1,
@@ -339,12 +339,12 @@ namespace DidoNet.Test.Runner
         [Fact]
         public async void RunRemoteWithCancel()
         {
-            // create and start a secure localhost loopback runner server that can execute serialized expressions
+            // create and start a secure localhost loop-back runner server that can execute serialized expressions
             var runnerServer = new RunnerServer();
             int port = GetNextAvailablePort();
             runnerServer.Start(TestSelfSignedCert.ServerCertificate, port, IPAddress.Loopback);
 
-            // create configuration to use the loopback server
+            // create configuration to use the loop-back server
             var configuration = new Configuration
             {
                 MaxTries = 1,
@@ -387,12 +387,12 @@ namespace DidoNet.Test.Runner
         [Fact]
         public async void RunRemoteWithException()
         {
-            // create and start a secure localhost loopback runner server that can execute serialized expressions
+            // create and start a secure localhost loop-back runner server that can execute serialized expressions
             var runnerServer = new RunnerServer();
             int port = GetNextAvailablePort();
             runnerServer.Start(TestSelfSignedCert.ServerCertificate, port, IPAddress.Loopback);
 
-            // create configuration to use the loopback server
+            // create configuration to use the loop-back server
             var configuration = new Configuration
             {
                 MaxTries = 1,
@@ -439,12 +439,12 @@ namespace DidoNet.Test.Runner
         [Fact]
         public async void StartRemote()
         {
-            // create and start a secure localhost loopback runner server that can execute serialized expressions
+            // create and start a secure localhost loop-back runner server that can execute serialized expressions
             var runnerServer = new RunnerServer();
             int port = GetNextAvailablePort();
             runnerServer.Start(TestSelfSignedCert.ServerCertificate, port, IPAddress.Loopback);
 
-            // create configuration to use the loopback server
+            // create configuration to use the loop-back server
             var configuration = new Configuration
             {
                 MaxTries = 1,
@@ -479,12 +479,12 @@ namespace DidoNet.Test.Runner
         //[Fact]
         public async void StartRemoteWithContinue()
         {
-            // create and start a secure localhost loopback runner server that can execute serialized expressions
+            // create and start a secure localhost loop-back runner server that can execute serialized expressions
             var runnerServer = new RunnerServer();
             int port = GetNextAvailablePort();
             runnerServer.Start(TestSelfSignedCert.ServerCertificate, port, IPAddress.Loopback);
 
-            // create configuration to use the loopback server
+            // create configuration to use the loop-back server
             var configuration = new Configuration
             {
                 MaxTries = 1,
@@ -531,12 +531,12 @@ namespace DidoNet.Test.Runner
         [Fact]
         public async void StartRemoteWithError()
         {
-            // create and start a secure localhost loopback runner server that can execute serialized expressions
+            // create and start a secure localhost loop-back runner server that can execute serialized expressions
             var runnerServer = new RunnerServer();
             int port = GetNextAvailablePort();
             runnerServer.Start(TestSelfSignedCert.ServerCertificate, port, IPAddress.Loopback);
 
-            // create configuration to use the loopback server
+            // create configuration to use the loop-back server
             var configuration = new Configuration
             {
                 MaxTries = 1,
@@ -568,7 +568,7 @@ namespace DidoNet.Test.Runner
         }
 
         /// <summary>
-        /// Performs an end-to-end test of Dido.RemoteExecuteAsync using local loopback mediator and runner servers.
+        /// Performs an end-to-end test of Dido.RemoteExecuteAsync using local loop-back mediator and runner servers.
         /// </summary>
         [Fact]
         public async void RunRemoteWithMediator()
@@ -581,12 +581,12 @@ namespace DidoNet.Test.Runner
             var expectedResult = lambda.Compile().Invoke(TestFixture.Environment.ExecutionContext!);
             Assert.Equal(testArgument, expectedResult);
 
-            // create and start a secure localhost loopback mediator server that can orchestrate runners
+            // create and start a secure localhost loop-back mediator server that can orchestrate runners
             var mediatorServer = new MediatorServer();
             int mediatorPort = GetNextAvailablePort();
             mediatorServer.Start(TestSelfSignedCert.ServerCertificate, mediatorPort, IPAddress.Loopback);
 
-            // create and start a secure localhost loopback runner server that registers to the mediator
+            // create and start a secure localhost loop-back runner server that registers to the mediator
             var runnerPort = GetNextAvailablePort();
             var runnerServer = new RunnerServer(new RunnerConfiguration
             {

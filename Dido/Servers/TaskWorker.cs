@@ -242,7 +242,6 @@ namespace DidoNet
                 Timer? timeout = null;
                 try
                 {
-                    // TODO: untethered tasks can't timeout
                     // set up a timer if necessary to cancel the task if it times out
                     long didTimeout = 0;
                     if (request.TimeoutInMs > 0)
