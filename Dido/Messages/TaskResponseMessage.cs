@@ -97,7 +97,7 @@ namespace DidoNet
             }
             else
             {
-                return (T)Convert.ChangeType(Result, typeof(T));
+                return (T)Convert.ChangeType(Result, typeof(T))!;
             }
         }
 

@@ -71,5 +71,11 @@ namespace DidoNet
                 && Length == f.Length
                 && Enumerable.SequenceEqual(Payload, f.Payload);
         }
+
+        public override int GetHashCode()
+        {
+            // good enough considering frames won't usually be added to a HashSet nor as a key to a Dictionary.
+            return HashCode.Combine(Type, Channel, Length);
+        }
     }
 }

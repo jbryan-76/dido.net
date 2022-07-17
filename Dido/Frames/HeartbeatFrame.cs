@@ -5,7 +5,7 @@ namespace DidoNet
 {
     public class HeartbeatFrame : Frame
     {
-        public int PeriodInSeconds
+        public int TimeoutInSeconds
         {
             get
             {
@@ -18,9 +18,9 @@ namespace DidoNet
             }
         }
 
-        public HeartbeatFrame(int periodInSeconds)
+        public HeartbeatFrame(int timeoutInSeconds)
         {
-            var bytes = BitConverter.GetBytes(periodInSeconds);
+            var bytes = BitConverter.GetBytes(timeoutInSeconds);
             if (BitConverter.IsLittleEndian)
             {
                 Array.Reverse(bytes);

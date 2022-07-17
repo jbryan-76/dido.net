@@ -68,9 +68,10 @@ namespace DidoNet
         internal delegate void FrameMonitor(Frame frame);
 
         /// <summary>
-        /// How long to wait between sending heartbeat frames.
+        /// Defines the maximum period of time there can be no traffic from the remote end of the connection 
+        /// before it is considered unreachable.
         /// </summary>
-        public static int DefaultHeartbeatPeriodInSeconds = 60;
+        public static TimeSpan DefaultHeartbeatTimeout = TimeSpan.FromSeconds(60);
 
         /// <summary>
         /// The optional name for the connection.
@@ -161,7 +162,7 @@ namespace DidoNet
         /// <summary>
         /// Contains the timestamp of the last data received from the remote connection.
         /// </summary>
-        private DateTimeOffset? LastRemoteTraffic;
+        private DateTime? LastRemoteTraffic;
 
         /// <summary>
         /// Used with Interlocked to indicate whether the object instance is connected
@@ -186,10 +187,10 @@ namespace DidoNet
         private bool IsDisposed = false;
 
         /// <summary>
-        /// The heartbeat period the remote end of this connection is using.
-        /// (Each side of the connection may have different heartbeat periods).
+        /// The heartbeat timeout the remote end of this connection is using.
+        /// (Each side of the connection may have a different heartbeat timeout).
         /// </summary>
-        private int RemoteHeartbeatPeriodInSeconds = DefaultHeartbeatPeriodInSeconds;
+        private TimeSpan RemoteHeartbeatTimeout = DefaultHeartbeatTimeout;
 
         /// <summary>
         /// A thread-safe collection of all Channels using the connection.
@@ -505,25 +506,22 @@ namespace DidoNet
         }
 
         /// <summary>
-        /// Send a heartbeat frame to the remote endpoint.
-        /// </summary>
-        internal void SendHeartbeat()
-        {
-            // signal to send a heartbeat frame as soon as possible
-            Interlocked.Exchange(ref HeartbeatPending, 1);
-        }
-
-        /// <summary>
         /// Finish internal bookkeeping once the remote connection is authenticated.
         /// </summary>
         private void FinishConnecting()
         {
+            // set initial connection state
+            LastRemoteTraffic = DateTime.UtcNow;
             Interlocked.Exchange(ref Connected, 1);
 
             if (SecureStream != null)
             {
-                // send a heartbeat frame periodically to keep the connection active
-                HeartbeatTimer = new Timer((arg) => SendHeartbeat(), null, 0, DefaultHeartbeatPeriodInSeconds * 1000);
+                // send a heartbeat frame at least twice as frequent as the timeout to keep the connection active
+                HeartbeatTimer = new Timer(
+                    (arg) => Interlocked.Exchange(ref HeartbeatPending, 1),
+                    null,
+                    0,
+                    (int)DefaultHeartbeatTimeout.TotalSeconds / 2 * 1000);
 
                 var remote = (IPEndPoint)EndPoint!.Client.RemoteEndPoint!;
                 var local = (IPEndPoint)EndPoint!.Client.LocalEndPoint!;
@@ -554,11 +552,9 @@ namespace DidoNet
                 while (Interlocked.Read(ref Connected) == 1)
                 {
                     // if a heartbeat is pending, send it immediately
-                    if (Interlocked.Read(ref HeartbeatPending) == 1)
+                    if (Interlocked.Exchange(ref HeartbeatPending, 0) == 1)
                     {
-                        var frame = new HeartbeatFrame(DefaultHeartbeatPeriodInSeconds);
-                        WriteFrame(frame);
-                        Interlocked.Exchange(ref HeartbeatPending, 0);
+                        WriteFrame(new HeartbeatFrame((int)DefaultHeartbeatTimeout.TotalSeconds));
                     }
 
                     // send all pending frames
@@ -574,7 +570,7 @@ namespace DidoNet
             catch (IOException e)
             {
                 WriteThreadException = e;
-                // force all thread termination on any error
+                // force all threads to terminate on any error
                 Interlocked.Exchange(ref Connected, 0);
                 OnDisconnect?.Invoke(this, DisconnectionReasons.Dropped);
             }
@@ -617,7 +613,7 @@ namespace DidoNet
                         if (read > 0)
                         {
                             ReadBuffer.Write(data, 0, read);
-                            LastRemoteTraffic = DateTimeOffset.UtcNow;
+                            LastRemoteTraffic = DateTime.UtcNow;
                         }
                     }
                     catch (IOException e)
@@ -642,16 +638,16 @@ namespace DidoNet
                         }
                     }
 
-                    // if no traffic is seen from the remote side for more than
-                    // twice its indicated heartbeat period, force a disconnect
+                    // if no traffic is seen from the remote side for longer than
+                    // its indicated heartbeat timeout, force a disconnect
                     TimeSpan remoteIdlePeriod = LastRemoteTraffic.HasValue
-                        ? DateTimeOffset.UtcNow - LastRemoteTraffic.Value
+                        ? DateTime.UtcNow - LastRemoteTraffic.Value
                         : TimeSpan.FromSeconds(0);
-                    if (remoteIdlePeriod.TotalSeconds > 2 * RemoteHeartbeatPeriodInSeconds)
+                    if (remoteIdlePeriod.TotalSeconds > RemoteHeartbeatTimeout.TotalSeconds)
                     {
                         // signal all threads to terminate
                         Interlocked.Exchange(ref Connected, 0);
-                        Logger.Info($"Forcing disconnect: remote connection did not send a heartbeat for more than {2 * RemoteHeartbeatPeriodInSeconds} seconds");
+                        Logger.Info($"Forcing disconnect: no traffic on remote connection for more than {(int)RemoteHeartbeatTimeout.TotalSeconds} seconds");
                         OnDisconnect?.Invoke(this, DisconnectionReasons.Unresponsive);
                         break;
                     }
@@ -666,9 +662,9 @@ namespace DidoNet
                     // process the frame
                     if (frame is HeartbeatFrame)
                     {
-                        // remember the heartbeat period the remote side is using
+                        // remember the heartbeat timeout the remote side is using
                         // to determine if it becomes unresponsive
-                        RemoteHeartbeatPeriodInSeconds = (frame as HeartbeatFrame)!.PeriodInSeconds;
+                        RemoteHeartbeatTimeout = TimeSpan.FromSeconds((frame as HeartbeatFrame)!.TimeoutInSeconds);
                         // NOTE: ignore heartbeats for unit test monitoring
                     }
                     else if (frame is DisconnectFrame)
