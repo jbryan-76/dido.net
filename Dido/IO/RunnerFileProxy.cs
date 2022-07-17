@@ -36,19 +36,6 @@ namespace DidoNet.IO
         /// </summary>
         private ConcurrentDictionary<string, RunnerFileStreamProxy> Files = new ConcurrentDictionary<string, RunnerFileStreamProxy>();
 
-        // TODO: use a <ushort,bool> dictionary for channels instead? with the value indicating whether it is used?
-
-        /// <summary>
-        /// The set of available channel numbers that can be used to create dedicated message channels
-        /// to proxy virtualized file access.
-        /// </summary>
-        private SortedSet<ushort> AvailableChannels = new SortedSet<ushort>();
-
-        /// <summary>
-        /// The set of used channel numbers used for dedicated message channels that proxy virtual file access.
-        /// </summary>
-        private SortedSet<ushort> UsedChannels = new SortedSet<ushort>();
-
         /// <summary>
         /// Create a new instance to proxy file IO over a connection.
         /// If a connection is not provided, the class instance API will pass-through to the local file-system.
@@ -59,14 +46,14 @@ namespace DidoNet.IO
         internal RunnerFileProxy(Connection? connection, RunnerConfiguration? configuration = null, string? applicationId = null)
         {
             CachePath = configuration?.FileCachePath;
-            
+
             // update the cache path where necessary to ensure each application has its own
             // folder to help prevent filename collisions
             if (!string.IsNullOrEmpty(CachePath) && !string.IsNullOrEmpty(applicationId))
             {
                 CachePath = Path.Combine(CachePath, applicationId);
             }
-            
+
             // ensure the cache folder exists, if necessary
             if (!string.IsNullOrEmpty(CachePath) && !Directory.Exists(CachePath))
             {
@@ -74,9 +61,6 @@ namespace DidoNet.IO
             }
 
             CacheMaxAge = configuration?.CacheMaxAge ?? TimeSpan.Zero;
-            AvailableChannels = new SortedSet<ushort>(
-                Enumerable.Range(Constants.AppRunner_FileChannelStart, Constants.AppRunner_MaxFileChannels).Select(i => (ushort)i)
-                );
             if (connection != null)
             {
                 Channel = new MessageChannel(connection, Constants.AppRunner_FileChannelId);
@@ -121,93 +105,87 @@ namespace DidoNet.IO
             }
             else
             {
-                ushort channelNumber = AcquireChannel();
-                try
-                {
-                    // if the cached file already exists, get its info and send with the start request
-                    // (if the files are the same, the application will send back a degenerate chunk message
-                    // instead of sending the whole file)
-                    if (File.Exists(dstCachedPath))
-                    {
-                        var info = new FileInfo(dstCachedPath);
+                string channelId = Guid.NewGuid().ToString();
 
-                        // if the cached file is expired, force a new copy to get transferred
-                        if (CacheMaxAge > TimeSpan.Zero &&
-                            DateTime.UtcNow - File.GetLastWriteTimeUtc(dstCachedPath) > CacheMaxAge)
-                        {
-                            File.Delete(dstCachedPath);
-                            Channel.Send(new FileStartCacheMessage(srcPath, channelNumber));
-                        }
-                        else
-                        {
-                            // otherwise send the current file info to the application to decide
-                            // whether to transmit the file
-                            byte[]? hash = null;
-                            if (checksum)
-                            {
-                                using (var md5 = System.Security.Cryptography.MD5.Create())
-                                using (var stream = File.OpenRead(dstCachedPath))
-                                {
-                                    hash = md5.ComputeHash(stream);
-                                }
-                            }
-                            Channel.Send(new FileStartCacheMessage(srcPath, channelNumber, info.Length, info.LastWriteTimeUtc, hash));
-                        }
+                // if the cached file already exists, get its info and send with the start request
+                // (if the files are the same, the application will send back a degenerate chunk message
+                // instead of sending the whole file)
+                if (File.Exists(dstCachedPath))
+                {
+                    var info = new FileInfo(dstCachedPath);
+
+                    // if the cached file is expired, force a new copy to get transferred
+                    if (CacheMaxAge > TimeSpan.Zero &&
+                        DateTime.UtcNow - File.GetLastWriteTimeUtc(dstCachedPath) > CacheMaxAge)
+                    {
+                        File.Delete(dstCachedPath);
+                        Channel.Send(new FileStartCacheMessage(srcPath, channelId));
                     }
                     else
                     {
-                        Channel.Send(new FileStartCacheMessage(srcPath, channelNumber));
-                    }
-
-                    // on a successful open, both sides agreed to create a new dedicated channel for
-                    // IO of the indicated file using the acquired channel number
-                    using (var fileChannel = new MessageChannel(Channel.Channel.Connection, channelNumber))
-                    {
-                        // receive a corresponding message containing the details of the requested file
-                        var info = fileChannel.ReceiveMessage<FileInfoMessage>();
-                        info.ThrowOnError();
-
-                        // handle the degenerate case of an empty file
-                        if (info.Length == 0)
+                        // otherwise send the current file info to the application to decide
+                        // whether to transmit the file
+                        byte[]? hash = null;
+                        if (checksum)
                         {
-                            File.WriteAllBytes(dstCachedPath, new byte[0]);
-                        }
-                        else
-                        {
-                            // otherwise loop and receive the entire file in chunks
-                            FileStream? file = null;
-                            FileChunkMessage chunk;
-                            do
+                            using (var md5 = System.Security.Cryptography.MD5.Create())
+                            using (var stream = File.OpenRead(dstCachedPath))
                             {
-                                chunk = fileChannel.ReceiveMessage<FileChunkMessage>();
-                                chunk.ThrowOnError();
-
-                                if (chunk.Length >= 0)
-                                {
-                                    // don't open the file until absolutely necessary:
-                                    // if the identical file is already cached, a degenerate chunk will be received
-                                    // and the file should not be overwritten
-                                    if (file == null)
-                                    {
-                                        // make sure the directory exists
-                                        Directory.CreateDirectory(Path.GetDirectoryName(dstCachedPath)!);
-                                        file = File.Open(dstCachedPath, FileMode.Create, FileAccess.Write);
-                                    }
-                                    file.Write(chunk.Bytes);
-                                }
-                            } while (!chunk.EOF);
-
-                            file?.Dispose();
+                                hash = md5.ComputeHash(stream);
+                            }
                         }
-
-                        // now force the cached last write time to match the source
-                        // to support the cache heuristic for determining identical files
-                        File.SetLastWriteTimeUtc(dstCachedPath, info.LastWriteTimeUtc);
+                        Channel.Send(new FileStartCacheMessage(srcPath, channelId, info.Length, info.LastWriteTimeUtc, hash));
                     }
                 }
-                finally
+                else
                 {
-                    ReleaseChannel(channelNumber);
+                    Channel.Send(new FileStartCacheMessage(srcPath, channelId));
+                }
+
+                // on a successful open, both sides agreed to create a new dedicated channel for
+                // IO of the indicated file using the acquired channel number
+                using (var fileChannel = new MessageChannel(Channel.Channel.Connection, channelId))
+                {
+                    // receive a corresponding message containing the details of the requested file
+                    var info = fileChannel.ReceiveMessage<FileInfoMessage>();
+                    info.ThrowOnError();
+
+                    // handle the degenerate case of an empty file
+                    if (info.Length == 0)
+                    {
+                        File.WriteAllBytes(dstCachedPath, new byte[0]);
+                    }
+                    else
+                    {
+                        // otherwise loop and receive the entire file in chunks
+                        FileStream? file = null;
+                        FileChunkMessage chunk;
+                        do
+                        {
+                            chunk = fileChannel.ReceiveMessage<FileChunkMessage>();
+                            chunk.ThrowOnError();
+
+                            if (chunk.Length >= 0)
+                            {
+                                // don't open the file until absolutely necessary:
+                                // if the identical file is already cached, a degenerate chunk will be received
+                                // and the file should not be overwritten
+                                if (file == null)
+                                {
+                                    // make sure the directory exists
+                                    Directory.CreateDirectory(Path.GetDirectoryName(dstCachedPath)!);
+                                    file = File.Open(dstCachedPath, FileMode.Create, FileAccess.Write);
+                                }
+                                file.Write(chunk.Bytes);
+                            }
+                        } while (!chunk.EOF);
+
+                        file?.Dispose();
+                    }
+
+                    // now force the cached last write time to match the source
+                    // to support the cache heuristic for determining identical files
+                    File.SetLastWriteTimeUtc(dstCachedPath, info.LastWriteTimeUtc);
                 }
             }
             return dstCachedPath;
@@ -242,82 +220,76 @@ namespace DidoNet.IO
             }
             else
             {
-                ushort channelNumber = AcquireChannel();
-                try
+                string channelId = Guid.NewGuid().ToString();
+
+                // get the file info and send with the start request
+                var fileInfo = new FileInfo(srcPath);
+                byte[] hash = new byte[0];
+                if (checksum)
                 {
-                    // get the file info and send with the start request
-                    var fileInfo = new FileInfo(srcPath);
-                    byte[] hash = new byte[0];
-                    if (checksum)
+                    using (var md5 = System.Security.Cryptography.MD5.Create())
+                    using (var stream = File.OpenRead(srcPath))
                     {
-                        using (var md5 = System.Security.Cryptography.MD5.Create())
-                        using (var stream = File.OpenRead(srcPath))
-                        {
-                            hash = md5.ComputeHash(stream);
-                        }
+                        hash = md5.ComputeHash(stream);
                     }
-                    var storeMessage = new FileStartStoreMessage(dstPath, channelNumber, fileInfo.Length, fileInfo.LastWriteTimeUtc, hash);
-                    Channel.Send(storeMessage);
+                }
+                var storeMessage = new FileStartStoreMessage(dstPath, channelId, fileInfo.Length, fileInfo.LastWriteTimeUtc, hash);
+                Channel.Send(storeMessage);
 
-                    // on a successful open, both sides agreed to create a new dedicated channel for
-                    // IO of the indicated file using the acquired channel number
-                    using (var fileChannel = new MessageChannel(Channel.Channel.Connection, channelNumber))
+                // on a successful open, both sides agreed to create a new dedicated channel for
+                // IO of the indicated file using the acquired channel number
+                using (var fileChannel = new MessageChannel(Channel.Channel.Connection, channelId))
+                {
+                    // receive a corresponding message containing the details of the requested file
+                    var info = fileChannel.ReceiveMessage<FileInfoMessage>();
+                    info.ThrowOnError();
+
+                    // handle the degenerate case of an empty file
+                    if (fileInfo.Length == 0)
                     {
-                        // receive a corresponding message containing the details of the requested file
-                        var info = fileChannel.ReceiveMessage<FileInfoMessage>();
-                        info.ThrowOnError();
-
-                        // handle the degenerate case of an empty file
-                        if (fileInfo.Length == 0)
+                        fileChannel.Send(new FileChunkMessage(dstPath, new byte[0], 0, 0));
+                    }
+                    else
+                    {
+                        // otherwise if the file already exists, the application will have sent back its info.
+                        // check whether the content changed
+                        bool same = Enumerable.SequenceEqual(hash, info.Hash)
+                            && fileInfo.Length == info.Length
+                            && fileInfo.LastWriteTimeUtc == info.LastWriteTimeUtc;
+                        if (same)
                         {
-                            fileChannel.Send(new FileChunkMessage(dstPath, new byte[0], 0, 0));
+                            // if the destination file hasn't changed, send a degenerate chunk
+                            fileChannel.Send(new FileChunkMessage(dstPath));
                         }
                         else
                         {
-                            // otherwise if the file already exists, the application will have sent back its info.
-                            // check whether the content changed
-                            bool same = Enumerable.SequenceEqual(hash, info.Hash)
-                                && fileInfo.Length == info.Length
-                                && fileInfo.LastWriteTimeUtc == info.LastWriteTimeUtc;
-                            if (same)
+                            // otherwise send the file in chunks
+                            using (var file = File.Open(srcPath, FileMode.Open, FileAccess.Read, FileShare.Read))
                             {
-                                // if the destination file hasn't changed, send a degenerate chunk
-                                fileChannel.Send(new FileChunkMessage(dstPath));
-                            }
-                            else
-                            {
-                                // otherwise send the file in chunks
-                                using (var file = File.Open(srcPath, FileMode.Open, FileAccess.Read, FileShare.Read))
+                                var buffer = new byte[512 * 1024]; // 0.5MB
+                                long remaining = file.Length;
+                                while (remaining > 0)
                                 {
-                                    var buffer = new byte[512 * 1024]; // 0.5MB
-                                    long remaining = file.Length;
-                                    while (remaining > 0)
+                                    var count = (int)Math.Min(remaining, buffer.Length);
+                                    int read = file.Read(buffer, 0, count);
+                                    var data = buffer;
+                                    // the message only sends a contiguous byte array containing all data,
+                                    // so resize if needed (which should only happen on the last chunk)
+                                    if (read != buffer.Length)
                                     {
-                                        var count = (int)Math.Min(remaining, buffer.Length);
-                                        int read = file.Read(buffer, 0, count);
-                                        var data = buffer;
-                                        // the message only sends a contiguous byte array containing all data,
-                                        // so resize if needed (which should only happen on the last chunk)
-                                        if (read != buffer.Length)
-                                        {
-                                            data = new byte[read];
-                                            Buffer.BlockCopy(buffer, 0, data, 0, read);
-                                        }
-                                        fileChannel.Send(new FileChunkMessage(dstPath, data, file.Position, file.Length));
-                                        remaining -= read;
+                                        data = new byte[read];
+                                        Buffer.BlockCopy(buffer, 0, data, 0, read);
                                     }
+                                    fileChannel.Send(new FileChunkMessage(dstPath, data, file.Position, file.Length));
+                                    remaining -= read;
                                 }
                             }
-
-                            // receive confirmation
-                            var ack = fileChannel.ReceiveMessage<FileAckMessage>();
-                            ack.ThrowOnError();
                         }
+
+                        // receive confirmation
+                        var ack = fileChannel.ReceiveMessage<FileAckMessage>();
+                        ack.ThrowOnError();
                     }
-                }
-                finally
-                {
-                    ReleaseChannel(channelNumber);
                 }
             }
         }
@@ -533,28 +505,22 @@ namespace DidoNet.IO
                     }
 
                     // opening a file: create a dedicated channel
-                    ushort channelNumber = AcquireChannel();
-                    try
-                    {
-                        // send the open file request and wait for the corresponding response.
-                        // because this code block has a lock on the connection, the request/response
-                        // pair will be correlated and not interleaved with another thread's attempt
-                        // to open or create a file
-                        Channel.Send(new FileOpenMessage(path, channelNumber, mode, access, share));
-                        var ack = Channel.ReceiveMessage<FileAckMessage>();
-                        ack.ThrowOnError();
+                    string channelId = Guid.NewGuid().ToString();
 
-                        // on a successful open, both sides agreed to create a new dedicated channel for
-                        // IO of the indicated file using the acquired channel number
-                        var fileChannel = new MessageChannel(Channel.Channel.Connection, channelNumber);
-                        var stream = new RunnerFileStreamProxy(path, ack.Position, ack.Length, fileChannel, (filename) => Close(filename));
-                        Files.TryAdd(path, stream);
-                        return stream;
-                    }
-                    finally
-                    {
-                        ReleaseChannel(channelNumber);
-                    }
+                    // send the open file request and wait for the corresponding response.
+                    // because this code block has a lock on the connection, the request/response
+                    // pair will be correlated and not interleaved with another thread's attempt
+                    // to open or create a file
+                    Channel.Send(new FileOpenMessage(path, channelId, mode, access, share));
+                    var ack = Channel.ReceiveMessage<FileAckMessage>();
+                    ack.ThrowOnError();
+
+                    // on a successful open, both sides agreed to create a new dedicated channel for
+                    // IO of the indicated file using the acquired channel number
+                    var fileChannel = new MessageChannel(Channel.Channel.Connection, channelId);
+                    var stream = new RunnerFileStreamProxy(path, ack.Position, ack.Length, fileChannel, (filename) => Close(filename));
+                    Files.TryAdd(path, stream);
+                    return stream;
                 }
             }
             else
@@ -826,45 +792,6 @@ namespace DidoNet.IO
             {
                 // inform the remote side the file connection is closing
                 Channel?.Send(new FileCloseMessage(path));
-                // make the utilized channel available again
-                ReleaseChannel(stream.Channel.ChannelNumber);
-            }
-        }
-
-        /// <summary>
-        /// Acquires and returns the next available unique channel number to use to open and proxy file IO.
-        /// </summary>
-        /// <returns></returns>
-        /// <exception cref="ResourceNotAvailableException"></exception>
-        private ushort AcquireChannel()
-        {
-            // TODO: this is a dumb, brute-force implementation; explore more elegant solutions
-
-            lock (AvailableChannels)
-            {
-                if (AvailableChannels.Count == 0)
-                {
-                    throw new ResourceNotAvailableException("No more communication channels are available on the underlying connection.");
-                }
-
-                var channelNumber = AvailableChannels.First();
-                AvailableChannels.Remove(channelNumber);
-                UsedChannels.Add(channelNumber);
-
-                return channelNumber;
-            }
-        }
-
-        /// <summary>
-        /// Releases the provided channel number, making it available again to be reused.
-        /// </summary>
-        /// <param name="channelNumber"></param>
-        private void ReleaseChannel(ushort channelNumber)
-        {
-            lock (AvailableChannels)
-            {
-                UsedChannels.Remove(channelNumber);
-                AvailableChannels.Add(channelNumber);
             }
         }
     }

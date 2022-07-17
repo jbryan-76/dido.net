@@ -195,7 +195,7 @@ namespace DidoNet
         /// <summary>
         /// A thread-safe collection of all Channels using the connection.
         /// </summary>
-        private ConcurrentDictionary<ushort, Channel> Channels = new ConcurrentDictionary<ushort, Channel>();
+        private ConcurrentDictionary<string, Channel> Channels = new ConcurrentDictionary<string, Channel>();
 
         /// <summary>
         /// The class logger instance.
@@ -386,7 +386,7 @@ namespace DidoNet
             Interlocked.Exchange(ref IsDisconnecting, 1);
 
             // remove and dispose all channels to force them to flush any remaining data
-            ushort[] keys;
+            string[] keys;
             while ((keys = Channels.Keys.ToArray()).Length > 0)
             {
                 foreach (var key in keys)
@@ -439,17 +439,17 @@ namespace DidoNet
         /// <para/>Note: Created channels are disposed implicitly when the owning connection is
         /// disposed, so calling Dispose() on a channel is effectively optional.
         /// </summary>
-        /// <param name="channelNumber"></param>
+        /// <param name="channelId"></param>
         /// <exception cref="NotConnectedException"></exception>
         /// <returns></returns>
-        public Channel GetChannel(ushort channelNumber)
+        public Channel GetChannel(string channelId)
         {
             if (Interlocked.Read(ref Connected) != 1
                 || Interlocked.Read(ref IsDisconnecting) == 1)
             {
                 throw new NotConnectedException("Can't create channel: not connected.");
             }
-            return GetChannelInternal(channelNumber);
+            return GetChannelInternal(channelId);
         }
 
         internal void SimulateUnexpectedDisconnect()
@@ -467,7 +467,7 @@ namespace DidoNet
         /// <param name="channel"></param>
         internal void RemoveChannel(Channel channel)
         {
-            Channels.TryRemove(channel.ChannelNumber, out _);
+            Channels.TryRemove(channel.ChannelId, out _);
         }
 
         /// <summary>
@@ -716,11 +716,11 @@ namespace DidoNet
         /// <summary>
         /// Gets or creates a reference to the indicated channel.
         /// </summary>
-        /// <param name="channelNumber"></param>
+        /// <param name="channelId"></param>
         /// <returns></returns>
-        private Channel GetChannelInternal(ushort channelNumber)
+        private Channel GetChannelInternal(string channelId)
         {
-            return Channels.GetOrAdd(channelNumber, (num) => new Channel(this, num));
+            return Channels.GetOrAdd(channelId, (id) => new Channel(this, id));
         }
 
         /// <summary>
@@ -737,7 +737,7 @@ namespace DidoNet
             int length = -1;
             var payload = new byte[0];
             if (ReadBuffer.TryReadByte(out var type)
-                && ReadBuffer.TryReadUShortBE(out var channel)
+                && ReadBuffer.TryReadString(out var channel)
                 && ReadBuffer.TryReadIntBE(out length)
                 && (length == 0 || ReadBuffer.TryReadBytes(length, out payload))
                 )
@@ -759,7 +759,6 @@ namespace DidoNet
             {
                 // a new frame is not yet available.
                 // restore the buffer position and return null
-                //ThreadHelpers.Debug($"connection {Name} no data {ReadBuffer.Position} -> {position} [{ReadBuffer.Length}]");
                 ReadBuffer.Position = position;
                 return null;
             }
@@ -774,7 +773,7 @@ namespace DidoNet
             // TODO: use a BufferedStream to increase performance?
             ThreadHelpers.Debug($"connection {Name} writing frame {frame}");
             WriteStream.WriteByte(frame.Type);
-            WriteStream.WriteUInt16BE(frame.Channel);
+            WriteStream.WriteString(frame.Channel);
             WriteStream.WriteInt32BE(frame.Length);
             if (frame.Length > 0)
             {

@@ -5,7 +5,7 @@ namespace DidoNet.IO
 {
     internal class FileTransferMessageBase : FileMessageBase
     {
-        public ushort ChannelNumber { get; set; }
+        public string ChannelId { get; set; }
 
         public long Length { get; set; }
 
@@ -15,11 +15,11 @@ namespace DidoNet.IO
 
         public FileTransferMessageBase() { }
 
-        public FileTransferMessageBase(string filename, ushort channelNumber,
+        public FileTransferMessageBase(string filename, string channelId,
             long? length = null, DateTime? modifiedUtc = null, byte[]? hash = null)
             : base(filename)
         {
-            ChannelNumber = channelNumber;
+            ChannelId = channelId;
             Length = length ?? -1;
             LastWriteTimeUtc = modifiedUtc ?? default(DateTime);
             Hash = hash ?? new byte[0];
@@ -28,7 +28,7 @@ namespace DidoNet.IO
         public override void Read(Stream stream)
         {
             base.Read(stream);
-            ChannelNumber = stream.ReadUInt16BE();
+            ChannelId = stream.ReadString();
             Length = stream.ReadInt64BE();
             var ticks = stream.ReadInt64BE();
             LastWriteTimeUtc = new DateTime(ticks, DateTimeKind.Utc);
@@ -38,7 +38,7 @@ namespace DidoNet.IO
         public override void Write(Stream stream)
         {
             base.Write(stream);
-            stream.WriteUInt16BE(ChannelNumber);
+            stream.WriteString(ChannelId);
             stream.WriteInt64BE(Length);
             stream.WriteInt64BE(LastWriteTimeUtc.Ticks);
             stream.WriteByteArray(Hash);

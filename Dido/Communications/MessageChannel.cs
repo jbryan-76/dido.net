@@ -56,7 +56,7 @@ namespace DidoNet
         /// <summary>
         /// The unique id for the underlying communications channel.
         /// </summary>
-        public ushort ChannelNumber { get { return Channel.ChannelNumber; } }
+        public string ChannelId { get { return Channel.ChannelId; } }
 
         /// <summary>
         /// Internal handler for unit tests to monitor received messages.
@@ -84,12 +84,12 @@ namespace DidoNet
         }
 
         /// <summary>
-        /// Creates a new message channel that uses the given channel number on the given connection.
+        /// Creates a new message channel that uses the given channel id on the given connection.
         /// </summary>
         /// <param name="connection"></param>
-        /// <param name="channelNumber"></param>
-        public MessageChannel(Connection connection, ushort channelNumber)
-            : this(connection.GetChannel(channelNumber)) { }
+        /// <param name="channelId"></param>
+        public MessageChannel(Connection connection, string channelId)
+            : this(connection.GetChannel(channelId)) { }
 
         public void Dispose()
         {
@@ -182,25 +182,25 @@ namespace DidoNet
             }
 
             // TODO: send message length too so can read+discard on error?
-            ThreadHelpers.Debug($"{ChannelNumber} {Channel.Name} reading message type");
+            ThreadHelpers.Debug($"{ChannelId} reading message type");
             var typeName = Channel.ReadString();
-            ThreadHelpers.Debug($"{ChannelNumber} {Channel.Name} receiving message {typeName}");
+            ThreadHelpers.Debug($"{ChannelId} receiving message {typeName}");
             var messageType = Type.GetType(typeName);
             if (messageType == null)
             {
-                ThreadHelpers.Debug($"{ChannelNumber} {Channel.Name} EXCEPTION: empty message type");
+                ThreadHelpers.Debug($"{ChannelId} EXCEPTION: empty message type");
 
                 throw new InvalidOperationException($"Unknown message type '{typeName}'");
             }
             var message = Activator.CreateInstance(messageType) as IMessage;
             if (message == null)
             {
-                ThreadHelpers.Debug($"{ChannelNumber} {Channel.Name} EXCEPTION: can't create instance");
+                ThreadHelpers.Debug($"{ChannelId} EXCEPTION: can't create instance");
                 throw new InvalidOperationException($"Cannot create instance of message type '{typeName}'");
             }
-            ThreadHelpers.Debug($"{ChannelNumber} {Channel.Name} starting read message {typeName}");
+            ThreadHelpers.Debug($"{ChannelId} starting read message {typeName}");
             message.Read(Channel);
-            ThreadHelpers.Debug($"{ChannelNumber} {Channel.Name} received message {typeName}");
+            ThreadHelpers.Debug($"{ChannelId} received message {typeName}");
 
             UnitTestReceiveMessageMonitor?.Invoke(message);
             return message;
@@ -231,7 +231,7 @@ namespace DidoNet
         {
             var message = ReceiveMessage();
             OnMessageReceived?.Invoke(message, this);
-            ThreadHelpers.Debug($"{ChannelNumber} {Channel.Name} invoked message receiver");
+            ThreadHelpers.Debug($"{ChannelId} invoked message receiver");
         }
     }
 }

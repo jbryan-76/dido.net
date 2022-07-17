@@ -33,14 +33,9 @@ namespace DidoNet
         public ChannelDataAvailableHandler? OnDataAvailable = null;
 
         /// <summary>
-        /// The optional name of the channel.
-        /// </summary>
-        public string Name { get; set; } = string.Empty;
-
-        /// <summary>
         /// The unique id for the channel.
         /// </summary>
-        public ushort ChannelNumber { get; private set; }
+        public string ChannelId { get; private set; }
 
         /// <summary>
         /// The Connection the channel is using for data transmission.
@@ -282,14 +277,14 @@ namespace DidoNet
         }
 
         /// <summary>
-        /// Create a new channel using the given connection and with the given (unique) channel number.
+        /// Create a new channel using the given connection and with the given (unique) channel id.
         /// </summary>
         /// <param name="connection"></param>
-        /// <param name="channelNumber"></param>
-        internal Channel(Connection connection, ushort channelNumber)
+        /// <param name="channelId"></param>
+        internal Channel(Connection connection, string channelId)
         {
             Connection = connection;
-            ChannelNumber = channelNumber;
+            ChannelId = channelId;
             WriteThread = new Thread(() => WriteLoop());
             WriteThread.Start();
             ReadThread = new Thread(() => ReadLoop());
@@ -304,7 +299,7 @@ namespace DidoNet
         {
             // when the connection receives data for this channel, enqueue it to be later read by a consumer
             ReadBuffer.Enqueue(bytes);
-            ThreadHelpers.Debug($"Channel {ChannelNumber} {Name} received {bytes.Length} bytes Q={ReadBuffer.Count}");
+            ThreadHelpers.Debug($"Channel {ChannelId} received {bytes.Length} bytes Q={ReadBuffer.Count}");
         }
 
         /// <summary>
@@ -323,7 +318,7 @@ namespace DidoNet
             {
                 // make sure all pending data is sent before stopping the write thread
                 Flush();
-                ThreadHelpers.Debug($"Disposing Channel {ChannelNumber} {Name}");
+                ThreadHelpers.Debug($"Disposing Channel {ChannelId}");
                 // signal the threads to stop
                 Interlocked.Exchange(ref IsDisposed, 1);
                 // wait for the threads to finish
@@ -369,14 +364,14 @@ namespace DidoNet
                 {
                     if (IsDataAvailable)
                     {
-                        ThreadHelpers.Debug($"Channel {ChannelNumber} {Name} data available");
+                        ThreadHelpers.Debug($"Channel {ChannelId} data available");
                         // NOTE by design this will block: the handler is meant to process
                         // the incoming data serially in a single thread
                         OnDataAvailable?.Invoke(this);
                     }
                     ThreadHelpers.Yield();
                 }
-                ThreadHelpers.Debug($"channel {ChannelNumber} {Name} read loop stopping read buffer={ReadBuffer.Count}");
+                ThreadHelpers.Debug($"channel {ChannelId} read loop stopping read buffer={ReadBuffer.Count}");
             }
             catch (Exception e)
             {
@@ -405,7 +400,7 @@ namespace DidoNet
                             int size = Math.Min(remaining, Frame.MaxFrameSize);
                             var bytes = new byte[size];
                             Buffer.BlockCopy(WriteBuffer.GetBuffer(), offset, bytes, 0, size);
-                            Connection.EnqueueFrame(new ChannelDataFrame(ChannelNumber, bytes));
+                            Connection.EnqueueFrame(new ChannelDataFrame(ChannelId, bytes));
                             remaining -= size;
                             offset += size;
                         }
@@ -415,7 +410,7 @@ namespace DidoNet
                     }
                     ThreadHelpers.Yield();
                 }
-                ThreadHelpers.Debug($"channel {ChannelNumber} {Name} write loop stopping write buffer={WriteBuffer.Length}");
+                ThreadHelpers.Debug($"channel {ChannelId} write loop stopping write buffer={WriteBuffer.Length}");
             }
             catch (Exception e)
             {

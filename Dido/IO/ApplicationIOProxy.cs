@@ -87,7 +87,7 @@ namespace DidoNet.IO
                     break;
 
                 case FileStartCacheMessage cache:
-                    using (var cacheChannel = new MessageChannel(Channel.Connection, cache.ChannelNumber))
+                    using (var cacheChannel = new MessageChannel(Channel.Connection, cache.ChannelId))
                     {
                         // ensure the file exists and send an error if not
                         if (!File.Exists(cache.Filename))
@@ -171,7 +171,7 @@ namespace DidoNet.IO
                     break;
 
                 case FileStartStoreMessage store:
-                    using (var storeChannel = new MessageChannel(Channel.Connection, store.ChannelNumber))
+                    using (var storeChannel = new MessageChannel(Channel.Connection, store.ChannelId))
                     {
                         // if the file exists, send back its info so the remote side can decide whether to transmit the file
                         if (File.Exists(store.Filename))

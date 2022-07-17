@@ -29,7 +29,7 @@ namespace DidoNet.IO
         public ApplicationFileStreamProxy(FileOpenMessage message, Connection connection)
         {
             Stream = File.Open(message.Filename, message.Mode, message.Access, message.Share);
-            Channel = new MessageChannel(connection, message.ChannelNumber);
+            Channel = new MessageChannel(connection, message.ChannelId);
             Channel.OnMessageReceived = FileMessageHandler;
         }
 

@@ -5,7 +5,7 @@ namespace DidoNet.IO
 {
     internal class FileOpenMessage : FileMessageBase
     {
-        public ushort ChannelNumber { get; set; }
+        public string ChannelId { get; set; }
 
         public FileMode Mode { get; set; }
 
@@ -15,10 +15,10 @@ namespace DidoNet.IO
 
         public FileOpenMessage() { }
 
-        public FileOpenMessage(string filename, ushort channelNumber, FileMode mode, FileAccess access, FileShare share)
+        public FileOpenMessage(string filename, string channelNumber, FileMode mode, FileAccess access, FileShare share)
             : base(filename)
         {
-            ChannelNumber = channelNumber;
+            ChannelId = channelNumber;
             Mode = mode;
             Access = access;
             Share = share;
@@ -27,7 +27,7 @@ namespace DidoNet.IO
         public override void Read(Stream stream)
         {
             base.Read(stream);
-            ChannelNumber = stream.ReadUInt16BE();
+            ChannelId = stream.ReadString();
             Mode = Enum.Parse<FileMode>(stream.ReadString());
             Access = Enum.Parse<FileAccess>(stream.ReadString());
             Share = Enum.Parse<FileShare>(stream.ReadString());
@@ -36,7 +36,7 @@ namespace DidoNet.IO
         public override void Write(Stream stream)
         {
             base.Write(stream);
-            stream.WriteUInt16BE(ChannelNumber);
+            stream.WriteString(ChannelId);
             stream.WriteString(Mode.ToString());
             stream.WriteString(Access.ToString());
             stream.WriteString(Share.ToString());

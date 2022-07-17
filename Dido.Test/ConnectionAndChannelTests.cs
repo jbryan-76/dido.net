@@ -39,7 +39,7 @@ namespace DidoNet.Test
             {
                 // send a test frame from the client to the server
                 var testFrame = new DebugFrame("hello world");
-                testFrame.Channel = 123;
+                testFrame.Channel = "test1";
                 clientServerConnection.SendClientToServer(testFrame);
                 clientServerConnection.WaitForAllClear();
 
@@ -57,7 +57,7 @@ namespace DidoNet.Test
 
                 // send a test frame from the server to the client
                 testFrame = new DebugFrame("goodbye cruel world");
-                testFrame.Channel = 456;
+                testFrame.Channel = "test2";
                 clientServerConnection.SendServerToClient(testFrame);
                 clientServerConnection.WaitForAllClear();
 
@@ -192,8 +192,8 @@ namespace DidoNet.Test
             using (var clientServerConnection = await ClientServerConnection.CreateAsync(GetNextAvailablePort()))
             {
                 // create both sides of a logical channel for the client and server to communicate
-                var channel1ClientSide = clientServerConnection.ClientConnection.GetChannel(1);
-                var channel1ServerSide = clientServerConnection.ServerConnection.GetChannel(1);
+                var channel1ClientSide = clientServerConnection.ClientConnection.GetChannel("test");
+                var channel1ServerSide = clientServerConnection.ServerConnection.GetChannel("test");
 
                 // indicate the channel should block reads until data is available
                 channel1ServerSide.BlockingReads = true;
@@ -215,10 +215,10 @@ namespace DidoNet.Test
             using (var clientServerConnection = await ClientServerConnection.CreateAsync(GetNextAvailablePort()))
             {
                 // create both sides of two logical channels for the client and server to communicate
-                var channel1ClientSide = clientServerConnection.ClientConnection.GetChannel(1);
-                var channel1ServerSide = clientServerConnection.ServerConnection.GetChannel(1);
-                var channel2ClientSide = clientServerConnection.ClientConnection.GetChannel(2);
-                var channel2ServerSide = clientServerConnection.ServerConnection.GetChannel(2);
+                var channel1ClientSide = clientServerConnection.ClientConnection.GetChannel("test1");
+                var channel1ServerSide = clientServerConnection.ServerConnection.GetChannel("test1");
+                var channel2ClientSide = clientServerConnection.ClientConnection.GetChannel("test2");
+                var channel2ServerSide = clientServerConnection.ServerConnection.GetChannel("test2");
 
                 // send test messages on each channel
                 var test1_c2s = "test 1 - c2s";
@@ -251,8 +251,8 @@ namespace DidoNet.Test
             using (var clientServerConnection = await ClientServerConnection.CreateAsync(GetNextAvailablePort()))
             {
                 // create both sides of a logical channel for the client and server to communicate
-                var channelClientSide = clientServerConnection.ClientConnection.GetChannel(1);
-                var channelServerSide = clientServerConnection.ServerConnection.GetChannel(1);
+                var channelClientSide = clientServerConnection.ClientConnection.GetChannel("test");
+                var channelServerSide = clientServerConnection.ServerConnection.GetChannel("test");
 
                 // write enough data to generate 3 frames
                 var data = new byte[2 * Frame.MaxFrameSize + 1];
@@ -282,8 +282,8 @@ namespace DidoNet.Test
             using (var clientServerConnection = await ClientServerConnection.CreateAsync(GetNextAvailablePort()))
             {
                 // create both sides of a logical channel for the client and server to communicate
-                var channel1ClientSide = clientServerConnection.ClientConnection.GetChannel(1);
-                var channel1ServerSide = clientServerConnection.ServerConnection.GetChannel(1);
+                var channel1ClientSide = clientServerConnection.ClientConnection.GetChannel("test");
+                var channel1ServerSide = clientServerConnection.ServerConnection.GetChannel("test");
 
                 // wrap in a message channel
                 var messageChannel1ClientSide = new MessageChannel(channel1ClientSide);
@@ -327,8 +327,8 @@ namespace DidoNet.Test
             using (var clientServerConnection = await ClientServerConnection.CreateAsync(GetNextAvailablePort()))
             {
                 // create both sides of a logical channel for the client and server to communicate
-                var channel1ClientSide = clientServerConnection.ClientConnection.GetChannel(1);
-                var channel1ServerSide = clientServerConnection.ServerConnection.GetChannel(1);
+                var channel1ClientSide = clientServerConnection.ClientConnection.GetChannel("test");
+                var channel1ServerSide = clientServerConnection.ServerConnection.GetChannel("test");
 
                 // wrap in a message channel
                 var messageChannel1ClientSide = new MessageChannel(channel1ClientSide);
@@ -357,8 +357,8 @@ namespace DidoNet.Test
             using (var clientServerConnection = await ClientServerConnection.CreateAsync(GetNextAvailablePort()))
             {
                 // create both sides of a logical channel for the client and server to communicate
-                var channel1ClientSide = clientServerConnection.ClientConnection.GetChannel(1);
-                var channel1ServerSide = clientServerConnection.ServerConnection.GetChannel(1);
+                var channel1ClientSide = clientServerConnection.ClientConnection.GetChannel("test");
+                var channel1ServerSide = clientServerConnection.ServerConnection.GetChannel("test");
 
                 // wrap in a message channel
                 var messageChannel1ClientSide = new MessageChannel(channel1ClientSide);
@@ -381,8 +381,8 @@ namespace DidoNet.Test
                 using (var clientServerConnection = await ClientServerConnection.CreateAsync(GetNextAvailablePort()))
                 {
                     // create both sides of a logical channel for the client and server to communicate
-                    var messageChannel1ClientSide = new MessageChannel(clientServerConnection.ClientConnection, 1);
-                    var messageChannel1ServerSide = new MessageChannel(clientServerConnection.ServerConnection, 1);
+                    var messageChannel1ClientSide = new MessageChannel(clientServerConnection.ClientConnection, "test");
+                    var messageChannel1ServerSide = new MessageChannel(clientServerConnection.ServerConnection, "test");
 
                     // try to receive a message from the client to the server in a thread...
                     var task = Task.Run(() =>
@@ -408,31 +408,31 @@ namespace DidoNet.Test
             using (var clientServerConnection = await ClientServerConnection.CreateAsync(GetNextAvailablePort()))
             {
                 // create both sides of 2 logical channels for the client and server to communicate
-                var channel1ClientSide = new MessageChannel(clientServerConnection.ClientConnection, 1);
-                var channel1ServerSide = new MessageChannel(clientServerConnection.ServerConnection, 1);
-                var channel2ClientSide = new MessageChannel(clientServerConnection.ClientConnection, 2);
-                var channel2ServerSide = new MessageChannel(clientServerConnection.ServerConnection, 2);
+                var channel1ClientSide = new MessageChannel(clientServerConnection.ClientConnection, "test1");
+                var channel1ServerSide = new MessageChannel(clientServerConnection.ServerConnection, "test1");
+                var channel2ClientSide = new MessageChannel(clientServerConnection.ClientConnection, "test2");
+                var channel2ServerSide = new MessageChannel(clientServerConnection.ServerConnection, "test2");
 
                 // create test messages
                 var testRequestMessage = new TestMessage { MyIntValue = 123, MyStringValue = "my request" };
                 var testResponseMessage = new TestMessage { MyIntValue = 456, MyStringValue = "my response" };
 
                 // storage for all received messages
-                var clientMessages = new ConcurrentBag<Tuple<TestMessage, int>>();
-                var serverMessages = new ConcurrentBag<Tuple<TestMessage, int>>();
+                var clientMessages = new ConcurrentBag<Tuple<TestMessage, string>>();
+                var serverMessages = new ConcurrentBag<Tuple<TestMessage, string>>();
 
                 long messageCount = 0;
 
                 // message handlers
                 MessageChannel.MessageReceivedHandler serverHandler = (message, channel) =>
                 {
-                    serverMessages.Add(new Tuple<TestMessage, int>((TestMessage)message, channel.ChannelNumber));
+                    serverMessages.Add(new Tuple<TestMessage, string>((TestMessage)message, channel.ChannelId));
                     channel.Send(testResponseMessage);
                     Interlocked.Increment(ref messageCount);
                 };
                 MessageChannel.MessageReceivedHandler clientHandler = (message, channel) =>
                 {
-                    clientMessages.Add(new Tuple<TestMessage, int>((TestMessage)message, channel.ChannelNumber));
+                    clientMessages.Add(new Tuple<TestMessage, string>((TestMessage)message, channel.ChannelId));
                     Interlocked.Increment(ref messageCount);
                 };
 
@@ -455,10 +455,10 @@ namespace DidoNet.Test
                 // confirm the messages match
                 Assert.Equal(2, clientMessages.Count);
                 Assert.Equal(2, serverMessages.Count);
-                Assert.Contains(1, clientMessages.Select(x => x.Item2));
-                Assert.Contains(2, clientMessages.Select(x => x.Item2));
-                Assert.Contains(1, serverMessages.Select(x => x.Item2));
-                Assert.Contains(2, serverMessages.Select(x => x.Item2));
+                Assert.Contains("test1", clientMessages.Select(x => x.Item2));
+                Assert.Contains("test2", clientMessages.Select(x => x.Item2));
+                Assert.Contains("test1", serverMessages.Select(x => x.Item2));
+                Assert.Contains("test2", serverMessages.Select(x => x.Item2));
                 Assert.All(clientMessages.Select(x => x.Item1), m => Assert.Equal(m.MyIntValue, testResponseMessage.MyIntValue));
                 Assert.All(clientMessages.Select(x => x.Item1), m => Assert.Equal(m.MyStringValue, testResponseMessage.MyStringValue));
                 Assert.All(serverMessages.Select(x => x.Item1), m => Assert.Equal(m.MyIntValue, testRequestMessage.MyIntValue));
@@ -470,10 +470,10 @@ namespace DidoNet.Test
         public async void MessageProducerConsumers()
         {
             // ordered storage for all sent and received messages
-            var clientSentMessages = new ConcurrentQueue<Tuple<TestMessage, int>>();
-            var clientReceivedMessages = new ConcurrentQueue<Tuple<TestMessage, int>>();
-            var serverSentMessages = new ConcurrentQueue<Tuple<TestMessage, int>>();
-            var serverReceivedMessages = new ConcurrentQueue<Tuple<TestMessage, int>>();
+            var clientSentMessages = new ConcurrentQueue<Tuple<TestMessage, string>>();
+            var clientReceivedMessages = new ConcurrentQueue<Tuple<TestMessage, string>>();
+            var serverSentMessages = new ConcurrentQueue<Tuple<TestMessage, string>>();
+            var serverReceivedMessages = new ConcurrentQueue<Tuple<TestMessage, string>>();
 
             // how many messages to send
             var rand = new Random();
@@ -486,19 +486,19 @@ namespace DidoNet.Test
             using (var clientServerConnection = await ClientServerConnection.CreateAsync(GetNextAvailablePort()))
             {
                 // create both sides of 2 logical channels for the client and server to communicate
-                var channel1ClientSide = new MessageChannel(clientServerConnection.ClientConnection, 1);
-                var channel1ServerSide = new MessageChannel(clientServerConnection.ServerConnection, 1);
-                var channel2ClientSide = new MessageChannel(clientServerConnection.ClientConnection, 2);
-                var channel2ServerSide = new MessageChannel(clientServerConnection.ServerConnection, 2);
+                var channel1ClientSide = new MessageChannel(clientServerConnection.ClientConnection, "test1");
+                var channel1ServerSide = new MessageChannel(clientServerConnection.ServerConnection, "test1");
+                var channel2ClientSide = new MessageChannel(clientServerConnection.ClientConnection, "test2");
+                var channel2ServerSide = new MessageChannel(clientServerConnection.ServerConnection, "test2");
 
                 // create message handlers to track received messages
                 MessageChannel.MessageReceivedHandler serverHandler = (message, channel) =>
                 {
-                    serverReceivedMessages.Enqueue(new Tuple<TestMessage, int>((TestMessage)message, channel.ChannelNumber));
+                    serverReceivedMessages.Enqueue(new Tuple<TestMessage, string>((TestMessage)message, channel.ChannelId));
                 };
                 MessageChannel.MessageReceivedHandler clientHandler = (message, channel) =>
                 {
-                    clientReceivedMessages.Enqueue(new Tuple<TestMessage, int>((TestMessage)message, channel.ChannelNumber));
+                    clientReceivedMessages.Enqueue(new Tuple<TestMessage, string>((TestMessage)message, channel.ChannelId));
                 };
                 channel1ClientSide.OnMessageReceived = clientHandler;
                 channel2ClientSide.OnMessageReceived = clientHandler;
@@ -506,7 +506,7 @@ namespace DidoNet.Test
                 channel2ServerSide.OnMessageReceived = serverHandler;
 
                 // create an action to send and track random messages
-                var producerAction = (int numMessages, MessageChannel channel, ConcurrentQueue<Tuple<TestMessage, int>> queue) =>
+                var producerAction = (int numMessages, MessageChannel channel, ConcurrentQueue<Tuple<TestMessage, string>> queue) =>
                 {
                     var rand = new Random();
                     for (int i = 0; i < numMessages; ++i)
@@ -514,7 +514,7 @@ namespace DidoNet.Test
                         Thread.Sleep(rand.Next(5, 50));
                         var message = new TestMessage { MyIntValue = rand.Next(), MyStringValue = Guid.NewGuid().ToString() };
                         channel.Send(message);
-                        queue.Enqueue(new Tuple<TestMessage, int>(message, channel.ChannelNumber));
+                        queue.Enqueue(new Tuple<TestMessage, string>(message, channel.ChannelId));
                     }
                 };
 
@@ -556,20 +556,20 @@ namespace DidoNet.Test
 
             // confirm message order
             confirmMessageOrder(
-                clientSentMessages.Where(x => x.Item2 == 1).Select(x => x.Item1).ToList(), // channel1ClientSent
-                serverReceivedMessages.Where(x => x.Item2 == 1).Select(x => x.Item1).ToList() // channel1ServerReceived
+                clientSentMessages.Where(x => x.Item2 == "test1").Select(x => x.Item1).ToList(), // channel1ClientSent
+                serverReceivedMessages.Where(x => x.Item2 == "test1").Select(x => x.Item1).ToList() // channel1ServerReceived
             );
             confirmMessageOrder(
-                serverSentMessages.Where(x => x.Item2 == 1).Select(x => x.Item1).ToList(), // channel1ServerSent
-                clientReceivedMessages.Where(x => x.Item2 == 1).Select(x => x.Item1).ToList() // channel1ClientReceived
+                serverSentMessages.Where(x => x.Item2 == "test1").Select(x => x.Item1).ToList(), // channel1ServerSent
+                clientReceivedMessages.Where(x => x.Item2 == "test1").Select(x => x.Item1).ToList() // channel1ClientReceived
             );
             confirmMessageOrder(
-                clientSentMessages.Where(x => x.Item2 == 2).Select(x => x.Item1).ToList(), // channel2ClientSent
-                serverReceivedMessages.Where(x => x.Item2 == 2).Select(x => x.Item1).ToList() // channel2ServerReceived
+                clientSentMessages.Where(x => x.Item2 == "test2").Select(x => x.Item1).ToList(), // channel2ClientSent
+                serverReceivedMessages.Where(x => x.Item2 == "test2").Select(x => x.Item1).ToList() // channel2ServerReceived
             );
             confirmMessageOrder(
-                serverSentMessages.Where(x => x.Item2 == 2).Select(x => x.Item1).ToList(), // channel2ServerSent
-                clientReceivedMessages.Where(x => x.Item2 == 2).Select(x => x.Item1).ToList() // channel2ClientReceived
+                serverSentMessages.Where(x => x.Item2 == "test2").Select(x => x.Item1).ToList(), // channel2ServerSent
+                clientReceivedMessages.Where(x => x.Item2 == "test2").Select(x => x.Item1).ToList() // channel2ClientReceived
             );
         }
 
@@ -580,8 +580,8 @@ namespace DidoNet.Test
             using (var clientLoopbackConnection = new Connection(loopback, Connection.LoopbackProxy.Role.Client, "client"))
             using (var serverLoopbackConnection = new Connection(loopback, Connection.LoopbackProxy.Role.Server, "server"))
             {
-                var clientChannel = clientLoopbackConnection.GetChannel(1);
-                var serverChannel = serverLoopbackConnection.GetChannel(1);
+                var clientChannel = clientLoopbackConnection.GetChannel("test");
+                var serverChannel = serverLoopbackConnection.GetChannel("test");
 
                 // indicate the channel should block reads until data is available
                 serverChannel.BlockingReads = true;
@@ -603,8 +603,8 @@ namespace DidoNet.Test
             using (var clientLoopbackConnection = new Connection(loopback, Connection.LoopbackProxy.Role.Client, "client"))
             using (var serverLoopbackConnection = new Connection(loopback, Connection.LoopbackProxy.Role.Server, "server"))
             {
-                var clientChannel = new MessageChannel(clientLoopbackConnection, 1);
-                var serverChannel = new MessageChannel(serverLoopbackConnection, 1);
+                var clientChannel = new MessageChannel(clientLoopbackConnection, "test");
+                var serverChannel = new MessageChannel(serverLoopbackConnection, "test");
 
                 // test client sending to server
                 var testMessage = new TestMessage { MyIntValue = 123, MyStringValue = "hello world" };
@@ -632,8 +632,8 @@ namespace DidoNet.Test
             using (var clientLoopbackConnection = new Connection(loopback, Connection.LoopbackProxy.Role.Client, "client"))
             using (var serverLoopbackConnection = new Connection(loopback, Connection.LoopbackProxy.Role.Server, "server"))
             {
-                var clientChannel = new MessageChannel(clientLoopbackConnection, 1);
-                var serverChannel = new MessageChannel(serverLoopbackConnection, 1);
+                var clientChannel = new MessageChannel(clientLoopbackConnection, "test");
+                var serverChannel = new MessageChannel(serverLoopbackConnection, "test");
 
                 // use a reset event to wait until the server receives the message
                 var reset = new AutoResetEvent(false);

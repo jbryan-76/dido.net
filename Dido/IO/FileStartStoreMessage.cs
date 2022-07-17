@@ -6,8 +6,8 @@ namespace DidoNet.IO
     {
         public FileStartStoreMessage() { }
 
-        public FileStartStoreMessage(string filename, ushort channelNumber,
+        public FileStartStoreMessage(string filename, string channelId,
             long? length = null, DateTime? modifiedUtc = null, byte[]? hash = null)
-            : base(filename, channelNumber, length, modifiedUtc, hash) { }
+            : base(filename, channelId, length, modifiedUtc, hash) { }
     }
 }

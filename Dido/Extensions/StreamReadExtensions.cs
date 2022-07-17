@@ -288,5 +288,44 @@ namespace DidoNet
             value = BitConverter.ToInt32(bytes);
             return true;
         }
+
+        /// <summary>
+        /// Try to read a string value from a stream as a length-prefixed character array.
+        /// <para/>Note the stream must support Position and Length properties,
+        /// and data is only read if enough bytes are available.
+        /// </summary>
+        /// <param name="stream"></param>
+        /// <param name="value"></param>
+        /// <returns>True if the value was read successfully, else false.</returns>
+        public static bool TryReadString(this Stream stream, out string value)
+        {
+            value = string.Empty;
+            var position = stream.Position;
+
+            // first try to read the string length
+            if (stream.Length - stream.Position < 4)
+            {
+                return false;
+            }
+            var buffer = new byte[4];
+            stream.Read(buffer, 0, 4);
+            if (BitConverter.IsLittleEndian)
+            {
+                Array.Reverse(buffer);
+            }
+            var length = BitConverter.ToInt32(buffer);
+
+            // then try to read the string
+            if (stream.Length - stream.Position < length)
+            {
+                stream.Position = position;
+                return false;
+            }
+            buffer = new byte[length];
+            stream.Read(buffer, 0, length);
+            value = Encoding.UTF8.GetString(buffer);
+
+            return true;
+        }
     }
 }

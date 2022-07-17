@@ -17,8 +17,7 @@ namespace DidoNet
 
         public byte Type { get; set; }
 
-        // TODO: switch to string channel ids instead of int16?
-        public ushort Channel { get; set; }
+        public string Channel { get; set; } = string.Empty;
 
         public int Length { get; set; }
 

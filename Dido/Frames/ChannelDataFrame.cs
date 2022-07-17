@@ -2,10 +2,10 @@
 {
     public class ChannelDataFrame : Frame
     {
-        public ChannelDataFrame(ushort channelNumber, byte[] payload)
+        public ChannelDataFrame(string channelId, byte[] payload)
         {
             FrameType = FrameTypes.ChannelData;
-            Channel = channelNumber;
+            Channel = channelId;
             Length = payload.Length;
             Payload = payload;
         }
