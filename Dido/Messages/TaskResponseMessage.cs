@@ -5,8 +5,12 @@ using System.Threading.Tasks;
 
 namespace DidoNet
 {
+    /// <summary>
+    /// A message sent from a runner to an application when a task completes successfully.
+    /// </summary>
     internal class TaskResponseMessage : IMessage
     {
+        // TODO: add compression
         public byte[] Bytes { get; private set; } = new byte[0];
 
         private object? _result = null;
@@ -47,14 +51,12 @@ namespace DidoNet
             //}
         }
 
-        public object Result
+        public object? Result
         {
             get
             {
-                if (_result == null)
+                if (_result == null && Bytes.Length > 0)
                 {
-                    // TODO: throw if bytes is empty
-
                     using (var stream = new MemoryStream(Bytes))
                     using (var streamReader = new StreamReader(stream: stream, leaveOpen: true))
                     using (var jsonReader = new JsonTextReader(streamReader))

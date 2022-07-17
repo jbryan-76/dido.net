@@ -6,6 +6,7 @@ namespace DidoNet
 {
     internal class TaskRequestMessage : IMessage
     {
+        // TODO: add compression
         public byte[] Bytes { get; private set; } = new byte[0];
 
         public string ApplicationId { get; set; } = string.Empty;

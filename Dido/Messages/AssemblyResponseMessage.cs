@@ -4,6 +4,7 @@ namespace DidoNet
 {
     internal class AssemblyResponseMessage : IMessage
     {
+        // TODO: add compression
         public byte[] Bytes { get; private set; } = new byte[0];
 
         public AssemblyResponseMessage() { }

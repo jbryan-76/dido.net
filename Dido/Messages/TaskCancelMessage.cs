@@ -3,6 +3,9 @@ using System.IO;
 
 namespace DidoNet
 {
+    /// <summary>
+    /// A message sent from a runner to an application when a task is canceled.
+    /// </summary>
     internal class TaskCancelMessage : IErrorMessage
     {
         public string Message { get; set; } = string.Empty;

@@ -6,6 +6,9 @@ using System.Security.Cryptography.X509Certificates;
 
 namespace DidoNet.Test.Common
 {
+    /// <summary>
+    /// A helper class for unit tests that manages a symmetric pair of connections using a loop-back client-server model.
+    /// </summary>
     public class ClientServerConnection : IDisposable
     {
         private bool IsDisposed = false;
@@ -43,15 +46,6 @@ namespace DidoNet.Test.Common
             // note the current transmission counts
             var currentClientSent = ClientTransmittedFrames.Count;
             var currentServerReceived = ServerRecievedFrames.Count;
-
-            if (currentClientSent != 0)
-            {
-                throw new InvalidOperationException("WTF1");
-            }
-            if (currentServerReceived != 0)
-            {
-                throw new InvalidOperationException("WTF2");
-            }
 
             // enqueue the frame for transmission
             ClientConnection.EnqueueFrame(frame);
@@ -188,6 +182,7 @@ namespace DidoNet.Test.Common
         /// <summary>
         /// Start a local loop-back server that yields a connection for the first client that connects to the provided port.
         /// </summary>
+        /// <param name="cert"></param>
         /// <param name="port"></param>
         /// <returns></returns>
         static private Task<Connection> StartServer(X509Certificate2 cert, int port)

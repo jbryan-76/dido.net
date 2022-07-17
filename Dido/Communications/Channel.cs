@@ -32,6 +32,9 @@ namespace DidoNet
         /// </summary>
         public ChannelDataAvailableHandler? OnDataAvailable = null;
 
+        /// <summary>
+        /// The optional name of the channel.
+        /// </summary>
         public string Name { get; set; } = string.Empty;
 
         /// <summary>
@@ -111,10 +114,10 @@ namespace DidoNet
         /// an IOException will be thrown instead of returning true.
         /// <para/>Note: since this call utilizes a thread in the thread pool, only use in
         /// situations where the caller does not expect to wait very long for data to arrive,
-        /// (ie no more than a few seconds) otherwise the call will utilize an entire thread while 
+        /// (i.e. no more than a few seconds) otherwise the call will utilize an entire thread while 
         /// waiting, which may block other work.
         /// </summary>
-        /// <param name="connection"></param>
+        /// <param name="throwIfClosed"></param>
         /// <returns></returns>
         public Task<bool> WaitForDataAsync(bool throwIfClosed = false)
         {

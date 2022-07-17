@@ -104,15 +104,12 @@ namespace DidoNet
         {
             UnitTestTransmitMessageMonitor?.Invoke(message);
             var messageType = message.GetType();
-            //ThreadHelpers.Debug($"{ChannelNumber} {Channel.Name} sending message {messageType.AssemblyQualifiedName}");
             Channel.WriteString(messageType.AssemblyQualifiedName!);
             message.Write(Channel);
-            //ThreadHelpers.Debug($"{ChannelNumber} {Channel.Name} sent message {messageType.AssemblyQualifiedName}");
             Channel.Flush();
-            //var checkType = Type.GetType(messageType.AssemblyQualifiedName);
-            //ThreadHelpers.Debug($"{ChannelNumber} {Channel.Name} confirmed:  {checkType}");
         }
 
+        // TODO: add SendAsync
         ///// <summary>
         ///// Write the given message to the underlying channel.
         ///// </summary>
@@ -120,13 +117,9 @@ namespace DidoNet
         //public async Task SendAsync(IMessage message)
         //{
         //    var messageType = message.GetType();
-        //    //ThreadHelpers.Debug($"{ChannelNumber} {Channel.Name} sending message {messageType.AssemblyQualifiedName}");
         //    await Channel.WriteStringAsync(messageType.AssemblyQualifiedName!);
         //    message.Write(Channel);
-        //    //ThreadHelpers.Debug($"{ChannelNumber} {Channel.Name} sent message {messageType.AssemblyQualifiedName}");
         //    Channel.Flush();
-        //    //var checkType = Type.GetType(messageType.AssemblyQualifiedName);
-        //    //ThreadHelpers.Debug($"{ChannelNumber} {Channel.Name} confirmed:  {checkType}");
         //}
 
         // TODO: explore in future. an interesting idea, but there are some timing concerns
@@ -212,6 +205,8 @@ namespace DidoNet
             UnitTestReceiveMessageMonitor?.Invoke(message);
             return message;
         }
+
+        // TODO: add ReceiveMessageAsync
 
         /// <summary>
         /// Block and receive a message of the indicated type from the underlying channel.

@@ -55,7 +55,7 @@ namespace DidoNet
         /// <summary>
         /// The class logger instance.
         /// </summary>
-        private ILogger Logger = LogManager.GetCurrentClassLogger();
+        private readonly ILogger Logger = LogManager.GetCurrentClassLogger();
 
         /// <summary>
         /// Create a new mediator server with the given configuration.

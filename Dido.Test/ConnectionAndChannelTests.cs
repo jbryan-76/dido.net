@@ -311,6 +311,7 @@ namespace DidoNet.Test
 
                 // block here until the message is received
                 reset.WaitOne();
+                reset.Dispose();
 
                 // confirm the messages match
                 Assert.NotNull(receivedMessage);
@@ -585,7 +586,7 @@ namespace DidoNet.Test
                 // indicate the channel should block reads until data is available
                 serverChannel.BlockingReads = true;
 
-                // write and read data over the loopback connection
+                // write and read data over the loop-back connection
                 var rand = new System.Random();
                 var data = Enumerable.Range(0, 64).Select(x => (byte)rand.Next(256)).ToArray();
                 clientChannel.WriteBytes(data);
@@ -649,6 +650,7 @@ namespace DidoNet.Test
 
                 // block until the message is received
                 reset.WaitOne();
+                reset.Dispose();
 
                 Assert.Equal(testMessage.MyIntValue, receivedMessage!.MyIntValue);
                 Assert.Equal(testMessage.MyStringValue, receivedMessage.MyStringValue);

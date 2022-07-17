@@ -82,7 +82,7 @@ namespace DidoNet
         /// <summary>
         /// The class logger instance.
         /// </summary>
-        private ILogger Logger = LogManager.GetCurrentClassLogger();
+        private readonly ILogger Logger = LogManager.GetCurrentClassLogger();
 
         /// <summary>
         /// Create a new runner server with the given configuration.
@@ -179,6 +179,7 @@ namespace DidoNet
             Logger.Info($"Stopping runner {Configuration.Id}...");
 
             // inform the mediator that this runner is stopping
+            // TODO: what to do if mediator is not available? retry? how long?
             MediatorChannel?.Send(new RunnerStatusMessage(RunnerStates.Stopping, 0, 0));
 
             // signal the work thread to stop

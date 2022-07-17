@@ -3,6 +3,9 @@ using System.IO;
 
 namespace DidoNet
 {
+    /// <summary>
+    /// A message sent from a runner to an application when a task fails to complete successfully. 
+    /// </summary>
     internal class TaskErrorMessage : IErrorMessage
     {
         public enum Categories
@@ -37,11 +40,11 @@ namespace DidoNet
                     case TaskErrorMessage.Categories.General:
                         return new TaskGeneralException("Error while executing remote expression", exception);
                     case TaskErrorMessage.Categories.Deserialization:
-                        throw new TaskDeserializationException("Error while executing remote expression", exception);
+                        return new TaskDeserializationException("Error while executing remote expression", exception);
                     case TaskErrorMessage.Categories.Invocation:
-                        throw new TaskInvocationException("Error while executing remote expression", exception);
+                        return new TaskInvocationException("Error while executing remote expression", exception);
                     default:
-                        throw new InvalidOperationException($"Task error category {Category} is unknown");
+                        return new InvalidOperationException($"Task error category {Category} is unknown");
                 }
             }
         }

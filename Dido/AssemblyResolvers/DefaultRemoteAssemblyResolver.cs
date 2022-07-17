@@ -8,7 +8,7 @@ namespace DidoNet
     {
         private MessageChannel Channel { get; set; }
 
-        private static ILogger Logger = LogManager.GetCurrentClassLogger();
+        private static readonly ILogger Logger = LogManager.GetCurrentClassLogger();
 
         public DefaultRemoteAssemblyResolver(MessageChannel channel)
         {

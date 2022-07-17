@@ -274,6 +274,7 @@ namespace DidoNet
                 case NewExpression exp:
                     throw new NotImplementedException();
                 case ParameterExpression exp:
+                    // TODO: throw if a ref or out parameter is used
                     return new ParameterNode
                     {
                         ExpressionType = exp.NodeType,

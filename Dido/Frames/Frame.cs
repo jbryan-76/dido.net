@@ -1,4 +1,7 @@
-﻿namespace DidoNet
+﻿using System;
+using System.Linq;
+
+namespace DidoNet
 {
     public enum FrameTypes
     {
@@ -16,7 +19,7 @@
 
         // TODO: switch to string channel ids instead of int16?
         public ushort Channel { get; set; }
-        
+
         public int Length { get; set; }
 
         public byte[] Payload { get; set; } = new byte[0];
@@ -46,6 +49,27 @@
         public override string ToString()
         {
             return $"Frame '{FrameType}' on channel {Channel}: {Length} bytes";
+        }
+
+        public override bool Equals(object? obj)
+        {
+            if (obj is null)
+            {
+                return false;
+            }
+            if (Object.ReferenceEquals(this, obj))
+            {
+                return true;
+            }
+            if (this.GetType() != obj.GetType())
+            {
+                return false;
+            }
+            Frame f = (Frame)obj;
+            return FrameType == f.FrameType
+                && Channel == f.Channel
+                && Length == f.Length
+                && Enumerable.SequenceEqual(Payload, f.Payload);
         }
     }
 }

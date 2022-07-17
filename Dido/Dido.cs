@@ -55,14 +55,16 @@ namespace DidoNet
         /// <summary>
         /// The class logger instance.
         /// </summary>
-        private static ILogger Logger = LogManager.GetCurrentClassLogger();
+        private static readonly ILogger Logger = LogManager.GetCurrentClassLogger();
 
         /// <summary>
         /// Execute the provided expression as a task and return its result.
         /// </summary>
         /// <typeparam name="Tprop"></typeparam>
         /// <param name="expression">The expression to execute.</param>
-        /// <param name="executionMode">An optional execution mode to override the currently configured mode.</param>
+        /// <param name="configuration">The optional configuration to control how the expression is executed.
+        /// If not provided, the GlobalConfiguration is used (if defined), otherwise a default configuration.</param>
+        /// <param name="cancellationToken">An optional cancellation token to cancel execution of the expression.</param>
         /// <returns></returns>
         /// <exception cref="InvalidOperationException"></exception>
         public static Task<Tprop> RunAsync<Tprop>(
@@ -281,19 +283,10 @@ namespace DidoNet
                 };
 
                 // kickoff the remote task by serializing the expression and transmitting it to the runner
-                var assemblyCaching = configuration.AssemblyCaching;
-                if (assemblyCaching == AssemblyCachingPolicies.Auto)
-                {
-#if DEBUG
-                    assemblyCaching = AssemblyCachingPolicies.Never;
-#else
-                    assemblyCaching = AssemblyCachingPolicies.Always;
-#endif
-                }
                 var requestMessage = new TaskRequestMessage(
                     await ExpressionSerializer.SerializeAsync(expression),
                     configuration.Id,
-                    assemblyCaching,
+                    configuration.GetActualAssemblyCachingPolicy(),
                     configuration.CachedAssemblyEncryptionKey,
                     configuration.TimeoutInMs);
                 tasksChannel.Send(requestMessage);
@@ -339,7 +332,7 @@ namespace DidoNet
             Logger.Trace($"Executing expression via {nameof(DebugRunLocalAsync)}");
 
             // to adequately test end-to-end processing and the current configuration,
-            // use a degenerate loopback connection for file channel messages
+            // use a degenerate loop-back connection for file channel messages
             var loopback = new Connection.LoopbackProxy();
             var appLoopbackConnection = new Connection(loopback, Connection.LoopbackProxy.Role.Client);
             var runnerLoopbackConnection = new Connection(loopback, Connection.LoopbackProxy.Role.Server);
@@ -371,7 +364,7 @@ namespace DidoNet
             {
                 Cancel = cancellationToken,
                 ExecutionMode = ExecutionModes.Local,
-                // in debug local mode, use a loopback connection to ensure all IO works as expected
+                // in debug local mode, use a loop-back connection to ensure all IO works as expected
                 // when the expression is executed remotely
                 File = new RunnerFileProxy(runnerLoopbackConnection, runnerConfig),
                 Directory = new RunnerDirectoryProxy(runnerLoopbackConnection, runnerConfig)
@@ -388,7 +381,7 @@ namespace DidoNet
                     // TODO: should this use a proxy RunnerServer too (like the unit tests), or is that overkill?
 
                     // to adequately test end-to-end processing and the current configuration,
-                    // serialize and deserialize the expression
+                    // serialize and deserialize the expression to simulate transmission to a remote runner
                     var data = await ExpressionSerializer.SerializeAsync(expression);
                     var func = await ExpressionSerializer.DeserializeAsync<Tprop>(data, env);
 

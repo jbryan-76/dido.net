@@ -49,7 +49,7 @@ namespace DidoNet
         /// <summary>
         /// The class logger instance.
         /// </summary>
-        private ILogger Logger = LogManager.GetCurrentClassLogger();
+        private readonly ILogger Logger = LogManager.GetCurrentClassLogger();
 
         /// <summary>
         /// Timestamp for when a task starts.
@@ -103,6 +103,7 @@ namespace DidoNet
             WorkThread?.Join(1000);
             Connection.Dispose();
             CancelSource.Dispose();
+            TaskComplete.Dispose();
         }
 
         // TODO: make this DoTetheredWork()?
@@ -238,7 +239,6 @@ namespace DidoNet
                 Timer? timeout = null;
                 try
                 {
-                    // TODO: untethered tasks can't timeout
                     // set up a timer if necessary to cancel the task if it times out
                     long didTimeout = 0;
                     if (request.TimeoutInMs > 0)
