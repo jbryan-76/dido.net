@@ -7,7 +7,7 @@ using System.Runtime.Loader;
 using System.Threading;
 using Xunit;
 
-namespace DidoNet.Test.Runner
+namespace DidoNet.Test.Servers
 {
     public class IsolatedAssembliesTests : IClassFixture<TestFixture>
     {

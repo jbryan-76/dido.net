@@ -179,6 +179,6 @@ namespace DidoNet.Test
             }
         }
 
-        // NOTE: Dido.RunRemoteAsync is tested in the DidoNet.Test.Runner project.
+        // NOTE: Dido.RunRemoteAsync is tested in the DidoNet.Test.Servers project.
     }
 }

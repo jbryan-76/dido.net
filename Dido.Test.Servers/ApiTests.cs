@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace DidoNet.Test.Runner
+namespace DidoNet.Test.Servers
 {
     public class ApiTests : IClassFixture<TestFixture>
     {

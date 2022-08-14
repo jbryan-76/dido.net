@@ -15,7 +15,7 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SslTestClient", "SslTestCli
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Dido.TestLib", "Dido.TestLib\Dido.TestLib.csproj", "{998643F0-7B60-4D4D-A638-743766DCE0BA}"
 EndProject
-Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Dido.Test.Runner", "Dido.Test.Runner\Dido.Test.Runner.csproj", "{52EC30F9-578B-4F04-ADEF-ACCBE54C3286}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Dido.Test.Servers", "Dido.Test.Servers\Dido.Test.Servers.csproj", "{52EC30F9-578B-4F04-ADEF-ACCBE54C3286}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Dido.Test.Common", "Dido.Test.Common\Dido.Test.Common.csproj", "{BAC0E325-A45F-41A1-87EE-8B29ABC9D5E3}"
 EndProject

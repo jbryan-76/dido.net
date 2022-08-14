@@ -3,7 +3,7 @@ using System;
 using System.IO;
 using Xunit;
 
-namespace DidoNet.Test.Runner
+namespace DidoNet.Test.Servers
 {
     public class DeserializationAndInvocationTests : IClassFixture<TestFixture>
     {

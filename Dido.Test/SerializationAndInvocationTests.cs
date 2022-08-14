@@ -41,9 +41,9 @@ namespace DidoNet.Test
 
         /// <summary>
         /// Generate a variety of sample lambda method calls, then serialize and save them to a common shared folder
-        /// to be deserialized and executed by the Dido.Test.Runner project.
+        /// to be deserialized and executed by the Dido.Test.Servers project.
         /// <para/>
-        /// NOTE this unit test must be run before any test from Dido.Test.Runner.DeserializationAndInvocationTests.
+        /// NOTE this unit test must be run before any test from Dido.Test.Servers.DeserializationAndInvocationTests.
         /// </summary>
         [Fact]
         public async void GenerateSerializedMethodInvocationData()
@@ -306,7 +306,7 @@ namespace DidoNet.Test
 
         /// <summary>
         /// This test verifies an explicitly created lambda expression matches an equivalent
-        /// lambda expression in code. This is critical to confirm some tests in Dido.Test.Runner
+        /// lambda expression in code. This is critical to confirm some tests in Dido.Test.Servers
         /// that will not have the necessary assemblies loaded.
         /// </summary>
         [Fact]

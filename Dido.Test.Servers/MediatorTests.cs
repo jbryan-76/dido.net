@@ -1,7 +1,7 @@
 ﻿using System;
 using Xunit;
 
-namespace DidoNet.Test.Runner
+namespace DidoNet.Test.Servers
 {
     public class MediatorTests
     {

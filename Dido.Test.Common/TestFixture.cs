@@ -49,7 +49,7 @@ namespace DidoNet.Test.Common
         public TestFixture()
         {
             // create a directory to hold test data that should be shared between
-            // the "Dido.Test" and "Dido.Test.Runner" projects
+            // the "Dido.Test" and "Dido.Test.Servers" projects
             SharedTestDataPath = Path.Combine(Path.GetTempPath(), SharedTestDataFolder);
             Directory.CreateDirectory(SharedTestDataPath);
 
