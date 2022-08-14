@@ -3,16 +3,11 @@ using System.Linq;
 
 namespace DidoNet
 {
-    public enum FrameTypes
-    {
-        ChannelData,
-        Disconnect,
-        Debug,
-        Heartbeat
-    }
-
     public class Frame
     {
+        /// <summary>
+        /// The maximum size of a frame, in bytes.
+        /// </summary>
         static public int MaxFrameSize = 512 * 1024;
 
         public byte Type { get; set; }

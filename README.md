@@ -162,3 +162,7 @@ TODO
 
 ## Security
 TODO: SSL certificate installation & configuration
+
+# TODO
+
+The current state of this framework is focused on correctness not performance. 

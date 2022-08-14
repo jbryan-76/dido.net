@@ -88,6 +88,15 @@ namespace DidoNet
 
             Logger.Info($"Starting mediator {Configuration.Id} listening at {ip}:{port}");
 
+            // update the configured endpoint applications should use to connect,
+            // if one was not provided
+            if (Configuration.Endpoint == null)
+            {
+                Configuration.Endpoint = new UriBuilder("https", ip.ToString(), port).Uri.ToString();
+            }
+
+            Logger.Info($"  Endpoint = {Configuration.Endpoint}");
+
             // listen for incoming connections
             var listener = new TcpListener(ip, port);
             listener.Start();

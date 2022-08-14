@@ -281,78 +281,79 @@ namespace DidoNet
                     }
                 }
 
-                // if there are any pending connections...
-                if (listener.Pending())
+                // sleep unless a new connection is pending
+                if (!listener.Pending())
                 {
-                    // ...accept the next one
-                    var client = listener.AcceptTcpClient();
+                    ThreadHelpers.Yield();
+                    continue;
+                }
 
-                    // create a secure connection to the endpoint
-                    var connection = new Connection(client, cert);
+                // block and wait for the next incoming connection
+                var client = listener.AcceptTcpClient();
 
-                    // receive the initial task detail message
-                    TaskTypeMessage taskTypeMessage = new TaskTypeMessage();
-                    using (var controlChannel = new MessageChannel(connection, Constants.AppRunner_ControlChannelId))
+                // create a secure connection to the endpoint
+                var connection = new Connection(client, cert);
+
+                // receive the initial task detail message
+                TaskTypeMessage taskTypeMessage = new TaskTypeMessage();
+                using (var controlChannel = new MessageChannel(connection, Constants.AppRunner_ControlChannelId))
+                {
+                    taskTypeMessage = controlChannel.ReceiveMessage<TaskTypeMessage>();
+                }
+
+                // TODO: if the connection is reconnecting to an existing runner, find and update the worker
+                if (taskTypeMessage.TaskType == TaskTypeMessage.TaskTypes.Untethered
+                    && !string.IsNullOrEmpty(taskTypeMessage.TaskId))
+                {
+                    if (ActiveWorkers.TryGetValue(taskTypeMessage.TaskId, out var worker))
                     {
-                        taskTypeMessage = controlChannel.ReceiveMessage<TaskTypeMessage>();
-                    }
-
-                    // TODO: if the connection is reconnecting to an existing runner, find and update the worker
-                    if (taskTypeMessage.TaskType == TaskTypeMessage.TaskTypes.Untethered
-                        && !string.IsNullOrEmpty(taskTypeMessage.TaskId))
-                    {
-                        if (ActiveWorkers.TryGetValue(taskTypeMessage.TaskId, out var worker))
-                        {
-                            // TODO: update the worker connection
-                            // TODO: send something back to the application
-                        }
-                        else
-                        {
-                            // TODO: if an active worker could not be found, that means it's done (or failed).
-                            // TODO: send something back to the application
-                        }
-                    }
-
-                    // the mediator uses an optimistic scheduling strategy, which means
-                    // it will route traffic to runners based on the conditions known at the 
-                    // time of the request, which may differ from the runner conditions by
-                    // the time the application connects. 
-                    // if this runner is "too busy" because it already has the maximum
-                    // number of tasks running and its queue is full, send a "too busy" message
-                    // back to the application and disconnect.
-                    // this will (probably) cause the application to try again, up to
-                    // its configured level of patience.
-                    if (ActiveWorkers.Count >= Configuration.MaxTasks
-                        && Configuration.MaxQueue >= 0
-                        && QueuedWorkers.Count >= Configuration.MaxQueue)
-                    {
-                        var tasksChannel = new MessageChannel(connection, Constants.AppRunner_TaskChannelId);
-                        tasksChannel.Send(new RunnerBusyMessage());
-                        connection.Dispose();
+                        // TODO: update the worker connection
+                        // TODO: send something back to the application
                     }
                     else
                     {
-                        // otherwise create a worker...
-                        var worker = new TaskWorker(connection, Configuration, taskTypeMessage);
-
-                        if (ActiveWorkers.Count < Configuration.MaxTasks
-                            && QueuedWorkers.Count == 0)
-                        {
-                            // ...and start it immediately if there is spare capacity...
-                            ActiveWorkers.TryAdd(worker.Id, worker);
-                            worker.Start(WorkerComplete);
-                        }
-                        else
-                        {
-                            // ...otherwise queue it for later
-                            QueuedWorkers.Enqueue(worker);
-                        }
-
-                        SendStatusToMediator();
+                        // TODO: if an active worker could not be found, that means it's done (or failed).
+                        // TODO: send something back to the application
                     }
                 }
 
-                ThreadHelpers.Yield();
+                // the mediator uses an optimistic scheduling strategy, which means
+                // it will route traffic to runners based on the conditions known at the 
+                // time of the request, which may differ from the runner conditions by
+                // the time the application connects. 
+                // if this runner is "too busy" because it already has the maximum
+                // number of tasks running and its queue is full, send a "too busy" message
+                // back to the application and disconnect.
+                // this will (probably) cause the application to try again, up to
+                // its configured level of patience.
+                if (ActiveWorkers.Count >= Configuration.MaxTasks
+                    && Configuration.MaxQueue >= 0
+                    && QueuedWorkers.Count >= Configuration.MaxQueue)
+                {
+                    var tasksChannel = new MessageChannel(connection, Constants.AppRunner_TaskChannelId);
+                    tasksChannel.Send(new RunnerBusyMessage());
+                    connection.Dispose();
+                }
+                else
+                {
+                    // otherwise create a worker...
+                    var worker = new TaskWorker(connection, Configuration, taskTypeMessage);
+
+                    if (ActiveWorkers.Count < Configuration.MaxTasks
+                        && QueuedWorkers.Count == 0)
+                    {
+                        // ...and start it immediately if there is spare capacity...
+                        ActiveWorkers.TryAdd(worker.Id, worker);
+                        worker.Start(WorkerComplete);
+                    }
+                    else
+                    {
+                        // ...otherwise queue it for later
+                        QueuedWorkers.Enqueue(worker);
+                    }
+
+                    SendStatusToMediator();
+                }
             }
 
             // the work loop is stopping:

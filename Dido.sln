@@ -23,9 +23,9 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Dido.TestLibDependency", "D
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{0265E925-514D-464D-A7A2-919BEFE55589}"
 	ProjectSection(SolutionItems) = preProject
-		Docker_README.md = Docker_README.md
 		Dockerfile.Runner.build = Dockerfile.Runner.build
 		Dockerfile.Runner.pack = Dockerfile.Runner.pack
+		Docker_README.md = Docker_README.md
 		README.md = README.md
 		TODO = TODO
 	EndProjectSection
@@ -38,7 +38,9 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SampleVideoTranscoder", "Sa
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SampleFileCompressor", "Samples\SampleFileCompressor\SampleFileCompressor.csproj", "{F9E1AD4F-2F77-4ED7-8C71-177C1FFB3104}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SampleAppCore3.1", "Samples\SampleAppCore3.1\SampleAppCore3.1.csproj", "{F37DD8F4-669E-4D26-AE99-1D70C71DF04A}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "SampleAppCore3.1", "Samples\SampleAppCore3.1\SampleAppCore3.1.csproj", "{F37DD8F4-669E-4D26-AE99-1D70C71DF04A}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Dido.Mediator", "Dido.Mediator\Dido.Mediator.csproj", "{DF19CCB6-023F-440F-B0C0-4E3291823BA5}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -98,6 +100,10 @@ Global
 		{F37DD8F4-669E-4D26-AE99-1D70C71DF04A}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F37DD8F4-669E-4D26-AE99-1D70C71DF04A}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F37DD8F4-669E-4D26-AE99-1D70C71DF04A}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DF19CCB6-023F-440F-B0C0-4E3291823BA5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DF19CCB6-023F-440F-B0C0-4E3291823BA5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DF19CCB6-023F-440F-B0C0-4E3291823BA5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DF19CCB6-023F-440F-B0C0-4E3291823BA5}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

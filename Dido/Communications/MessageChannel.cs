@@ -49,14 +49,14 @@ namespace DidoNet
         }
 
         /// <summary>
-        /// The underlying channel messages are exchanged on.
-        /// </summary>
-        public Channel Channel { get; private set; }
-
-        /// <summary>
         /// The unique id for the underlying communications channel.
         /// </summary>
         public string ChannelId { get { return Channel.ChannelId; } }
+
+        /// <summary>
+        /// The connection the channel is using for data transmission.
+        /// </summary>
+        public Connection Connection { get { return Channel.Connection; } }
 
         /// <summary>
         /// Internal handler for unit tests to monitor received messages.
@@ -67,6 +67,11 @@ namespace DidoNet
         /// Internal handler for unit tests to monitor transmitted messages.
         /// </summary>
         internal MessageMonitor? UnitTestTransmitMessageMonitor;
+
+        /// <summary>
+        /// The underlying channel messages are exchanged on.
+        /// </summary>
+        protected Channel Channel { get; private set; }
 
         /// <summary>
         /// The event handler triggered when a new message is received.

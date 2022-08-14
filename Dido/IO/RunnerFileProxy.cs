@@ -144,7 +144,7 @@ namespace DidoNet.IO
 
                 // on a successful open, both sides agreed to create a new dedicated channel for
                 // IO of the indicated file using the acquired channel number
-                using (var fileChannel = new MessageChannel(Channel.Channel.Connection, channelId))
+                using (var fileChannel = new MessageChannel(Channel.Connection, channelId))
                 {
                     // receive a corresponding message containing the details of the requested file
                     var info = fileChannel.ReceiveMessage<FileInfoMessage>();
@@ -238,7 +238,7 @@ namespace DidoNet.IO
 
                 // on a successful open, both sides agreed to create a new dedicated channel for
                 // IO of the indicated file using the acquired channel number
-                using (var fileChannel = new MessageChannel(Channel.Channel.Connection, channelId))
+                using (var fileChannel = new MessageChannel(Channel.Connection, channelId))
                 {
                     // receive a corresponding message containing the details of the requested file
                     var info = fileChannel.ReceiveMessage<FileInfoMessage>();
@@ -517,7 +517,7 @@ namespace DidoNet.IO
 
                     // on a successful open, both sides agreed to create a new dedicated channel for
                     // IO of the indicated file using the acquired channel number
-                    var fileChannel = new MessageChannel(Channel.Channel.Connection, channelId);
+                    var fileChannel = new MessageChannel(Channel.Connection, channelId);
                     var stream = new RunnerFileStreamProxy(path, ack.Position, ack.Length, fileChannel, (filename) => Close(filename));
                     Files.TryAdd(path, stream);
                     return stream;

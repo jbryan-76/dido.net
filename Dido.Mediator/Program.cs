@@ -7,13 +7,13 @@ using System.Security.Cryptography.X509Certificates;
 using Topshelf;
 using Topshelf.Runtime.DotNetCore;
 
-namespace DidoNet.Runner.Windows
+namespace DidoNet.Mediator.Windows
 {
     /// <summary>
-    /// Implements a basic Dido.NET Runner service for windows.
-    /// Note this is a reference implementation of a standard runner service.
+    /// Implements a basic Dido.NET Mediator service for windows.
+    /// Note this is a reference implementation of a standard mediator service.
     /// </summary>
-    public class RunnerService : ServiceControl, IDisposable
+    public class MediatorService : ServiceControl, IDisposable
     {
         /// <summary>
         /// The identity to use when running the service.
@@ -52,16 +52,11 @@ namespace DidoNet.Runner.Windows
         private static string? CommandLineId = null;
 
         /// <summary>
-        /// When running the service from the command line, allows specifying the label to use.
-        /// </summary>
-        private static string? CommandLineLabel = null;
-
-        /// <summary>
         /// Runs the service using standard options and minimal configuration. 
         /// Use in the console app's Program.cs as follows:
         /// <para/>
         /// <c>
-        /// ServiceBase.EasyRun&lt;MyRunnerService&gt;("My description", "My Display Name", "MyServiceName", ServiceBase.IdentityTypes.LocalSystem);
+        /// ServiceBase.EasyRun&lt;MyMediatorService&gt;("My description", "My Display Name", "MyServiceName", ServiceBase.IdentityTypes.LocalSystem);
         /// </c>
         /// <para/>
         /// If more control is needed, see here: http://docs.topshelf-project.com/en/latest/configuration/config_api.html
@@ -79,7 +74,6 @@ namespace DidoNet.Runner.Windows
                 // add support to override certain configuration from the command line
                 c.AddCommandLineDefinition("port", v => CommandLinePort = Int32.Parse(v));
                 c.AddCommandLineDefinition("id", v => CommandLineId = v);
-                c.AddCommandLineDefinition("label", v => CommandLineLabel = v);
                 c.ApplyCommandLine();
 
                 // change the environment builder on non-windows systems
@@ -126,7 +120,7 @@ namespace DidoNet.Runner.Windows
 
                 var environment = System.Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
 
-                // get runner configuration
+                // get mediator configuration
                 var builder = new ConfigurationBuilder()
                                 .SetBasePath(Directory.GetCurrentDirectory())
                                 .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
@@ -135,8 +129,8 @@ namespace DidoNet.Runner.Windows
                                 .AddEnvironmentVariables();
 
                 Configuration = builder.Build();
-                RunnerConfig = new RunnerConfiguration();
-                Configuration.Bind("Runner", RunnerConfig);
+                MediatorConfig = new MediatorConfiguration();
+                Configuration.Bind("Mediator", MediatorConfig);
                 ServerConfig = new ServerConfiguration();
                 Configuration.Bind("Server", ServerConfig);
 
@@ -146,14 +140,10 @@ namespace DidoNet.Runner.Windows
                 }
                 if (!string.IsNullOrEmpty(CommandLineId))
                 {
-                    RunnerConfig.Id = CommandLineId;
-                }
-                if (!string.IsNullOrEmpty(CommandLineLabel))
-                {
-                    RunnerConfig.Label = CommandLineLabel;
+                    MediatorConfig.Id = CommandLineId;
                 }
 
-                Server = new RunnerServer(RunnerConfig);
+                Server = new MediatorServer(MediatorConfig);
 
                 // load the certificate to use for encrypting connections
                 X509Certificate2? cert;
@@ -238,9 +228,9 @@ namespace DidoNet.Runner.Windows
         /// </summary>
         public IConfiguration? Configuration { get; private set; }
 
-        private RunnerServer? Server = null;
+        private MediatorServer? Server = null;
 
-        protected RunnerConfiguration? RunnerConfig;
+        protected MediatorConfiguration? MediatorConfig;
 
         protected ServerConfiguration? ServerConfig;
 
@@ -251,7 +241,7 @@ namespace DidoNet.Runner.Windows
     {
         public static void Main(string[] args)
         {
-            RunnerService.EasyRun<RunnerService>("Dido.NET Runner Service", "Dido.NET Runner", "Dido.NET.Runner");
+            MediatorService.EasyRun<MediatorService>("Dido.NET Mediator Service", "Dido.NET Mediator", "Dido.NET.Mediator");
         }
     }
 }

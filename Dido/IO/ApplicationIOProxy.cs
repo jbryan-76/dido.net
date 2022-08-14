@@ -51,7 +51,7 @@ namespace DidoNet.IO
                 case FileOpenMessage open:
                     try
                     {
-                        var openFile = new ApplicationFileStreamProxy(open, Channel.Connection);
+                        var openFile = new ApplicationFileStreamProxy(open, Connection);
                         files.TryAdd(open.Filename, openFile);
                         channel.Send(new FileAckMessage(open.Filename, openFile.Stream.Position, openFile.Stream.Length));
                     }
@@ -87,7 +87,7 @@ namespace DidoNet.IO
                     break;
 
                 case FileStartCacheMessage cache:
-                    using (var cacheChannel = new MessageChannel(Channel.Connection, cache.ChannelId))
+                    using (var cacheChannel = new MessageChannel(Connection, cache.ChannelId))
                     {
                         // ensure the file exists and send an error if not
                         if (!File.Exists(cache.Filename))
@@ -171,7 +171,7 @@ namespace DidoNet.IO
                     break;
 
                 case FileStartStoreMessage store:
-                    using (var storeChannel = new MessageChannel(Channel.Connection, store.ChannelId))
+                    using (var storeChannel = new MessageChannel(Connection, store.ChannelId))
                     {
                         // if the file exists, send back its info so the remote side can decide whether to transmit the file
                         if (File.Exists(store.Filename))
