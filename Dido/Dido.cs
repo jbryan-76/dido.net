@@ -170,7 +170,7 @@ namespace DidoNet
         // TODO: SubmitJobAsync(expression) => submit request to mediator, get back an id
         // TODO: JobStatusAsync(id) => get job status/result by job id
         // TODO: CancelJobAsync(id) => cancel job
-        // TODO: AddJobHandler(id,handler) => invoke handler when job is done (and have background thread poll)
+        // TODO: AddJobHandler(id,handler) => invoke handler when job is done (either polling background thread or use MQ)
 
         /// <summary>
         /// Execute the provided expression as a task in a remote environment, regardless of the value of configuration.ExecutionMode.

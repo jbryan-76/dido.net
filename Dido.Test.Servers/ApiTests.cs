@@ -34,7 +34,7 @@ namespace DidoNet.Test.Servers
         }
 
         /// <summary>
-        /// Performs an end-to-end test of Dido.RemoteExecuteAsync using a local loop-back server.
+        /// Performs an end-to-end test of Dido.RunAsync using a local loop-back runner server.
         /// </summary>
         [Fact]
         public async void RunRemote()
@@ -75,6 +75,10 @@ namespace DidoNet.Test.Servers
             runnerServer.Dispose();
         }
 
+        /// <summary>
+        /// Performs an end-to-end test of Dido.RunAsync using a local loop-back runner server
+        /// configured to cache needed assemblies.
+        /// </summary>
         [Fact]
         public async void RunRemoteWithCachedAssemblies()
         {
@@ -120,7 +124,9 @@ namespace DidoNet.Test.Servers
 
             // at this point, the runner cache should contain the assemblies necessary to execute the expression.
             // re-run the expression without the correct remote assembly resolver.
-            // the runner should still succeed in executing the expression by loading the cached assemblies.
+            // the runner should still succeed in executing the expression by loading the cached assemblies
+            // (since an incorrect assembly resolver is configured, if the cached assemblies are not loaded an
+            // exception *would* be thrown, but *should not* be in this test).
 
             using (var runnerServer = new RunnerServer(new RunnerConfiguration
             {
@@ -156,7 +162,10 @@ namespace DidoNet.Test.Servers
             }
         }
 
-
+        /// <summary>
+        /// Performs an end-to-end test of Dido.RunAsync using a local loop-back runner server
+        /// configured to cache and encrypt needed assemblies.
+        /// </summary>
         [Fact]
         public async void RunRemoteWithEncryptedCachedAssemblies()
         {
@@ -203,7 +212,9 @@ namespace DidoNet.Test.Servers
 
             // at this point, the runner cache should contain the encrypted assemblies necessary to execute the expression.
             // re-run the expression without the correct remote assembly resolver.
-            // the runner should still succeed in executing the expression by loading the cached assemblies.
+            // the runner should still succeed in executing the expression by loading the cached assemblies
+            // (since an incorrect assembly resolver is configured, if the cached assemblies are not loaded an
+            // exception *would* be thrown, but *should not* be in this test).
 
             using (var runnerServer = new RunnerServer(new RunnerConfiguration
             {
@@ -241,7 +252,8 @@ namespace DidoNet.Test.Servers
         }
 
         /// <summary>
-        /// Performs an end-to-end test of Dido.RemoteExecuteAsync using a local loop-back server.
+        /// Performs an end-to-end test of Dido.Run using a local loop-back runner server,
+        /// which invokes a handler when the execution completes, instead of awaiting a task.
         /// </summary>
         [Fact]
         public async void RunRemoteWithDeferredResultHandling()
@@ -304,6 +316,10 @@ namespace DidoNet.Test.Servers
             }
         }
 
+        /// <summary>
+        /// Performs an end-to-end test of Dido.RunAsync using a local loop-back runner server
+        /// and an infinite-loop expression to confirm a timeout exception is thrown.
+        /// </summary>
         [Fact]
         public async void RunRemoteWithTimeout()
         {
@@ -336,6 +352,10 @@ namespace DidoNet.Test.Servers
             runnerServer.Dispose();
         }
 
+        /// <summary>
+        /// Performs an end-to-end test of Dido.RunAsync using a local loop-back runner server
+        /// and an infinite-loop expression to confirm a canceled exception is thrown.
+        /// </summary>
         [Fact]
         public async void RunRemoteWithCancel()
         {
@@ -384,6 +404,10 @@ namespace DidoNet.Test.Servers
             }
         }
 
+        /// <summary>
+        /// Performs an end-to-end test of Dido.RunAsync using a local loop-back runner server
+        /// and a expression that throws during execution.
+        /// </summary>
         [Fact]
         public async void RunRemoteWithException()
         {
@@ -422,7 +446,7 @@ namespace DidoNet.Test.Servers
         }
 
         /// <summary>
-        /// Performs an end-to-end test of Dido.RemoteExecuteAsync using local loop-back mediator and runner servers.
+        /// Performs an end-to-end test of Dido.RunAsync using local loop-back mediator and runner servers.
         /// </summary>
         [Fact]
         public async void RunRemoteWithMediator()
@@ -444,9 +468,7 @@ namespace DidoNet.Test.Servers
             var runnerPort = GetNextAvailablePort();
             var runnerServer = new RunnerServer(new RunnerConfiguration
             {
-                //Endpoint = $"https://localhost:{runnerPort}",
                 Endpoint = new UriBuilder("https", "localhost", runnerPort).Uri.ToString(),
-                //MediatorUri = $"https://localhost:{mediatorPort}",
                 MediatorUri = new UriBuilder("https", "localhost", mediatorPort).Uri.ToString(),
                 // bypass server cert validation since unit tests are using a base-64 self-signed cert
                 ServerValidationPolicy = ServerCertificateValidationPolicies._SKIP_
@@ -463,7 +485,6 @@ namespace DidoNet.Test.Servers
             var configuration = new Configuration
             {
                 MaxTries = 1,
-                //MediatorUri = new Uri($"https://localhost:{mediatorPort}"),
                 MediatorUri = new UriBuilder("https", "localhost", mediatorPort).Uri,
                 ExecutionMode = ExecutionModes.Remote,
                 // use the unit test assembly resolver instead of the default implementation
@@ -497,7 +518,7 @@ namespace DidoNet.Test.Servers
             // using a temporary assembly load context to hold the needed assemblies.
             // (NOTE the reason for creating the expression this way is to ensure the assemblies
             // it uses are not automatically included as packages within the unit test project,
-            // and are instead resolved dynamically on demand as needed by the remote runner)
+            // and are instead resolved dynamically on demand at runtime as needed by the remote runner)
             var context = new AssemblyLoadContext(Guid.NewGuid().ToString(), true);
             var testLibStream = (await TestFixture.Configuration.ResolveLocalAssemblyAsync("Dido.TestLib, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null"))!;
             var testLibAssembly = context.LoadFromStream(testLibStream);

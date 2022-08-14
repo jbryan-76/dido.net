@@ -22,4 +22,5 @@
     3) application updates the microservice code
     4) application restarts and reconnects to the microservice task
     =>) if code has changed (? how to tell?), stop task, unload assemblies, restart task
-- 
+- for "untethered" tasks, force the use of an external durable message system rather than write out own? can be achieved 
+  through configuration and delegates or plugins.

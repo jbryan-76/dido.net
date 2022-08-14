@@ -105,7 +105,7 @@ namespace DidoNet
         public AssemblyCachingPolicies AssemblyCaching { get; set; } = AssemblyCachingPolicies.Auto;
 
         /// <summary>
-        /// The optional encryption key to use when caching assemblies on a remote runner.
+        /// The optional secret key to use when encrypting cached assemblies on a remote runner.
         /// </summary>
         public string CachedAssemblyEncryptionKey { get; set; } = string.Empty;
 
