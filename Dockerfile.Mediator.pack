@@ -1,0 +1,9 @@
+## CREATE IMAGE BY PACKING THE EXISTING BINARIES:
+# dotnet publish -c Release
+# docker build -f Dockerfile.Mediator.pack -t dido.mediator .
+
+FROM mcr.microsoft.com/dotnet/sdk:6.0
+COPY Dido.Mediator/bin/Release/net6.0/ Mediator/
+COPY *.pfx Mediator/
+WORKDIR /Mediator
+ENTRYPOINT ["dotnet", "Dido.Mediator.dll"]

@@ -1,5 +1,7 @@
 ﻿class Program
 {
+    // TODO: update this to use either a mediator host or a runner host
+
     static void PrintUse()
     {
         var appName = Path.GetFileNameWithoutExtension(System.Diagnostics.Process.GetCurrentProcess().MainModule.FileName);

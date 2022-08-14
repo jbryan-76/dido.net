@@ -1,0 +1,24 @@
+## CREATE IMAGE BY BUILDING FROM SOURCE:
+# docker build -f Dockerfile.Mediator.build -t dido.mediator .
+
+# STEP 1: Build Dido library
+FROM mcr.microsoft.com/dotnet/sdk:6.0 as build-env
+WORKDIR /
+COPY *.pfx ./
+WORKDIR /Dido
+COPY Dido/ ./
+WORKDIR /Dido
+RUN dotnet restore
+RUN dotnet publish -c Release
+
+# STEP 2: Build Dido Mediator
+WORKDIR /Dido.Mediator
+COPY Dido.Mediator/ ./
+RUN dotnet restore
+RUN dotnet publish -c Release
+
+# STEP 3: Build Mediator image
+FROM mcr.microsoft.com/dotnet/sdk:6.0
+COPY --from=build-env Dido.Mediator/bin/Release/net6.0/ Mediator/
+WORKDIR /Mediator
+ENTRYPOINT ["dotnet", "Dido.Mediator.dll"]
