@@ -3,9 +3,9 @@
     public class ServerConfiguration
     {
         /// <summary>
-        /// The port the server will listen to.
+        /// The port the server will listen to for incoming connections.
         /// </summary>
-        public int Port { get; set; } = 4940;
+        public int? Port { get; set; } = 4940;
 
         /// <summary>
         /// The optional IpAddress the server will bind to.

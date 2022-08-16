@@ -118,9 +118,10 @@ namespace DidoNet
         /// <param name="port"></param>
         /// <param name="ip"></param>
         /// <returns></returns>
-        public void Start(X509Certificate2 cert, int port, IPAddress? ip = null)
+        public void Start(X509Certificate2 cert, int? port = null, IPAddress? ip = null)
         {
             ip ??= IPAddress.Any;
+            port ??= Constants.DefaultPort;
 
             Logger.Info($"Starting runner {Configuration.Id} listening at {ip}:{port}");
 
@@ -128,7 +129,12 @@ namespace DidoNet
             // if one was not provided
             if (Configuration.Endpoint == null)
             {
-                Configuration.Endpoint = new UriBuilder("https", ip.ToString(), port).Uri.ToString();
+                var host = ip.ToString();
+                if (host == "0.0.0.0")
+                {
+                    host = "localhost";
+                }
+                Configuration.Endpoint = new UriBuilder("https", host, port.Value).Uri.ToString();
             }
 
             Logger.Info($"  Endpoint = {Configuration.Endpoint}");
@@ -158,7 +164,7 @@ namespace DidoNet
             }
 
             // listen for incoming connections
-            var listener = new TcpListener(ip, port);
+            var listener = new TcpListener(ip, port.Value);
             listener.Start();
 
             // start a work thread to accept and process new connections

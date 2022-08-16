@@ -456,12 +456,12 @@ namespace DidoNet
             // ...however if no runner is configured but a mediator is, ask the mediator to choose a runner
             if (runnerUri == null && configuration.MediatorUri != null)
             {
+                // open a connection to the mediator
                 var connectionSettings = new ClientConnectionSettings
                 {
                     ValidaionPolicy = configuration.ServerCertificateValidationPolicy,
                     Thumbprint = configuration.ServerCertificateThumbprint
                 };
-                // open a connection to the mediator
                 using (var mediatorConnection =
                     new Connection(configuration.MediatorUri.Host, configuration.MediatorUri.Port, null, connectionSettings))
                 {

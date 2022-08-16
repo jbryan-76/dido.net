@@ -4,6 +4,11 @@ namespace DidoNet
 {
     internal class Constants
     {
+        /// <summary>
+        /// The default port to use for incoming connections.
+        /// </summary>
+        internal static readonly int DefaultPort = 4940;
+
         #region Application <-> Mediator <-> Runner channels
         /// <summary>
         /// The channel number for the channel transporting data between an Application and a Mediator.

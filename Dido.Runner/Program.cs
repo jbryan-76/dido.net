@@ -57,6 +57,12 @@ namespace DidoNet.Runner.Windows
         private static string? CommandLineLabel = null;
 
         /// <summary>
+        /// When running the service from the command line, allows specifying the mediator
+        /// that schedules tasks for this runner.
+        /// </summary>
+        private static string? CommandLineMediator = null;
+
+        /// <summary>
         /// Runs the service using standard options and minimal configuration. 
         /// Use in the console app's Program.cs as follows:
         /// <para/>
@@ -80,6 +86,7 @@ namespace DidoNet.Runner.Windows
                 c.AddCommandLineDefinition("port", v => CommandLinePort = Int32.Parse(v));
                 c.AddCommandLineDefinition("id", v => CommandLineId = v);
                 c.AddCommandLineDefinition("label", v => CommandLineLabel = v);
+                c.AddCommandLineDefinition("mediator", v => CommandLineMediator = v);
                 c.ApplyCommandLine();
 
                 // change the environment builder on non-windows systems
@@ -151,6 +158,10 @@ namespace DidoNet.Runner.Windows
                 if (!string.IsNullOrEmpty(CommandLineLabel))
                 {
                     RunnerConfig.Label = CommandLineLabel;
+                }
+                if (!string.IsNullOrEmpty(CommandLineMediator))
+                {
+                    RunnerConfig.MediatorUri = CommandLineMediator;
                 }
 
                 Server = new RunnerServer(RunnerConfig);
