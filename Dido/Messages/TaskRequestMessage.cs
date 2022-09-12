@@ -17,6 +17,8 @@ namespace DidoNet
 
         public int TimeoutInMs { get; private set; } = -1;
 
+        public string JobId { get; set; } = string.Empty;
+
         public TaskRequestMessage() { }
 
         public TaskRequestMessage(
@@ -24,12 +26,14 @@ namespace DidoNet
             string applicationId,
             AssemblyCachingPolicies assemblyCaching,
             string assemblyEncryptionKey,
+            string jobId,
             int timeoutInMs = Timeout.Infinite)
         {
             Bytes = bytes;
             AssemblyCaching = assemblyCaching;
             CachedAssemblyEncryptionKey = assemblyEncryptionKey;
             ApplicationId = applicationId;
+            JobId = jobId;
             TimeoutInMs = timeoutInMs;
         }
 
@@ -39,6 +43,7 @@ namespace DidoNet
             AssemblyCaching = Enum.Parse<AssemblyCachingPolicies>(stream.ReadString());
             CachedAssemblyEncryptionKey = stream.ReadString();
             TimeoutInMs = stream.ReadInt32BE();
+            JobId = stream.ReadString();
             Bytes = stream.ReadByteArray();
         }
 
@@ -48,6 +53,7 @@ namespace DidoNet
             stream.WriteString(AssemblyCaching.ToString());
             stream.WriteString(CachedAssemblyEncryptionKey);
             stream.WriteInt32BE(TimeoutInMs);
+            stream.WriteString(JobId);
             stream.WriteByteArray(Bytes);
         }
     }

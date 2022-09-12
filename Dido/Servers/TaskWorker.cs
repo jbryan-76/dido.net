@@ -22,6 +22,16 @@ namespace DidoNet
         public Connection Connection { get; private set; }
 
         /// <summary>
+        /// The specific success or failure message of the executed task that is sent back to the application.
+        /// </summary>
+        public IMessage? ResultMessage { get; private set; }
+
+        ///// <summary>
+        ///// The error result of the executed task when it does not complete successfully.
+        ///// </summary>
+        //public IErrorMessage? Error { get; private set; }
+
+        /// <summary>
         /// The configuration of the runner that is executing this task.
         /// </summary>
         private RunnerConfiguration Configuration { get; set; }
@@ -134,7 +144,8 @@ namespace DidoNet
             catch (Exception ex)
             {
                 // handle all unexpected exceptions explicitly by notifying the application that an error occurred
-                tasksChannel.Send(new TaskErrorMessage(TaskErrorMessage.Categories.General, ex));
+                ResultMessage = new TaskErrorMessage(TaskErrorMessage.Categories.General, ex);
+                tasksChannel.Send(ResultMessage);
                 CancelSource.Cancel();
                 TaskComplete.Set();
                 Logger.Trace($"Worker task {Id} failed: {ex}");
@@ -157,6 +168,8 @@ namespace DidoNet
         /// <param name="request"></param>
         private async void ExecuteTask(TaskRequestMessage request)
         {
+            var isJob = !string.IsNullOrEmpty(request.JobId);
+
             // create communication channels to the application for: task communication, assemblies
             // TODO: what happens when the connection terminates? these will need to be recreated
             var tasksChannel = new MessageChannel(Connection, Constants.AppRunner_TaskChannelId);
@@ -182,8 +195,8 @@ namespace DidoNet
                 catch (Exception ex)
                 {
                     // handle all unexpected exceptions explicitly by notifying the application that an error occurred
-                    var errorMessage = new TaskErrorMessage(TaskErrorMessage.Categories.General, ex);
-                    channel.Send(errorMessage);
+                    ResultMessage = new TaskErrorMessage(TaskErrorMessage.Categories.General, ex);
+                    channel.Send(ResultMessage);
                     CancelSource.Cancel();
                     TaskComplete.Set();
                 }
@@ -229,8 +242,8 @@ namespace DidoNet
                 catch (Exception ex)
                 {
                     // catch and report deserialization errors
-                    var errorMessage = new TaskErrorMessage(TaskErrorMessage.Categories.Deserialization, ex);
-                    tasksChannel.Send(errorMessage);
+                    ResultMessage = new TaskErrorMessage(TaskErrorMessage.Categories.Deserialization, ex);
+                    tasksChannel.Send(ResultMessage);
                     // indicate to the main thread that the task is done
                     TaskComplete.Set();
                     return;
@@ -252,13 +265,20 @@ namespace DidoNet
                             Interlocked.Exchange(ref didTimeout, 1);
 
                             // let the application know immediately the task did not complete due to a timeout
-                            // (this way if the task does not cancel soon at least the application
-                            // can start a retry)
-                            tasksChannel.Send(new TaskTimeoutMessage());
+                            // (this way if the task does not stop soon at least the application can start a retry)
+                            ResultMessage = new TaskTimeoutMessage();
+                            tasksChannel.Send(ResultMessage);
 
                             // indicate the timeout message was sent
                             Interlocked.Exchange(ref didTimeout, 2);
                         }, null, request.TimeoutInMs, Timeout.Infinite);
+                    }
+
+                    // if the task request is a job, notify the application that task processing is starting normally.
+                    // the application will then need to interact with the job via the mediator using the jobs API
+                    if (isJob)
+                    {
+                        tasksChannel.Send(new TaskAcceptedMessage());
                     }
 
                     // execute the task by invoking the expression.
@@ -280,8 +300,9 @@ namespace DidoNet
                         CancelSource.Token.ThrowIfCancellationRequested();
 
                         // otherwise send the result back to the application
-                        var resultMessage = new TaskResponseMessage(result);
-                        tasksChannel.Send(resultMessage);
+                        // (note for jobs, the application will not receive this message)
+                        ResultMessage = new TaskResponseMessage(result);
+                        tasksChannel.Send(ResultMessage);
                     }
                     else
                     {
@@ -299,13 +320,16 @@ namespace DidoNet
                 catch (OperationCanceledException)
                 {
                     // catch and report cancellations
-                    tasksChannel.Send(new TaskCancelMessage());
+                    // (note for jobs, the application will not receive this message)
+                    ResultMessage = new TaskCancelMessage();
+                    tasksChannel.Send(ResultMessage);
                 }
                 catch (Exception ex)
                 {
                     // catch and report invocation errors
-                    var errorMessage = new TaskErrorMessage(TaskErrorMessage.Categories.Invocation, ex);
-                    tasksChannel.Send(errorMessage);
+                    // (note for jobs, the application will not receive this message)
+                    ResultMessage = new TaskErrorMessage(TaskErrorMessage.Categories.Invocation, ex);
+                    tasksChannel.Send(ResultMessage);
                 }
                 finally
                 {

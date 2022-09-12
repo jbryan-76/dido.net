@@ -316,6 +316,9 @@ namespace DidoNet
                         case RunnerStatusMessage status:
                             runner.Update(status);
                             break;
+                        case RunnerJobMessage job:
+                            // TODO: handle runner completed task messages and persist data for "job" mode
+                            break;
                     }
                 };
 

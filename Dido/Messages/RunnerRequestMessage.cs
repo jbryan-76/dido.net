@@ -36,13 +36,16 @@ namespace DidoNet
         /// </summary>
         public string[] Tags { get; set; } = new string[0];
 
+        public bool AsJob { get; set; }
+
         public RunnerRequestMessage() { }
 
-        public RunnerRequestMessage(OSPlatforms[] platforms, string label, string[] tags)
+        public RunnerRequestMessage(OSPlatforms[] platforms, string label, string[] tags, bool asJob)
         {
             Label = label;
             Platforms = platforms.ToArray();
             Tags = tags.ToArray();
+            AsJob = asJob;
         }
 
         public void Read(Stream stream)
@@ -50,6 +53,7 @@ namespace DidoNet
             Label = stream.ReadString();
             Platforms = stream.ReadArray((s) => Enum.Parse<OSPlatforms>(s.ReadString()));
             Tags = stream.ReadArray((s) => s.ReadString());
+            AsJob = stream.ReadBoolean();
         }
 
         public void Write(Stream stream)
@@ -57,6 +61,7 @@ namespace DidoNet
             stream.WriteString(Label);
             stream.WriteArray(Platforms, (s, item) => s.WriteString(item.ToString()));
             stream.WriteArray(Tags, (s, item) => s.WriteString(item));
+            stream.WriteBoolean(AsJob);
         }
     }
 }

@@ -168,9 +168,46 @@ namespace DidoNet
 
         // TODO: "jobs" API: must use a mediator and runners
         // TODO: SubmitJobAsync(expression) => submit request to mediator, get back an id
-        // TODO: JobStatusAsync(id) => get job status/result by job id
+        // TODO: QueryJobAsync(id) => get job status/result by job id
         // TODO: CancelJobAsync(id) => cancel job
         // TODO: AddJobHandler(id,handler) => invoke handler when job is done (either polling background thread or use MQ)
+        public static async Task<string> SubmitJobAsync<Tprop>(
+            Expression<Func<ExecutionContext, Tprop>> expression,
+            Configuration? configuration = null)
+        {
+            configuration ??= GlobalConfiguration ?? new Configuration();
+
+            // verify a mediator is configured
+            if (configuration.MediatorUri == null)
+            {
+                throw new InvalidConfigurationException($"Configuration error: Use of the jobs API requires a mediator service to be running and {nameof(Configuration.MediatorUri)} set.");
+            }
+
+            int tries = 0;
+            while (true)
+            {
+                ++tries;
+                try
+                {
+                    return await DoSubmitJobAsync(expression, configuration);
+                }
+                // only retry if the exception is a TimeoutException or RunnerBusyException
+                // (otherwise the exception is for a different error and should bubble up)
+                catch (Exception e) when (e is TimeoutException || e is RunnerBusyException)
+                {
+                    // don't retry forever
+                    if (configuration.MaxTries > 0 && tries >= configuration.MaxTries)
+                    {
+                        throw;
+                    }
+                    else
+                    {
+                        // exponential back-off: roughly [100, 700, 3000, 10000] ms
+                        ThreadHelpers.Yield((int)Math.Pow(100, Math.Sqrt(Math.Max(tries, 4))));
+                    }
+                }
+            }
+        }
 
         /// <summary>
         /// Execute the provided expression as a task in a remote environment, regardless of the value of configuration.ExecutionMode.
@@ -235,6 +272,8 @@ namespace DidoNet
         /// </summary>
         /// <typeparam name="Tprop"></typeparam>
         /// <param name="expression"></param>
+        /// <param name="configuration"></param>
+        /// <param name="cancellationToken"></param>
         /// <returns></returns>
         /// <exception cref="TaskGeneralException"></exception>
         /// <exception cref="TaskDeserializationException"></exception>
@@ -246,7 +285,7 @@ namespace DidoNet
             CancellationToken cancellationToken)
         {
             // choose a runner to execute the expression
-            Uri runnerUri = SelectRunner(configuration);
+            (Uri runnerUri, string _) = SelectRunner(configuration);
 
             var connectionSettings = new ClientConnectionSettings
             {
@@ -288,6 +327,7 @@ namespace DidoNet
                     configuration.Id,
                     configuration.GetActualAssemblyCachingPolicy(),
                     configuration.CachedAssemblyEncryptionKey,
+                    string.Empty,
                     configuration.TimeoutInMs);
                 tasksChannel.Send(requestMessage);
 
@@ -307,6 +347,87 @@ namespace DidoNet
                     // TODO: receive untethered runner+task id response and create a handle
                     case TaskResponseMessage response:
                         return response.GetResult<Tprop>();
+                    case IErrorMessage error:
+                        throw error.Exception;
+                    default:
+                        throw new UnhandledMessageException(message);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Execute the provided expression as a task on a remote runner,
+        /// but track it as a job in a mediator.
+        /// </summary>
+        /// <typeparam name="Tprop"></typeparam>
+        /// <param name="expression"></param>
+        /// <param name="Configuration"></param>
+        /// <returns></returns>
+        /// <exception cref="TaskGeneralException"></exception>
+        /// <exception cref="TaskDeserializationException"></exception>
+        /// <exception cref="TaskInvocationException"></exception>
+        /// <exception cref="InvalidOperationException"></exception>
+        private static async Task<string> DoSubmitJobAsync<Tprop>(
+            Expression<Func<ExecutionContext, Tprop>> expression,
+            Configuration configuration)
+        {
+            // choose a runner to execute the expression
+            (Uri runnerUri, string jobId) = SelectRunner(configuration, true);
+
+            var connectionSettings = new ClientConnectionSettings
+            {
+                ValidaionPolicy = configuration.ServerCertificateValidationPolicy,
+                Thumbprint = configuration.ServerCertificateThumbprint
+            };
+
+            // create a secure connection to the remote runner
+            using (var runnerConnection = new Connection(runnerUri!.Host, runnerUri.Port, null, connectionSettings))
+            {
+                Logger.Trace($"Executing expression via {nameof(RunRemoteAsync)} to {runnerUri}");
+
+                // create communication channels to the runner for: control messages, task messages, assembly messages
+                var controlChannel = new MessageChannel(runnerConnection, Constants.AppRunner_ControlChannelId);
+                var tasksChannel = new MessageChannel(runnerConnection, Constants.AppRunner_TaskChannelId);
+                var assembliesChannel = new MessageChannel(runnerConnection, Constants.AppRunner_AssemblyChannelId);
+
+                // inform the runner about what kind of task will be executed
+                controlChannel.Send(new TaskTypeMessage(TaskTypeMessage.TaskTypes.Tethered));
+
+                // create a proxy to handle file-system IO requests from the expression executing on the runner
+                var ioProxy = new ApplicationIOProxy(runnerConnection);
+
+                // handle assembly messages
+                assembliesChannel.OnMessageReceived = (message, channel) => HandleAssemblyMessages(configuration, message, channel);
+
+                // after kicking off the task request below, exactly one response message is expected back,
+                // which is received in this handler and attached to a TaskCompletionSource to be awaited
+                // below and then processed
+                var responseSource = new TaskCompletionSource<IMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+                tasksChannel.OnMessageReceived = (message, channel) =>
+                {
+                    responseSource.SetResult(message);
+                };
+
+                // kickoff the remote task by serializing the expression and transmitting it to the runner.
+                // since a job id is included, the runner will send the result to the mediator, not back to the application
+                var requestMessage = new TaskRequestMessage(
+                    await ExpressionSerializer.SerializeAsync(expression),
+                    configuration.Id,
+                    configuration.GetActualAssemblyCachingPolicy(),
+                    configuration.CachedAssemblyEncryptionKey,
+                    jobId,
+                    configuration.TimeoutInMs);
+                tasksChannel.Send(requestMessage);
+
+                // wait until a response is received
+                Task.WaitAll(responseSource.Task);
+                var message = responseSource.Task.Result;
+
+                // handle the response
+                switch (message)
+                {
+                    case TaskAcceptedMessage accepted:
+                        return jobId;
                     case IErrorMessage error:
                         throw error.Exception;
                     default:
@@ -445,16 +566,18 @@ namespace DidoNet
         /// Selects a suitable remote runner to execute a task based on the provided configuration.
         /// </summary>
         /// <param name="configuration"></param>
+        /// <param name="asJob"></param>
         /// <returns></returns>
         /// <exception cref="RunnerNotAvailableException"></exception>
         /// <exception cref="UnhandledMessageException"></exception>
-        internal static Uri SelectRunner(Configuration configuration)
+        internal static (Uri endpoint, string jobId) SelectRunner(Configuration configuration, bool asJob = false)
         {
             // prefer the explicitly provided runner...
             var runnerUri = configuration.RunnerUri;
+            var jobId = String.Empty;
 
             // ...however if no runner is configured but a mediator is, ask the mediator to choose a runner
-            if (runnerUri == null && configuration.MediatorUri != null)
+            if (asJob || (runnerUri == null && configuration.MediatorUri != null))
             {
                 // open a connection to the mediator
                 var connectionSettings = new ClientConnectionSettings
@@ -467,7 +590,7 @@ namespace DidoNet
                 {
                     // create the communications channel and request an available runner from the mediator
                     var applicationChannel = new MessageChannel(mediatorConnection, Constants.MediatorApp_ChannelId);
-                    applicationChannel.Send(new RunnerRequestMessage(configuration.RunnerOSPlatforms, configuration.RunnerLabel, configuration.RunnerTags));
+                    applicationChannel.Send(new RunnerRequestMessage(configuration.RunnerOSPlatforms, configuration.RunnerLabel, configuration.RunnerTags, asJob));
 
                     // receive and process the response
                     var message = applicationChannel.ReceiveMessage(configuration.MediatorTimeout);
@@ -475,6 +598,7 @@ namespace DidoNet
                     {
                         case RunnerResponseMessage response:
                             runnerUri = new Uri(response.Endpoint);
+                            jobId = response.JobId;
                             break;
 
                         case RunnerNotAvailableMessage notAvailable:
@@ -486,7 +610,7 @@ namespace DidoNet
                 }
             }
 
-            return runnerUri!;
+            return (runnerUri!, jobId);
         }
 
         /// <summary>

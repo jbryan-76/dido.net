@@ -36,6 +36,7 @@ namespace DidoNet
 
         /// <summary>
         /// Indicates whether the runner has started and is running.
+        /// Note an integer is used because booleans are not supported by Interlocked.Exchange.
         /// </summary>
         private long IsRunning = 0;
 
@@ -384,6 +385,13 @@ namespace DidoNet
         /// <param name="worker"></param>
         private void WorkerComplete(TaskWorker worker)
         {
+            if (false)
+            {
+                // TODO: if the task is in "job" mode, send the result to the mediator
+                // worker.ResultMessage
+                MediatorChannel?.Send(new RunnerJobMessage());
+            }
+
             // move the worker to the completed queue so it can be disposed by the main thread
             ActiveWorkers.Remove(worker.Id, out _);
             CompletedWorkers.Enqueue(worker);
