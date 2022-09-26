@@ -6,8 +6,8 @@
     public enum DisconnectionReasons
     {
         /// <summary>
-        /// Default value indicating an unknown or non-specific reason.
-        /// For a closed connection this is not a legal value.
+        /// Default initial value indicating an unknown or non-specific reason.
+        /// For a previously opened and currently closed connection this is not a legal value.
         /// </summary>
         Unknown = 0,
 

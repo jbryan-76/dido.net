@@ -19,7 +19,7 @@ namespace DidoNet
 
         public string ExceptionType { get; private set; } = string.Empty;
 
-        public string ExceptionMessage { get; private set; } = string.Empty;
+        public string Message { get; private set; } = string.Empty;
 
         public Exception Exception
         {
@@ -28,11 +28,11 @@ namespace DidoNet
                 Exception exception;
                 try
                 {
-                    exception = Activator.CreateInstance(Type.GetType(ExceptionType)!, ExceptionMessage) as Exception ?? new Exception();
+                    exception = Activator.CreateInstance(Type.GetType(ExceptionType)!, Message) as Exception ?? new Exception();
                 }
                 catch (Exception)
                 {
-                    exception = new InvalidOperationException($"Could not create exception of type '{ExceptionType}' with error message {ExceptionMessage}.");
+                    exception = new InvalidOperationException($"Could not create exception of type '{ExceptionType}' with error message {Message}.");
                 }
 
                 switch (Category)
@@ -54,7 +54,7 @@ namespace DidoNet
         public TaskErrorMessage(Categories category, Exception exception)
         {
             Category = category;
-            ExceptionMessage = exception.ToString();
+            Message = exception.ToString();
             ExceptionType = exception.GetType().FullName!;
         }
 
@@ -62,14 +62,14 @@ namespace DidoNet
         {
             Category = Enum.Parse<Categories>(stream.ReadString());
             ExceptionType = stream.ReadString();
-            ExceptionMessage = stream.ReadString();
+            Message = stream.ReadString();
         }
 
         public void Write(Stream stream)
         {
             stream.WriteString(Category.ToString());
             stream.WriteString(ExceptionType);
-            stream.WriteString(ExceptionMessage);
+            stream.WriteString(Message);
         }
     }
 }

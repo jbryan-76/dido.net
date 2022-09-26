@@ -4,7 +4,7 @@
 
     static void PrintUse()
     {
-        var appName = Path.GetFileNameWithoutExtension(System.Diagnostics.Process.GetCurrentProcess().MainModule.FileName);
+        var appName = Path.GetFileNameWithoutExtension(System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName);
         Console.WriteLine($"Use: {appName} (-runner|-mediator) host");
         Console.WriteLine($"NOTE: A Dido.Runner or Dido.Mediator service must be running at the provided host with the sample dido-localhost certificate.");
     }

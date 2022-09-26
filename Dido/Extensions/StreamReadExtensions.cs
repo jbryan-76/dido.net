@@ -204,6 +204,30 @@ namespace DidoNet
         }
 
         /// <summary>
+        /// Read a message from a stream, creating and returning the necessary 
+        /// strongly-typed message instance.
+        /// </summary>
+        /// <param name="stream"></param>
+        /// <returns></returns>
+        /// <exception cref="InvalidOperationException"></exception>
+        public static IMessage ReadMessage(this Stream stream)
+        {
+            var typeName = stream.ReadString();
+            var messageType = Type.GetType(typeName);
+            if (messageType == null)
+            {
+                throw new InvalidOperationException($"Unknown message type '{typeName}'");
+            }
+            var message = Activator.CreateInstance(messageType) as IMessage;
+            if (message == null)
+            {
+                throw new InvalidOperationException($"Cannot create instance of message type '{typeName}'");
+            }
+            message.Read(stream);
+            return message;
+        }
+        
+        /// <summary>
         /// Try to read the given number of bytes from the stream.
         /// <para/>Note the stream must support Position and Length properties,
         /// and data is only read if enough bytes are available.

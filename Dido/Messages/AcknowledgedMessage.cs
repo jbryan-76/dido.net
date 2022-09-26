@@ -2,9 +2,9 @@
 
 namespace DidoNet
 {
-    internal class TaskAcceptedMessage : IMessage
+    internal class AcknowledgedMessage : IMessage
     {
-        public TaskAcceptedMessage() { }
+        public AcknowledgedMessage() { }
 
         public void Read(Stream stream)
         {

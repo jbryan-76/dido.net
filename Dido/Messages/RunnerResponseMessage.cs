@@ -6,25 +6,26 @@ namespace DidoNet
     {
         public string Endpoint { get; set; } = string.Empty;
 
-        public string JobId { get; set; } = string.Empty;
+        //public string JobId { get; set; } = string.Empty;
 
         public RunnerResponseMessage() { }
 
-        public RunnerResponseMessage(string endpoint)
+        public RunnerResponseMessage(string endpoint)//, string jobId)
         {
             Endpoint = endpoint;
+            //JobId = jobId;
         }
 
         public void Read(Stream stream)
         {
             Endpoint = stream.ReadString();
-            JobId = stream.ReadString();
+            //JobId = stream.ReadString();
         }
 
         public void Write(Stream stream)
         {
             stream.WriteString(Endpoint);
-            stream.WriteString(JobId);
+            //stream.WriteString(JobId);
         }
     } 
 }

@@ -8,9 +8,106 @@ using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace DidoNet
 {
+
+    internal class MemoryJob : IJob
+    {
+        public string RunnerId { get; set; } = string.Empty;
+        public string JobId { get; set; } = string.Empty;
+        public string Status { get; set; } = string.Empty;
+        public byte[] Data { get; set; } = new byte[0];
+    }
+
+    internal class MemoryJobStore : IJobStore
+    {
+        public Task CreateJob(IJob job)
+        {
+            lock (Jobs)
+            {
+                if (Jobs.ContainsKey(job.JobId))
+                {
+                    throw new Exception($"Duplicate key: A job with id '{job.JobId}' already exists.");
+                }
+                Jobs.Add(job.JobId, new MemoryJob
+                {
+                    JobId = job.JobId,
+                    RunnerId = job.RunnerId,
+                    Status = job.Status,
+                    Data = job.Data.ToArray()
+                });
+            }
+            return Task.CompletedTask;
+        }
+
+        public Task UpdateJob(IJob job)
+        {
+            lock (Jobs)
+            {
+                if (!Jobs.ContainsKey(job.JobId))
+                {
+                    throw new Exception($"Unknown key: A job with id '{job.JobId}' does not exist.");
+                }
+                Jobs[job.JobId] = new MemoryJob
+                {
+                    JobId = job.JobId,
+                    RunnerId = job.RunnerId,
+                    Status = job.Status,
+                    Data = job.Data.ToArray()
+                };
+            }
+            return Task.CompletedTask;
+        }
+
+        public Task SetJobStatus(string jobId, string status)
+        {
+            lock (Jobs)
+            {
+                if (!Jobs.ContainsKey(jobId))
+                {
+                    throw new Exception($"Unknown key: A job with id '{jobId}' does not exist.");
+                }
+                Jobs[jobId].Status = status;
+            }
+            return Task.CompletedTask;
+        }
+
+        public Task<IJob?> GetJob(string jobId)
+        {
+            lock (Jobs)
+            {
+                Jobs.TryGetValue(jobId, out var job);
+                return Task.FromResult((IJob?)job);
+            }
+        }
+
+        public Task<IEnumerable<IJob>> GetAllJobs(string runnerId)
+        {
+            lock (Jobs)
+            {
+                return Task.FromResult(Jobs.Values.Where(j => j.RunnerId == runnerId).Select(j => (IJob)j));
+            }
+        }
+
+        public Task DeleteJob(string jobId)
+        {
+            lock (Jobs)
+            {
+                Jobs.Remove(jobId);
+                return Task.CompletedTask;
+            }
+        }
+
+        //public Task DeleteAllJobs(string runnerId)
+        //{
+        //    throw new NotImplementedException();
+        //}
+
+        private Dictionary<string, MemoryJob> Jobs = new Dictionary<string, MemoryJob>();
+    }
+
     /// <summary>
     /// A configurable Dido Mediator server that can be deployed as a console app, service, or integrated into a
     /// larger application.
@@ -23,9 +120,14 @@ namespace DidoNet
         public MediatorConfiguration Configuration { get; private set; }
 
         /// <summary>
+        /// A backing store for jobs.
+        /// </summary>
+        public IJobStore JobStore { get; set; } = new MemoryJobStore();
+
+        /// <summary>
         /// The set of known runners.
         /// </summary>
-        internal List<Runner> RunnerPool = new List<Runner>();
+        internal List<RunnerItem> RunnerPool = new List<RunnerItem>();
 
         /// <summary>
         /// Indicates whether the mediator has started and is running.
@@ -84,7 +186,7 @@ namespace DidoNet
         /// <param name="ip"></param>
         public void Start(X509Certificate2 cert, int? port = null, IPAddress? ip = null)
         {
-            ip = ip ?? IPAddress.Any;
+            ip ??= IPAddress.Any;
             port ??= Constants.DefaultPort;
 
             Logger.Info($"Starting mediator {Configuration.Id} listening at {ip}:{port}");
@@ -140,7 +242,7 @@ namespace DidoNet
         /// </summary>
         /// <param name="request"></param>
         /// <returns></returns>
-        internal Runner? GetNextAvailableRunner(RunnerRequestMessage request)
+        internal RunnerItem? GetNextAvailableRunner(RunnerRequestMessage request)
         {
             // TODO: if the request identifies a specific runner (by id) for a "tetherless" re-connect,
             // TODO: find and return that runner immediately, with no filtering
@@ -262,16 +364,19 @@ namespace DidoNet
             var applicationChannel = new MessageChannel(connection, Constants.MediatorApp_ChannelId);
             var runnerChannel = new MessageChannel(connection, Constants.MediatorRunner_ChannelId);
 
-            Runner? runner = null;
+            // if a runner connects, this object will be created and contains the runner detail
+            RunnerItem? runner = null;
+
             try
             {
                 // applications will contact the mediator using the application channel
-                // to make requests: eg get a runner, check job status, etc
-                applicationChannel.OnMessageReceived = (message, channel) =>
+                // to make requests: e.g. get a runner, check job status, etc
+                applicationChannel.OnMessageReceived = async (message, channel) =>
                 {
                     // this connection is to an application.
                     // close the runner channel so as not to tie up a thread
                     runnerChannel?.Dispose();
+                    runnerChannel = null;
 
                     // process the message
                     switch (message)
@@ -287,6 +392,55 @@ namespace DidoNet
                                 channel.Send(new RunnerResponseMessage(runner.Endpoint));
                             }
                             break;
+
+                        case JobQueryMessage jobQuery:
+                            var job = await JobStore.GetJob(jobQuery.JobId);
+
+                            if (job == null)
+                            {
+                                channel.Send(new JobNotFoundMessage(jobQuery.JobId));
+                            }
+                            else
+                            {
+                                if (job.Status == JobStatusValues.Running)
+                                {
+                                    channel.Send(new JobStartMessage
+                                    {
+                                        JobId = job.JobId,
+                                        RunnerId = job.RunnerId,
+                                    });
+                                }
+                                else if (job.Status == JobStatusValues.Abandoned)
+                                {
+                                    channel.Send(new JobCompleteMessage
+                                    {
+                                        JobId = job.JobId,
+                                        RunnerId = job.RunnerId
+                                    });
+                                }
+                                else
+                                {
+                                    channel.Send(new JobCompleteMessage
+                                    {
+                                        JobId = job.JobId,
+                                        RunnerId = job.RunnerId,
+                                        ResultMessageBytes = job.Data
+                                    });
+                                }
+                            }
+
+                            break;
+
+                        case JobDeleteMessage jobDelete:
+                            await JobStore.DeleteJob(jobDelete.JobId);
+                            channel.Send(new AcknowledgedMessage());
+                            break;
+
+                        case JobCancelMessage jobCancel:
+                            // TODO:
+                            // TODO: send cancel message from mediator to runner
+                            //channel.Send(new AcknowledgedMessage());
+                            break;
                     }
                 };
 
@@ -296,28 +450,79 @@ namespace DidoNet
                     // this connection is to a runner.
                     // close the application channel so as not to tie up a thread
                     applicationChannel?.Dispose();
-
-                    // add the runner to the pool, if necessary
-                    if (runner == null)
-                    {
-                        runner = new Runner();
-                        lock (RunnerPool)
-                        {
-                            RunnerPool.Add(runner);
-                        }
-                    }
+                    applicationChannel = null;
 
                     // process the message
                     switch (message)
                     {
                         case RunnerStartMessage start:
+                            // TODO: if a runner with the same id already exists, send back error
+
+                            // create and add the runner to the pool, if necessary
+                            if (runner == null)
+                            {
+                                runner = new RunnerItem();
+                                lock (RunnerPool)
+                                {
+                                    RunnerPool.Add(runner);
+                                }
+                            }
                             runner.Init(start);
+
+                            // add a disconnect handler to the connection to mark all in-progress jobs as abandoned
+                            connection.OnDisconnect = async (connection, reason) =>
+                            {
+                                var jobs = await JobStore.GetAllJobs(runner.Id);
+                                foreach (var job in jobs)
+                                {
+                                    if (//job.Status == JobStatusValues.Pending ||
+                                        job.Status == JobStatusValues.Running)
+                                    {
+                                        _ = JobStore.SetJobStatus(job.JobId, JobStatusValues.Abandoned);
+                                    }
+                                }
+                            };
+
+                            // TODO: send back an ack to tell the runner they are ok to continue
                             break;
+
                         case RunnerStatusMessage status:
-                            runner.Update(status);
+                            runner?.Update(status);
                             break;
-                        case RunnerJobMessage job:
-                            // TODO: handle runner completed task messages and persist data for "job" mode
+
+                        case JobStartMessage jobStart:
+                            JobStore.CreateJob(new MemoryJob
+                            {
+                                RunnerId = jobStart.RunnerId,
+                                JobId = jobStart.JobId,
+                                Status = JobStatusValues.Running
+                            });
+                            break;
+
+                        case JobCompleteMessage jobComplete:
+                            var jobStatus = string.Empty;
+                            switch (jobComplete.ResultMessage)
+                            {
+                                case TaskErrorMessage error:
+                                    jobStatus = JobStatusValues.Error;
+                                    break;
+                                case TaskResponseMessage response:
+                                    jobStatus = JobStatusValues.Complete;
+                                    break;
+                                case TaskCancelMessage cancel:
+                                    jobStatus = JobStatusValues.Cancelled;
+                                    break;
+                                case TaskTimeoutMessage timeout:
+                                    jobStatus = JobStatusValues.Timeout;
+                                    break;
+                            }
+                            JobStore.UpdateJob(new MemoryJob
+                            {
+                                RunnerId = jobComplete.RunnerId,
+                                JobId = jobComplete.JobId,
+                                Status = jobStatus,
+                                Data = jobComplete.ResultMessageBytes
+                            });
                             break;
                     }
                 };
@@ -376,100 +581,6 @@ namespace DidoNet
             {
                 Thread = thread;
                 Connection = connection;
-            }
-        }
-
-        /// <summary>
-        /// Tracks the state and status of a connected runner.
-        /// </summary>
-        internal class Runner : IRunnerDetail, IRunnerStatus
-        {
-            /// <summary>
-            /// The OS platform the runner is on.
-            /// </summary>
-            public OSPlatforms Platform { get; set; } = OSPlatforms.Unknown;
-
-            /// <summary>
-            /// The OS version for the platform the runner is on.
-            /// </summary>
-            public string OSVersion { get; set; } = string.Empty;
-
-            /// <summary>
-            /// The uri for applications to use to connect to the runner.
-            /// </summary>
-            public string Endpoint { get; set; } = string.Empty;
-
-            /// <summary>
-            /// The maximum number of tasks the runner can execute concurrently.
-            /// <para/>Legal values are:
-            /// <para/>Less than or equal to zero (default) = Auto (will be set to the available 
-            /// number of cpu cores present on the system).
-            /// <para/>Anything else indicates the maximum number of tasks.
-            /// </summary>
-            public int MaxTasks { get; set; } = 0;
-
-            /// <summary>
-            /// The maximum number of pending tasks the runner can accept and queue before rejecting.
-            /// <para/>Legal values are:
-            /// <para/>Less than zero = Unlimited (up to the number of simultaneous connections allowed by the OS).
-            /// <para/>Zero (default) = Tasks cannot be queued. New tasks are accepted only if fewer than
-            /// the maximum number of concurrent tasks are currently running.
-            /// <para/>Anything else indicates the maximum number of tasks to queue.
-            /// </summary>
-            public int MaxQueue { get; set; } = 0;
-
-            /// <summary>
-            /// The optional runner label.
-            /// </summary>
-            public string Label { get; set; } = string.Empty;
-
-            /// <summary>
-            /// The optional runner tags.
-            /// </summary>
-            public string[] Tags { get; set; } = new string[0];
-
-            /// <summary>
-            /// The last known state of the runner.
-            /// </summary>
-            public RunnerStates State { get; set; } = RunnerStates.Starting;
-
-            /// <summary>
-            /// The number of tasks the runner is currently executing.
-            /// By definition this is less than or equal to MaxTasks.
-            /// </summary>
-            public int ActiveTasks { get; set; } = 0;
-
-            /// <summary>
-            /// The number of pending tasks the runner has in its queue.
-            /// By definition this is less than or equal to MaxQueue (unless MaxQueue is less than zero).
-            /// </summary>
-            public int QueueLength { get; set; } = 0;
-
-            /// <summary>
-            /// Initialize the runner metadata from the provided message.
-            /// </summary>
-            /// <param name="message"></param>
-            public void Init(RunnerStartMessage message)
-            {
-                Platform = message.Platform;
-                OSVersion = message.OSVersion;
-                Endpoint = message.Endpoint;
-                MaxTasks = message.MaxTasks;
-                MaxQueue = message.MaxQueue;
-                Label = message.Label;
-                Tags = message.Tags;
-                State = RunnerStates.Starting;
-            }
-
-            /// <summary>
-            /// Update the runner status from the provided message.
-            /// </summary>
-            /// <param name="message"></param>
-            public void Update(RunnerStatusMessage message)
-            {
-                State = message.State;
-                ActiveTasks = message.ActiveTasks;
-                QueueLength = message.QueueLength;
             }
         }
     }

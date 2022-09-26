@@ -13,8 +13,6 @@ namespace DidoNet
         // TODO: add compression
         public byte[] Bytes { get; private set; } = new byte[0];
 
-        private object? _result = null;
-
         public TaskResponseMessage() { }
 
         public TaskResponseMessage(object? result)
@@ -26,8 +24,6 @@ namespace DidoNet
                 result = resultType.GetProperty(nameof(Task<object?>.Result))?.GetValue(result);
             }
 
-            // TODO: the current JsonSerializer cannot serialize eg built-in
-            // TODO: value types (int, string, etc) to BSON. fix this somehow
             using (var stream = new MemoryStream())
             {
                 using (var streamWriter = new StreamWriter(stream: stream, leaveOpen: true))
@@ -40,6 +36,8 @@ namespace DidoNet
                 Bytes = stream.ToArray();
             }
 
+            // TODO: the current JsonSerializer cannot serialize built-in
+            // TODO: value types (int, string, etc) to BSON. fix this somehow
             //using (var stream = new MemoryStream())
             //using (var binaryWriter = new BinaryWriter(stream, Encoding.Default, true))
             //using (var bsonWriter = new BsonDataWriter(binaryWriter))
@@ -104,11 +102,14 @@ namespace DidoNet
         public void Read(Stream stream)
         {
             Bytes = stream.ReadByteArray();
+            _result = null;
         }
 
         public void Write(Stream stream)
         {
             stream.WriteByteArray(Bytes);
         }
+
+        private object? _result = null;
     }
 }

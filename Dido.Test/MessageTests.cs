@@ -12,12 +12,14 @@ namespace DidoNet.Test
         {
             using (var stream = new MemoryStream())
             {
+                var id = Guid.NewGuid().ToString();
                 var fakeEndpoint = new UriBuilder("https", "localhost", 1234).Uri.ToString();
-                var tx = new RunnerStartMessage(fakeEndpoint, 4, 5, "label", new string[] { "tag1", "tag2", "tag3" });
+                var tx = new RunnerStartMessage(id, fakeEndpoint, 4, 5, "label", new string[] { "tag1", "tag2", "tag3" });
                 tx.Write(stream);
                 stream.Position = 0;
                 var rx = new RunnerStartMessage();
                 rx.Read(stream);
+                Assert.Equal(tx.Id, rx.Id);
                 Assert.Equal(tx.Platform, rx.Platform);
                 Assert.Equal(tx.OSVersion, rx.OSVersion);
                 Assert.Equal(tx.Endpoint, rx.Endpoint);
@@ -43,5 +45,7 @@ namespace DidoNet.Test
                 Assert.Equal(tx.QueueLength, rx.QueueLength);
             }
         }
+
+        // TODO: tests for remaining messages
     }
 }

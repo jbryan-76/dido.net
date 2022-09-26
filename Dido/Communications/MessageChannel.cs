@@ -108,9 +108,10 @@ namespace DidoNet
         public void Send(IMessage message)
         {
             UnitTestTransmitMessageMonitor?.Invoke(message);
-            var messageType = message.GetType();
-            Channel.WriteString(messageType.AssemblyQualifiedName!);
-            message.Write(Channel);
+            Channel.WriteMessage(message);
+            //var messageType = message.GetType();
+            //Channel.WriteString(messageType.AssemblyQualifiedName!);
+            //message.Write(Channel);
             Channel.Flush();
         }
 
@@ -163,21 +164,22 @@ namespace DidoNet
         {
             if (timeout != null)
             {
-                // TODO: any way to do this without using a thread?
+                // TODO: any better way to do this with a timeout but without using a thread?
                 var task = Task.Run(() =>
                 {
-                    var typeName = Channel.ReadString();
-                    var messageType = Type.GetType(typeName);
-                    if (messageType == null)
-                    {
-                        throw new InvalidOperationException($"Unknown message type '{typeName}'");
-                    }
-                    var message = Activator.CreateInstance(messageType) as IMessage;
-                    if (message == null)
-                    {
-                        throw new InvalidOperationException($"Cannot create instance of message type '{typeName}'");
-                    }
-                    message.Read(Channel);
+                    var message = Channel.ReadMessage();
+                    //var typeName = Channel.ReadString();
+                    //var messageType = Type.GetType(typeName);
+                    //if (messageType == null)
+                    //{
+                    //    throw new InvalidOperationException($"Unknown message type '{typeName}'");
+                    //}
+                    //var message = Activator.CreateInstance(messageType) as IMessage;
+                    //if (message == null)
+                    //{
+                    //    throw new InvalidOperationException($"Cannot create instance of message type '{typeName}'");
+                    //}
+                    //message.Read(Channel);
                     return message;
 
                 });

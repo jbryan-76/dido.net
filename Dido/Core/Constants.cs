@@ -2,6 +2,17 @@
 
 namespace DidoNet
 {
+    internal class JobStatusValues
+    {
+        //internal const string Pending = "pending";
+        internal const string Running = "running";
+        internal const string Complete = "complete";
+        internal const string Cancelled = "cancelled";
+        internal const string Error = "error";
+        internal const string Timeout = "timeout";
+        internal const string Abandoned = "abandoned";
+    }
+
     internal class Constants
     {
         /// <summary>
@@ -16,9 +27,14 @@ namespace DidoNet
         internal static readonly string MediatorApp_ChannelId = "app-med";
 
         /// <summary>
-        /// The name for the channel transporting data between a Runner and a Mediator.
+        /// The name for the channel transporting runner data between a Runner and a Mediator.
         /// </summary>
         internal static readonly string MediatorRunner_ChannelId = "run-med";
+
+        /// <summary>
+        /// The name for the channel transporting job data between a Runner and a Mediator.
+        /// </summary>
+        internal static readonly string MediatorRunnerJobs_ChannelId = "run-med-job";
         #endregion
 
         #region Application <-> Runner channels

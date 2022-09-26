@@ -167,11 +167,12 @@ namespace DidoNet
         }
 
         // TODO: "jobs" API: must use a mediator and runners
-        // TODO: SubmitJobAsync(expression) => submit request to mediator, get back an id
+        // TODO: SubmitJobAsync(expression) => submit request to mediator, get back a job id
         // TODO: QueryJobAsync(id) => get job status/result by job id
         // TODO: CancelJobAsync(id) => cancel job
         // TODO: AddJobHandler(id,handler) => invoke handler when job is done (either polling background thread or use MQ)
-        public static async Task<string> SubmitJobAsync<Tprop>(
+
+        public static async Task<JobHandle> SubmitJobAsync<Tprop>(
             Expression<Func<ExecutionContext, Tprop>> expression,
             Configuration? configuration = null)
         {
@@ -205,6 +206,140 @@ namespace DidoNet
                         // exponential back-off: roughly [100, 700, 3000, 10000] ms
                         ThreadHelpers.Yield((int)Math.Pow(100, Math.Sqrt(Math.Max(tries, 4))));
                     }
+                }
+            }
+        }
+
+        public static async Task<JobHandle> ConnectJobAsync(string jobId, Configuration? configuration = null)
+        {
+            // TODO: 
+            throw new NotImplementedException();
+        }
+
+        public static Task<JobResult<Tprop>> QueryJobAsync<Tprop>(JobHandle jobHandle, Configuration? configuration = null)
+        {
+            return QueryJobAsync<Tprop>(jobHandle.JobId, configuration);
+        }
+
+        public static async Task<JobResult<Tprop>> QueryJobAsync<Tprop>(string jobId, Configuration? configuration = null)
+        {
+            configuration ??= GlobalConfiguration ?? new Configuration();
+
+            // verify a mediator is configured
+            if (configuration.MediatorUri == null)
+            {
+                throw new InvalidConfigurationException($"Configuration error: Use of the jobs API requires a mediator service to be running and {nameof(Configuration.MediatorUri)} set.");
+            }
+
+            // open a connection to the mediator
+            var connectionSettings = new ClientConnectionSettings
+            {
+                ValidaionPolicy = configuration.ServerCertificateValidationPolicy,
+                Thumbprint = configuration.ServerCertificateThumbprint
+            };
+            using (var mediatorConnection =
+                new Connection(configuration.MediatorUri.Host, configuration.MediatorUri.Port, null, connectionSettings))
+            {
+                // create the communications channel and request the job status from the mediator
+                var mediatorChannel = new MessageChannel(mediatorConnection, Constants.MediatorApp_ChannelId);
+                mediatorChannel.Send(new JobQueryMessage(jobId));
+
+                // receive and process the response
+                var message = mediatorChannel.ReceiveMessage(configuration.MediatorTimeout);
+                switch (message)
+                {
+                    case JobNotFoundMessage notFound:
+                        throw new JobNotFoundException($"Job '{jobId}' not found.");
+
+                    case JobStartMessage start:
+                        return new JobResult<Tprop>
+                        {
+                            Status = JobStatus.Running,
+                        };
+
+                    case JobCompleteMessage complete:
+                        if (complete.ResultMessage == null)
+                        {
+                            return new JobResult<Tprop>
+                            {
+                                Status = JobStatus.Abandoned
+                            };
+                        }
+                        else
+                        {
+                            switch (complete.ResultMessage)
+                            {
+                                case TaskResponseMessage response:
+                                    return new JobResult<Tprop>
+                                    {
+                                        Status = JobStatus.Complete,
+                                        Result = response.GetResult<Tprop>()
+                                    };
+                                case TaskCancelMessage cancel:
+                                    return new JobResult<Tprop>
+                                    {
+                                        Status = JobStatus.Cancelled,
+                                        Error = cancel.Message
+                                    };
+                                case TaskTimeoutMessage timeout:
+                                    return new JobResult<Tprop>
+                                    {
+                                        Status = JobStatus.Timeout,
+                                        Error = timeout.Message
+                                    };
+                                case IErrorMessage error:
+                                    return new JobResult<Tprop>
+                                    {
+                                        Status = JobStatus.Error,
+                                        Error = error.Message
+                                    };
+                                default:
+                                    throw new UnhandledMessageException(message);
+                            }
+                        }
+
+                    default:
+                        throw new UnhandledMessageException(message);
+                }
+            }
+        }
+
+        public static Task DeleteJobAsync(JobHandle jobHandle, Configuration? configuration = null)
+        {
+            return DeleteJobAsync(jobHandle.JobId, configuration);
+        }
+
+        public static async Task DeleteJobAsync(string jobId, Configuration? configuration = null)
+        {
+            configuration ??= GlobalConfiguration ?? new Configuration();
+
+            // verify a mediator is configured
+            if (configuration.MediatorUri == null)
+            {
+                throw new InvalidConfigurationException($"Configuration error: Use of the jobs API requires a mediator service to be running and {nameof(Configuration.MediatorUri)} set.");
+            }
+
+            // open a connection to the mediator
+            var connectionSettings = new ClientConnectionSettings
+            {
+                ValidaionPolicy = configuration.ServerCertificateValidationPolicy,
+                Thumbprint = configuration.ServerCertificateThumbprint
+            };
+            using (var mediatorConnection =
+                new Connection(configuration.MediatorUri.Host, configuration.MediatorUri.Port, null, connectionSettings))
+            {
+                // create the communications channel and request the job to be deleted
+                var mediatorChannel = new MessageChannel(mediatorConnection, Constants.MediatorApp_ChannelId);
+                mediatorChannel.Send(new JobDeleteMessage(jobId));
+
+                // receive and process the response
+                var message = mediatorChannel.ReceiveMessage(configuration.MediatorTimeout);
+                switch (message)
+                {
+                    case AcknowledgedMessage ack:
+                        return;
+                    default:
+                        throw new UnhandledMessageException(message);
                 }
             }
         }
@@ -285,7 +420,8 @@ namespace DidoNet
             CancellationToken cancellationToken)
         {
             // choose a runner to execute the expression
-            (Uri runnerUri, string _) = SelectRunner(configuration);
+            //(Uri runnerUri, string _) = SelectRunner(configuration);
+            var runnerUri = SelectRunner(configuration, false);
 
             var connectionSettings = new ClientConnectionSettings
             {
@@ -355,9 +491,28 @@ namespace DidoNet
             }
         }
 
+        public class JobHandle : IDisposable
+        {
+            public string JobId { get; set; }
+            internal ClientConnectionSettings ConnectionSettings { get; set; }
+            internal Connection RunnerConnection { get; set; }
+            internal MessageChannel AssembliesChannel { get; set; }
+            internal ApplicationIOProxy IOProxy { get; set; }
+
+            internal JobHandle()
+            {
+
+            }
+
+            public void Dispose()
+            {
+                RunnerConnection.Dispose();
+            }
+        }
+
         /// <summary>
         /// Execute the provided expression as a task on a remote runner,
-        /// but track it as a job in a mediator.
+        /// but track its life cycle and result as a job in a mediator.
         /// </summary>
         /// <typeparam name="Tprop"></typeparam>
         /// <param name="expression"></param>
@@ -367,12 +522,13 @@ namespace DidoNet
         /// <exception cref="TaskDeserializationException"></exception>
         /// <exception cref="TaskInvocationException"></exception>
         /// <exception cref="InvalidOperationException"></exception>
-        private static async Task<string> DoSubmitJobAsync<Tprop>(
+        private static async Task<JobHandle> DoSubmitJobAsync<Tprop>(
             Expression<Func<ExecutionContext, Tprop>> expression,
             Configuration configuration)
         {
             // choose a runner to execute the expression
-            (Uri runnerUri, string jobId) = SelectRunner(configuration, true);
+            //(Uri runnerUri, string jobId) = SelectRunner(configuration, true);
+            var runnerUri = SelectRunner(configuration, true);
 
             var connectionSettings = new ClientConnectionSettings
             {
@@ -381,10 +537,11 @@ namespace DidoNet
             };
 
             // create a secure connection to the remote runner
-            using (var runnerConnection = new Connection(runnerUri!.Host, runnerUri.Port, null, connectionSettings))
-            {
-                Logger.Trace($"Executing expression via {nameof(RunRemoteAsync)} to {runnerUri}");
+            var runnerConnection = new Connection(runnerUri!.Host, runnerUri.Port, null, connectionSettings);
+            Logger.Trace($"Executing expression via {nameof(RunRemoteAsync)} to {runnerUri}");
 
+            try
+            {
                 // create communication channels to the runner for: control messages, task messages, assembly messages
                 var controlChannel = new MessageChannel(runnerConnection, Constants.AppRunner_ControlChannelId);
                 var tasksChannel = new MessageChannel(runnerConnection, Constants.AppRunner_TaskChannelId);
@@ -410,6 +567,7 @@ namespace DidoNet
 
                 // kickoff the remote task by serializing the expression and transmitting it to the runner.
                 // since a job id is included, the runner will send the result to the mediator, not back to the application
+                var jobId = Guid.NewGuid().ToString();
                 var requestMessage = new TaskRequestMessage(
                     await ExpressionSerializer.SerializeAsync(expression),
                     configuration.Id,
@@ -426,13 +584,25 @@ namespace DidoNet
                 // handle the response
                 switch (message)
                 {
-                    case TaskAcceptedMessage accepted:
-                        return jobId;
+                    case AcknowledgedMessage accepted:
+                        return new JobHandle
+                        {
+                            AssembliesChannel = assembliesChannel,
+                            ConnectionSettings = connectionSettings,
+                            IOProxy = ioProxy,
+                            JobId = jobId,
+                            RunnerConnection = runnerConnection
+                        };
                     case IErrorMessage error:
                         throw error.Exception;
                     default:
                         throw new UnhandledMessageException(message);
                 }
+            }
+            catch (Exception)
+            {
+                runnerConnection.Dispose();
+                throw;
             }
         }
 
@@ -564,20 +734,22 @@ namespace DidoNet
 
         /// <summary>
         /// Selects a suitable remote runner to execute a task based on the provided configuration.
+        /// Throws an exception if a runner could not be obtained.
         /// </summary>
         /// <param name="configuration"></param>
         /// <param name="asJob"></param>
         /// <returns></returns>
         /// <exception cref="RunnerNotAvailableException"></exception>
         /// <exception cref="UnhandledMessageException"></exception>
-        internal static (Uri endpoint, string jobId) SelectRunner(Configuration configuration, bool asJob = false)
+        //internal static (Uri endpoint, string jobId) SelectRunner(Configuration configuration, bool asJob = false)
+        internal static Uri SelectRunner(Configuration configuration, bool forceSelectFromMediator)
         {
             // prefer the explicitly provided runner...
             var runnerUri = configuration.RunnerUri;
-            var jobId = String.Empty;
+            //var jobId = String.Empty;
 
             // ...however if no runner is configured but a mediator is, ask the mediator to choose a runner
-            if (asJob || (runnerUri == null && configuration.MediatorUri != null))
+            if (configuration.MediatorUri != null && (forceSelectFromMediator || runnerUri == null))
             {
                 // open a connection to the mediator
                 var connectionSettings = new ClientConnectionSettings
@@ -589,16 +761,16 @@ namespace DidoNet
                     new Connection(configuration.MediatorUri.Host, configuration.MediatorUri.Port, null, connectionSettings))
                 {
                     // create the communications channel and request an available runner from the mediator
-                    var applicationChannel = new MessageChannel(mediatorConnection, Constants.MediatorApp_ChannelId);
-                    applicationChannel.Send(new RunnerRequestMessage(configuration.RunnerOSPlatforms, configuration.RunnerLabel, configuration.RunnerTags, asJob));
+                    var mediatorChannel = new MessageChannel(mediatorConnection, Constants.MediatorApp_ChannelId);
+                    mediatorChannel.Send(new RunnerRequestMessage(configuration.RunnerOSPlatforms, configuration.RunnerLabel, configuration.RunnerTags));//, asJob);
 
                     // receive and process the response
-                    var message = applicationChannel.ReceiveMessage(configuration.MediatorTimeout);
+                    var message = mediatorChannel.ReceiveMessage(configuration.MediatorTimeout);
                     switch (message)
                     {
                         case RunnerResponseMessage response:
                             runnerUri = new Uri(response.Endpoint);
-                            jobId = response.JobId;
+                            //jobId = response.JobId;
                             break;
 
                         case RunnerNotAvailableMessage notAvailable:
@@ -610,7 +782,8 @@ namespace DidoNet
                 }
             }
 
-            return (runnerUri!, jobId);
+            //return (runnerUri!, jobId);
+            return runnerUri!;
         }
 
         /// <summary>

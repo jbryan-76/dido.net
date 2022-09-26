@@ -211,5 +211,18 @@ namespace DidoNet
                 writer(stream, item);
             }
         }
+
+        /// <summary>
+        /// Write the provided message to a stream, including type information sufficient
+        /// to recreate the strongly-typed message via ReadMessage().
+        /// </summary>
+        /// <param name="stream"></param>
+        /// <param name="message"></param>
+        public static void WriteMessage(this Stream stream, IMessage message)
+        {
+            var messageType = message.GetType();
+            stream.WriteString(messageType.AssemblyQualifiedName!);
+            message.Write(stream);
+        }
     }
 }

@@ -11,35 +11,35 @@ namespace DidoNet.Test.Servers
             var mediator = new MediatorServer();
 
             // not available: starting
-            mediator.RunnerPool.Add(new MediatorServer.Runner()
+            mediator.RunnerPool.Add(new RunnerItem()
             {
                 MaxTasks = 1,
                 State = RunnerStates.Starting
             });
 
             // not available: max tasks is zero
-            mediator.RunnerPool.Add(new MediatorServer.Runner()
+            mediator.RunnerPool.Add(new RunnerItem()
             {
                 MaxTasks = 0,
                 State = RunnerStates.Ready
             });
 
             // not available: paused
-            mediator.RunnerPool.Add(new MediatorServer.Runner()
+            mediator.RunnerPool.Add(new RunnerItem()
             {
                 MaxTasks = 1,
                 State = RunnerStates.Paused
             });
 
             // not available: stopping
-            mediator.RunnerPool.Add(new MediatorServer.Runner()
+            mediator.RunnerPool.Add(new RunnerItem()
             {
                 MaxTasks = 1,
                 State = RunnerStates.Stopping
             });
 
             // not available: no available task slots, and no queue
-            mediator.RunnerPool.Add(new MediatorServer.Runner()
+            mediator.RunnerPool.Add(new RunnerItem()
             {
                 MaxTasks = 1,
                 ActiveTasks = 1,
@@ -48,7 +48,7 @@ namespace DidoNet.Test.Servers
             });
 
             // not available: no available task slots, and queue is full
-            mediator.RunnerPool.Add(new MediatorServer.Runner()
+            mediator.RunnerPool.Add(new RunnerItem()
             {
                 MaxTasks = 1,
                 ActiveTasks = 1,
@@ -67,7 +67,7 @@ namespace DidoNet.Test.Servers
             var mediator = new MediatorServer();
 
             // create 3 identical available runners, differing only by OS
-            var linux = new MediatorServer.Runner()
+            var linux = new RunnerItem()
             {
                 Label = Guid.NewGuid().ToString(),
                 Platform = OSPlatforms.Linux,
@@ -76,7 +76,7 @@ namespace DidoNet.Test.Servers
             };
             mediator.RunnerPool.Add(linux);
 
-            var windows = new MediatorServer.Runner()
+            var windows = new RunnerItem()
             {
                 Label = Guid.NewGuid().ToString(),
                 Platform = OSPlatforms.Windows,
@@ -85,7 +85,7 @@ namespace DidoNet.Test.Servers
             };
             mediator.RunnerPool.Add(windows);
 
-            var osx = new MediatorServer.Runner()
+            var osx = new RunnerItem()
             {
                 Label = Guid.NewGuid().ToString(),
                 Platform = OSPlatforms.OSX,
@@ -119,7 +119,7 @@ namespace DidoNet.Test.Servers
         {
             var mediator = new MediatorServer();
 
-            var one = new MediatorServer.Runner()
+            var one = new RunnerItem()
             {
                 Label = Guid.NewGuid().ToString(),
                 MaxTasks = 1,
@@ -127,7 +127,7 @@ namespace DidoNet.Test.Servers
             };
             mediator.RunnerPool.Add(one);
 
-            var two = new MediatorServer.Runner()
+            var two = new RunnerItem()
             {
                 Label = Guid.NewGuid().ToString(),
                 MaxTasks = 1,
@@ -135,7 +135,7 @@ namespace DidoNet.Test.Servers
             };
             mediator.RunnerPool.Add(two);
 
-            var three = new MediatorServer.Runner()
+            var three = new RunnerItem()
             {
                 Label = Guid.NewGuid().ToString(),
                 MaxTasks = 1,
@@ -157,7 +157,7 @@ namespace DidoNet.Test.Servers
         {
             var mediator = new MediatorServer();
 
-            var one = new MediatorServer.Runner()
+            var one = new RunnerItem()
             {
                 Label = Guid.NewGuid().ToString(),
                 MaxTasks = 1,
@@ -166,7 +166,7 @@ namespace DidoNet.Test.Servers
             };
             mediator.RunnerPool.Add(one);
 
-            var two = new MediatorServer.Runner()
+            var two = new RunnerItem()
             {
                 Label = Guid.NewGuid().ToString(),
                 MaxTasks = 1,
@@ -175,7 +175,7 @@ namespace DidoNet.Test.Servers
             };
             mediator.RunnerPool.Add(two);
 
-            var three = new MediatorServer.Runner()
+            var three = new RunnerItem()
             {
                 Label = Guid.NewGuid().ToString(),
                 MaxTasks = 1,
@@ -212,7 +212,7 @@ namespace DidoNet.Test.Servers
             var mediator = new MediatorServer();
 
             // not available: all task slots occupied
-            var one = new MediatorServer.Runner()
+            var one = new RunnerItem()
             {
                 Label = Guid.NewGuid().ToString(),
                 MaxTasks = 1,
@@ -222,7 +222,7 @@ namespace DidoNet.Test.Servers
             mediator.RunnerPool.Add(one);
 
             // available: available task slot
-            var two = new MediatorServer.Runner()
+            var two = new RunnerItem()
             {
                 Label = Guid.NewGuid().ToString(),
                 MaxTasks = 1,
@@ -232,7 +232,7 @@ namespace DidoNet.Test.Servers
             mediator.RunnerPool.Add(two);
 
             // not available: all task slots occupied
-            var three = new MediatorServer.Runner()
+            var three = new RunnerItem()
             {
                 Label = Guid.NewGuid().ToString(),
                 MaxTasks = 1,
@@ -253,7 +253,7 @@ namespace DidoNet.Test.Servers
             var mediator = new MediatorServer();
 
             // not available: all task slots occupied and queue full
-            var one = new MediatorServer.Runner()
+            var one = new RunnerItem()
             {
                 Label = Guid.NewGuid().ToString(),
                 MaxTasks = 1,
@@ -265,7 +265,7 @@ namespace DidoNet.Test.Servers
             mediator.RunnerPool.Add(one);
 
             // available: available queue
-            var two = new MediatorServer.Runner()
+            var two = new RunnerItem()
             {
                 Label = Guid.NewGuid().ToString(),
                 MaxTasks = 1,
@@ -277,7 +277,7 @@ namespace DidoNet.Test.Servers
             mediator.RunnerPool.Add(two);
 
             // not available: all task slots occupied and queue full
-            var three = new MediatorServer.Runner()
+            var three = new RunnerItem()
             {
                 Label = Guid.NewGuid().ToString(),
                 MaxTasks = 1,
@@ -300,7 +300,7 @@ namespace DidoNet.Test.Servers
             var mediator = new MediatorServer();
 
             // not available: all task slots occupied and no queue
-            var one = new MediatorServer.Runner()
+            var one = new RunnerItem()
             {
                 Label = Guid.NewGuid().ToString(),
                 MaxTasks = 1,
@@ -311,7 +311,7 @@ namespace DidoNet.Test.Servers
             mediator.RunnerPool.Add(one);
 
             // available: unlimited queue
-            var two = new MediatorServer.Runner()
+            var two = new RunnerItem()
             {
                 Label = Guid.NewGuid().ToString(),
                 MaxTasks = 1,
@@ -322,7 +322,7 @@ namespace DidoNet.Test.Servers
             mediator.RunnerPool.Add(two);
 
             // not available: all task slots occupied and queue full
-            var three = new MediatorServer.Runner()
+            var three = new RunnerItem()
             {
                 Label = Guid.NewGuid().ToString(),
                 MaxTasks = 1,
@@ -345,7 +345,7 @@ namespace DidoNet.Test.Servers
             var mediator = new MediatorServer();
 
             // available: least open slots
-            var one = new MediatorServer.Runner()
+            var one = new RunnerItem()
             {
                 Label = Guid.NewGuid().ToString(),
                 MaxTasks = 3,
@@ -355,7 +355,7 @@ namespace DidoNet.Test.Servers
             mediator.RunnerPool.Add(one);
 
             // most available: most open slots
-            var two = new MediatorServer.Runner()
+            var two = new RunnerItem()
             {
                 Label = Guid.NewGuid().ToString(),
                 MaxTasks = 4,
@@ -365,7 +365,7 @@ namespace DidoNet.Test.Servers
             mediator.RunnerPool.Add(two);
 
             // available: some open slots
-            var three = new MediatorServer.Runner()
+            var three = new RunnerItem()
             {
                 Label = Guid.NewGuid().ToString(),
                 MaxTasks = 4,
@@ -386,7 +386,7 @@ namespace DidoNet.Test.Servers
             var mediator = new MediatorServer();
 
             // available: medium queue
-            var one = new MediatorServer.Runner()
+            var one = new RunnerItem()
             {
                 Label = Guid.NewGuid().ToString(),
                 MaxTasks = 1,
@@ -398,7 +398,7 @@ namespace DidoNet.Test.Servers
             mediator.RunnerPool.Add(one);
 
             // most available: smallest queue
-            var two = new MediatorServer.Runner()
+            var two = new RunnerItem()
             {
                 Label = Guid.NewGuid().ToString(),
                 MaxTasks = 1,
@@ -410,7 +410,7 @@ namespace DidoNet.Test.Servers
             mediator.RunnerPool.Add(two);
 
             // available: biggest queue
-            var three = new MediatorServer.Runner()
+            var three = new RunnerItem()
             {
                 Label = Guid.NewGuid().ToString(),
                 MaxTasks = 1,

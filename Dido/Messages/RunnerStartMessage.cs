@@ -18,6 +18,8 @@ namespace DidoNet
 
     internal class RunnerStartMessage : IMessage, IRunnerDetail
     {
+        public string Id { get; set; } = string.Empty;
+
         public OSPlatforms Platform { get; set; } = OSPlatforms.Unknown;
 
         public string OSVersion { get; set; } = string.Empty;
@@ -34,8 +36,9 @@ namespace DidoNet
 
         public RunnerStartMessage() { }
 
-        public RunnerStartMessage(string endpoint, int maxTasks, int maxQueue, string label, string[] tags)
+        public RunnerStartMessage(string id, string endpoint, int maxTasks, int maxQueue, string label, string[] tags)
         {
+            Id = id;
             Endpoint = endpoint;
             MaxTasks = maxTasks;
             MaxQueue = maxQueue;
@@ -53,6 +56,7 @@ namespace DidoNet
 
         public void Read(Stream stream)
         {
+            Id = stream.ReadString();
             Platform = Enum.Parse<OSPlatforms>(stream.ReadString());
             OSVersion = stream.ReadString();
             Endpoint = stream.ReadString();
@@ -64,6 +68,7 @@ namespace DidoNet
 
         public void Write(Stream stream)
         {
+            stream.WriteString(Id);
             stream.WriteString(Platform.ToString());
             stream.WriteString(OSVersion);
             stream.WriteString(Endpoint);

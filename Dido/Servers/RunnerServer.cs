@@ -154,13 +154,14 @@ namespace DidoNet
                 MediatorChannel = new MessageChannel(MediatorConnection, Constants.MediatorRunner_ChannelId);
 
                 // announce this runner to the mediator
-                MediatorChannel.Send(new RunnerStartMessage(Configuration.Endpoint.ToString(),
+                MediatorChannel.Send(new RunnerStartMessage(Configuration.Id, Configuration.Endpoint.ToString(),
                     Configuration.MaxTasks, Configuration.MaxQueue, Configuration.Label, Configuration.Tags));
                 MediatorChannel.Send(new RunnerStatusMessage(RunnerStates.Starting, 0, 0));
 
-                // TODO: receive an error back and kill the runner if the runner id is not unique in the mediator
+                // TODO: receive the response. if error, kill the runner, else proceed
 
                 // TODO: start an infrequent (eg 60s) heartbeat to mediator to update status and environment stats (eg cpu, ram)?
+
                 Logger.Info($"Runner {Configuration.Id} using mediator = {Configuration.MediatorUri}");
             }
 
@@ -282,9 +283,10 @@ namespace DidoNet
                 {
                     if (QueuedWorkers.TryDequeue(out var worker))
                     {
-                        ActiveWorkers.TryAdd(worker.Id, worker);
-                        worker.Start(WorkerComplete);
-                        SendStatusToMediator();
+                        StartWorker(worker);
+                        //ActiveWorkers.TryAdd(worker.Id, worker);
+                        //worker.Start(WorkerComplete);
+                        //SendStatusToMediator();
                     }
                 }
 
@@ -350,16 +352,17 @@ namespace DidoNet
                         && QueuedWorkers.Count == 0)
                     {
                         // ...and start it immediately if there is spare capacity...
-                        ActiveWorkers.TryAdd(worker.Id, worker);
-                        worker.Start(WorkerComplete);
+                        //ActiveWorkers.TryAdd(worker.Id, worker);
+                        //worker.Start(WorkerComplete);
+                        StartWorker(worker);
                     }
                     else
                     {
                         // ...otherwise queue it for later
-                        QueuedWorkers.Enqueue(worker);
+                        //QueuedWorkers.Enqueue(worker);
+                        //SendStatusToMediator();
+                        QueueWorker(worker);
                     }
-
-                    SendStatusToMediator();
                 }
             }
 
@@ -377,6 +380,35 @@ namespace DidoNet
             CancelActiveWorkers();
 
             CleanupCompletedWorkers();
+
+            SendStatusToMediator();
+        }
+
+        private void StartWorker(TaskWorker worker)
+        {
+            ActiveWorkers.TryAdd(worker.Id, worker);
+            worker.Start(WorkerStarted, WorkerComplete);
+            SendStatusToMediator();
+        }
+
+        private void QueueWorker(TaskWorker worker)
+        {
+            QueuedWorkers.Enqueue(worker);
+            SendStatusToMediator();
+        }
+
+        /// <summary>
+        /// A handler invoked when a worker starts.
+        /// </summary>
+        /// <param name="worker"></param>
+        private void WorkerStarted(TaskWorker worker)
+        {
+            if (!string.IsNullOrEmpty(worker.Request?.JobId))
+            {
+                // if the task is in "job" mode, inform the mediator that it started
+                MediatorChannel?.Send(new JobStartMessage(Configuration.Id, worker.Request.JobId));
+                // TODO: receive confirmation
+            }
         }
 
         /// <summary>
@@ -385,11 +417,10 @@ namespace DidoNet
         /// <param name="worker"></param>
         private void WorkerComplete(TaskWorker worker)
         {
-            if (false)
+            if (!string.IsNullOrEmpty(worker.Request?.JobId))
             {
-                // TODO: if the task is in "job" mode, send the result to the mediator
-                // worker.ResultMessage
-                MediatorChannel?.Send(new RunnerJobMessage());
+                // if the task is in "job" mode, send the result to the mediator
+                MediatorChannel?.Send(new JobCompleteMessage(Configuration.Id, worker.Request.JobId, worker.Result!));
             }
 
             // move the worker to the completed queue so it can be disposed by the main thread
@@ -438,11 +469,20 @@ namespace DidoNet
         /// </summary>
         private void SendStatusToMediator()
         {
-            MediatorChannel?.Send(new RunnerStatusMessage(
-                RunnerStates.Ready,
-                ActiveWorkers.Count,
-                QueuedWorkers.Count)
-            );
+            if (MediatorChannel != null)
+            {
+                // use a critical section to ensure sequential message sending
+                // since this method is called from WorkLoop() and WorkerComplete()
+                // and the run in different threads
+                lock (MediatorChannel)
+                {
+                    MediatorChannel?.Send(new RunnerStatusMessage(
+                        RunnerStates.Ready,
+                        ActiveWorkers.Count,
+                        QueuedWorkers.Count)
+                    );
+                }
+            }
         }
     }
 }
