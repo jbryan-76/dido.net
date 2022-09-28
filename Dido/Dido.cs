@@ -279,19 +279,19 @@ namespace DidoNet
                                     return new JobResult<Tprop>
                                     {
                                         Status = JobStatus.Cancelled,
-                                        Error = cancel.Message
+                                        Exception = cancel.Exception
                                     };
                                 case TaskTimeoutMessage timeout:
                                     return new JobResult<Tprop>
                                     {
                                         Status = JobStatus.Timeout,
-                                        Error = timeout.Message
+                                        Exception = timeout.Exception
                                     };
                                 case IErrorMessage error:
                                     return new JobResult<Tprop>
                                     {
                                         Status = JobStatus.Error,
-                                        Error = error.Message
+                                        Exception = error.Exception
                                     };
                                 default:
                                     throw new UnhandledMessageException(message);
@@ -331,6 +331,46 @@ namespace DidoNet
                 // create the communications channel and request the job to be deleted
                 var mediatorChannel = new MessageChannel(mediatorConnection, Constants.MediatorApp_ChannelId);
                 mediatorChannel.Send(new JobDeleteMessage(jobId));
+
+                // receive and process the response
+                var message = mediatorChannel.ReceiveMessage(configuration.MediatorTimeout);
+                switch (message)
+                {
+                    case AcknowledgedMessage ack:
+                        return;
+                    default:
+                        throw new UnhandledMessageException(message);
+                }
+            }
+        }
+
+        public static Task CancelJobAsync(JobHandle jobHandle, Configuration? configuration = null)
+        {
+            return CancelJobAsync(jobHandle.JobId, configuration);
+        }
+
+        public static async Task CancelJobAsync(string jobId, Configuration? configuration = null)
+        {
+            configuration ??= GlobalConfiguration ?? new Configuration();
+
+            // verify a mediator is configured
+            if (configuration.MediatorUri == null)
+            {
+                throw new InvalidConfigurationException($"Configuration error: Use of the jobs API requires a mediator service to be running and {nameof(Configuration.MediatorUri)} set.");
+            }
+
+            // open a connection to the mediator
+            var connectionSettings = new ClientConnectionSettings
+            {
+                ValidaionPolicy = configuration.ServerCertificateValidationPolicy,
+                Thumbprint = configuration.ServerCertificateThumbprint
+            };
+            using (var mediatorConnection =
+                new Connection(configuration.MediatorUri.Host, configuration.MediatorUri.Port, null, connectionSettings))
+            {
+                // create the communications channel and request the job to be cancelled
+                var mediatorChannel = new MessageChannel(mediatorConnection, Constants.MediatorApp_ChannelId);
+                mediatorChannel.Send(new JobCancelMessage(jobId));
 
                 // receive and process the response
                 var message = mediatorChannel.ReceiveMessage(configuration.MediatorTimeout);
@@ -494,15 +534,11 @@ namespace DidoNet
         public class JobHandle : IDisposable
         {
             public string JobId { get; set; }
+
             internal ClientConnectionSettings ConnectionSettings { get; set; }
             internal Connection RunnerConnection { get; set; }
             internal MessageChannel AssembliesChannel { get; set; }
             internal ApplicationIOProxy IOProxy { get; set; }
-
-            internal JobHandle()
-            {
-
-            }
 
             public void Dispose()
             {

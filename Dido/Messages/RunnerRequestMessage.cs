@@ -4,20 +4,6 @@ using System.Linq;
 
 namespace DidoNet
 {
-    // TODO:
-    //internal class QueryJobMessage : IMessage
-    //{
-
-    //}
-    //internal class CancelJobMessage : IMessage
-    //{
-
-    //}
-    //internal class DeleteJobMessage : IMessage
-    //{
-
-    //}
-
     /// <summary>
     /// A message to request an available runner from a mediator to run a task.
     /// </summary>
@@ -26,7 +12,10 @@ namespace DidoNet
         // TODO: incorporate a "priority" for the task or runner?
         //public int Priority { get; set; } = 0;
 
-        // TODO: for "tetherless" tasks, incorporate a runner id in the request, that always succeeds if the runner exists
+        /// <summary>
+        /// Indicates the id of a specific runner.
+        /// </summary>
+        public string RunnerId { get; set; } = string.Empty;
 
         /// <summary>
         /// Indicates a set of runner OS platforms the task should run on.

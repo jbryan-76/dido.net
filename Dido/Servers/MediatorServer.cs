@@ -244,10 +244,12 @@ namespace DidoNet
         /// <returns></returns>
         internal RunnerItem? GetNextAvailableRunner(RunnerRequestMessage request)
         {
-            // TODO: if the request identifies a specific runner (by id) for a "tetherless" re-connect,
-            // TODO: find and return that runner immediately, with no filtering
-
-            // TODO: build the query once and reuse it
+            // if the request identifies a specific runner (by id),
+            // find and return that runner immediately, with no filtering
+            if (!string.IsNullOrEmpty(request.RunnerId))
+            {
+                return RunnerPool.FirstOrDefault(x => x.Id == request.RunnerId);
+            }
 
             // initialize a query to the current set of ready runners
             var query = RunnerPool.Where(x => x.State == RunnerStates.Ready);
@@ -350,6 +352,176 @@ namespace DidoNet
         }
 
         /// <summary>
+        /// Processes all messages from a runner.
+        /// </summary>
+        /// <param name="message"></param>
+        /// <param name="channel"></param>
+        /// <returns></returns>
+        private async Task RunnerChannelMessageHandler(IMessage message, MessageChannel channel, Connection connection)
+        {
+            IJob? job = null;
+            RunnerItem? runner = null;
+
+            switch (message)
+            {
+                case RunnerStartMessage start:
+                    // TODO: if a runner with the same id already exists, send back error
+
+                    // create and add the runner to the pool, if necessary
+                    if (runner == null)
+                    {
+                        runner = new RunnerItem();
+                        lock (RunnerPool)
+                        {
+                            RunnerPool.Add(runner);
+                        }
+                    }
+                    runner.Init(start, channel);
+
+                    // add a disconnect handler to the connection to mark all in-progress jobs as abandoned
+                    connection.OnDisconnect = async (connection, reason) =>
+                    {
+                        var jobs = await JobStore.GetAllJobs(runner.Id);
+                        foreach (var job in jobs)
+                        {
+                            if (//job.Status == JobStatusValues.Pending ||
+                                job.Status == JobStatusValues.Running)
+                            {
+                                _ = JobStore.SetJobStatus(job.JobId, JobStatusValues.Abandoned);
+                            }
+                        }
+                    };
+
+                    // TODO: send back an ack to tell the runner they are ok to continue
+                    break;
+
+                case RunnerStatusMessage status:
+                    runner = RunnerPool.FirstOrDefault(x => x.Channel == channel);
+                    runner?.Update(status);
+                    break;
+
+                case JobStartMessage jobStart:
+                    await JobStore.CreateJob(new MemoryJob
+                    {
+                        RunnerId = jobStart.RunnerId,
+                        JobId = jobStart.JobId,
+                        Status = JobStatusValues.Running
+                    });
+                    break;
+
+                case JobCompleteMessage jobComplete:
+                    var jobStatus = string.Empty;
+                    switch (jobComplete.ResultMessage)
+                    {
+                        case TaskErrorMessage error:
+                            jobStatus = JobStatusValues.Error;
+                            break;
+                        case TaskResponseMessage response:
+                            jobStatus = JobStatusValues.Complete;
+                            break;
+                        case TaskCancelMessage cancel:
+                            jobStatus = JobStatusValues.Cancelled;
+                            break;
+                        case TaskTimeoutMessage timeout:
+                            jobStatus = JobStatusValues.Timeout;
+                            break;
+                    }
+                    await JobStore.UpdateJob(new MemoryJob
+                    {
+                        RunnerId = jobComplete.RunnerId,
+                        JobId = jobComplete.JobId,
+                        Status = jobStatus,
+                        Data = jobComplete.ResultMessageBytes
+                    });
+                    break;
+            }
+
+        }
+
+        /// <summary>
+        /// Processes all messages from the application.
+        /// </summary>
+        /// <param name="message"></param>
+        /// <param name="channel"></param>
+        /// <returns></returns>
+        private async Task ApplicationChannelMessageHandler(IMessage message, MessageChannel channel)
+        {
+            IJob? job = null;
+            RunnerItem? runner = null;
+
+            switch (message)
+            {
+                case RunnerRequestMessage request:
+                    runner = GetNextAvailableRunner(request);
+                    if (runner == null)
+                    {
+                        channel.Send(new RunnerNotAvailableMessage());
+                    }
+                    else
+                    {
+                        channel.Send(new RunnerResponseMessage(runner.Endpoint));
+                    }
+                    break;
+
+                case JobQueryMessage jobQuery:
+                    job = await JobStore.GetJob(jobQuery.JobId);
+
+                    if (job == null)
+                    {
+                        channel.Send(new JobNotFoundMessage(jobQuery.JobId));
+                    }
+                    else
+                    {
+                        if (job.Status == JobStatusValues.Running)
+                        {
+                            channel.Send(new JobStartMessage
+                            {
+                                JobId = job.JobId,
+                                RunnerId = job.RunnerId,
+                            });
+                        }
+                        else if (job.Status == JobStatusValues.Abandoned)
+                        {
+                            channel.Send(new JobCompleteMessage
+                            {
+                                JobId = job.JobId,
+                                RunnerId = job.RunnerId
+                            });
+                        }
+                        else
+                        {
+                            channel.Send(new JobCompleteMessage
+                            {
+                                JobId = job.JobId,
+                                RunnerId = job.RunnerId,
+                                ResultMessageBytes = job.Data
+                            });
+                        }
+                    }
+                    break;
+
+                case JobDeleteMessage jobDelete:
+                    await JobStore.DeleteJob(jobDelete.JobId);
+                    channel.Send(new AcknowledgedMessage());
+                    break;
+
+                case JobCancelMessage jobCancel:
+                    job = await JobStore.GetJob(jobCancel.JobId);
+                    if (job != null)
+                    {
+                        // find the runner and tell it to cancel the job
+                        runner = RunnerPool.FirstOrDefault(x => x.Id == job.RunnerId);
+                        runner?.Channel?.Send(new JobCancelMessage(job.JobId));
+                    }
+
+                    // delete the job
+                    await JobStore.DeleteJob(jobCancel.JobId);
+                    channel.Send(new AcknowledgedMessage());
+                    break;
+            }
+        }
+
+        /// <summary>
         /// Processes the given connection from either an application or a mediator,
         /// handling all received messages and communication.
         /// </summary>
@@ -364,9 +536,6 @@ namespace DidoNet
             var applicationChannel = new MessageChannel(connection, Constants.MediatorApp_ChannelId);
             var runnerChannel = new MessageChannel(connection, Constants.MediatorRunner_ChannelId);
 
-            // if a runner connects, this object will be created and contains the runner detail
-            RunnerItem? runner = null;
-
             try
             {
                 // applications will contact the mediator using the application channel
@@ -379,73 +548,11 @@ namespace DidoNet
                     runnerChannel = null;
 
                     // process the message
-                    switch (message)
-                    {
-                        case RunnerRequestMessage request:
-                            var runner = GetNextAvailableRunner(request);
-                            if (runner == null)
-                            {
-                                channel.Send(new RunnerNotAvailableMessage());
-                            }
-                            else
-                            {
-                                channel.Send(new RunnerResponseMessage(runner.Endpoint));
-                            }
-                            break;
-
-                        case JobQueryMessage jobQuery:
-                            var job = await JobStore.GetJob(jobQuery.JobId);
-
-                            if (job == null)
-                            {
-                                channel.Send(new JobNotFoundMessage(jobQuery.JobId));
-                            }
-                            else
-                            {
-                                if (job.Status == JobStatusValues.Running)
-                                {
-                                    channel.Send(new JobStartMessage
-                                    {
-                                        JobId = job.JobId,
-                                        RunnerId = job.RunnerId,
-                                    });
-                                }
-                                else if (job.Status == JobStatusValues.Abandoned)
-                                {
-                                    channel.Send(new JobCompleteMessage
-                                    {
-                                        JobId = job.JobId,
-                                        RunnerId = job.RunnerId
-                                    });
-                                }
-                                else
-                                {
-                                    channel.Send(new JobCompleteMessage
-                                    {
-                                        JobId = job.JobId,
-                                        RunnerId = job.RunnerId,
-                                        ResultMessageBytes = job.Data
-                                    });
-                                }
-                            }
-
-                            break;
-
-                        case JobDeleteMessage jobDelete:
-                            await JobStore.DeleteJob(jobDelete.JobId);
-                            channel.Send(new AcknowledgedMessage());
-                            break;
-
-                        case JobCancelMessage jobCancel:
-                            // TODO:
-                            // TODO: send cancel message from mediator to runner
-                            //channel.Send(new AcknowledgedMessage());
-                            break;
-                    }
+                    await ApplicationChannelMessageHandler(message, channel);
                 };
 
                 // runners will contact the mediator using the runner channel to update their status
-                runnerChannel.OnMessageReceived = (message, channel) =>
+                runnerChannel.OnMessageReceived = async (message, channel) =>
                 {
                     // this connection is to a runner.
                     // close the application channel so as not to tie up a thread
@@ -453,78 +560,7 @@ namespace DidoNet
                     applicationChannel = null;
 
                     // process the message
-                    switch (message)
-                    {
-                        case RunnerStartMessage start:
-                            // TODO: if a runner with the same id already exists, send back error
-
-                            // create and add the runner to the pool, if necessary
-                            if (runner == null)
-                            {
-                                runner = new RunnerItem();
-                                lock (RunnerPool)
-                                {
-                                    RunnerPool.Add(runner);
-                                }
-                            }
-                            runner.Init(start);
-
-                            // add a disconnect handler to the connection to mark all in-progress jobs as abandoned
-                            connection.OnDisconnect = async (connection, reason) =>
-                            {
-                                var jobs = await JobStore.GetAllJobs(runner.Id);
-                                foreach (var job in jobs)
-                                {
-                                    if (//job.Status == JobStatusValues.Pending ||
-                                        job.Status == JobStatusValues.Running)
-                                    {
-                                        _ = JobStore.SetJobStatus(job.JobId, JobStatusValues.Abandoned);
-                                    }
-                                }
-                            };
-
-                            // TODO: send back an ack to tell the runner they are ok to continue
-                            break;
-
-                        case RunnerStatusMessage status:
-                            runner?.Update(status);
-                            break;
-
-                        case JobStartMessage jobStart:
-                            JobStore.CreateJob(new MemoryJob
-                            {
-                                RunnerId = jobStart.RunnerId,
-                                JobId = jobStart.JobId,
-                                Status = JobStatusValues.Running
-                            });
-                            break;
-
-                        case JobCompleteMessage jobComplete:
-                            var jobStatus = string.Empty;
-                            switch (jobComplete.ResultMessage)
-                            {
-                                case TaskErrorMessage error:
-                                    jobStatus = JobStatusValues.Error;
-                                    break;
-                                case TaskResponseMessage response:
-                                    jobStatus = JobStatusValues.Complete;
-                                    break;
-                                case TaskCancelMessage cancel:
-                                    jobStatus = JobStatusValues.Cancelled;
-                                    break;
-                                case TaskTimeoutMessage timeout:
-                                    jobStatus = JobStatusValues.Timeout;
-                                    break;
-                            }
-                            JobStore.UpdateJob(new MemoryJob
-                            {
-                                RunnerId = jobComplete.RunnerId,
-                                JobId = jobComplete.JobId,
-                                Status = jobStatus,
-                                Data = jobComplete.ResultMessageBytes
-                            });
-                            break;
-                    }
+                    await RunnerChannelMessageHandler(message, channel, connection);
                 };
 
                 // the client will run forever until it disconnects or this server stops
@@ -540,6 +576,7 @@ namespace DidoNet
             finally
             {
                 // if the connection was for a runner, remove it from the pool
+                var runner = RunnerPool.FirstOrDefault(x => x.Channel?.Connection == connection);
                 if (runner != null)
                 {
                     lock (RunnerPool)

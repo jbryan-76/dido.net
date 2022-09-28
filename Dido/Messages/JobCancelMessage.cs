@@ -8,8 +8,7 @@ namespace DidoNet
 
         public JobCancelMessage() { }
 
-        public JobCancelMessage(
-            string jobId)
+        public JobCancelMessage(string jobId)
         {
             JobId = jobId;
         }

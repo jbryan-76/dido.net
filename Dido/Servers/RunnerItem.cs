@@ -72,11 +72,17 @@
         public int QueueLength { get; set; } = 0;
 
         /// <summary>
+        /// The mediator-runner message channel;
+        /// </summary>
+        public MessageChannel? Channel { get; set; }
+
+        /// <summary>
         /// Initialize the runner metadata from the provided message.
         /// </summary>
         /// <param name="message"></param>
-        public void Init(RunnerStartMessage message)
+        public void Init(RunnerStartMessage message, MessageChannel channel)
         {
+            Channel = channel;
             Id = message.Id;
             Platform = message.Platform;
             OSVersion = message.OSVersion;

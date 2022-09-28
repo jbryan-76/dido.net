@@ -9,6 +9,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace DidoNet
 {
@@ -162,6 +163,9 @@ namespace DidoNet
 
                 // TODO: start an infrequent (eg 60s) heartbeat to mediator to update status and environment stats (eg cpu, ram)?
 
+                // start listening for messages from the mediator
+                MediatorChannel.OnMessageReceived = async (message, channel) => await MediatorChannelMessageHandler(message, channel);
+
                 Logger.Info($"Runner {Configuration.Id} using mediator = {Configuration.MediatorUri}");
             }
 
@@ -177,6 +181,32 @@ namespace DidoNet
             // debounce the server by giving it a beat or two to startup
             // TODO: test and remove this: is it necessary?
             Thread.Sleep(10);
+        }
+
+        /// <summary>
+        /// Processes all messages from the mediator.
+        /// </summary>
+        /// <param name="message"></param>
+        /// <param name="channel"></param>
+        /// <returns></returns>
+        private async Task MediatorChannelMessageHandler(IMessage message, MessageChannel channel)
+        {
+            // process the message
+            switch (message)
+            {
+                case JobCancelMessage cancel:
+                    // try to find the worker...
+                    var worker = ActiveWorkers.Values.FirstOrDefault(w => w.Request?.JobId == cancel.JobId);
+                    if (worker != null)
+                    {
+                        // ...then cancel it
+                        worker.Cancel();
+                        // move the worker to the completed queue to attempt to cleanly dispose it
+                        ActiveWorkers.Remove(worker.Id, out _);
+                        CompletedWorkers.Enqueue(worker);
+                    }
+                    break;
+            }
         }
 
         /// <summary>
