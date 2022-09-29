@@ -42,13 +42,13 @@ namespace DidoNet
             return Task.CompletedTask;
         }
 
-        public Task UpdateJob(IJob job)
+        public Task<bool> UpdateJob(IJob job)
         {
             lock (Jobs)
             {
                 if (!Jobs.ContainsKey(job.JobId))
                 {
-                    throw new Exception($"Unknown key: A job with id '{job.JobId}' does not exist.");
+                    return Task.FromResult(false);
                 }
                 Jobs[job.JobId] = new MemoryJob
                 {
@@ -58,20 +58,20 @@ namespace DidoNet
                     Data = job.Data.ToArray()
                 };
             }
-            return Task.CompletedTask;
+            return Task.FromResult(true);
         }
 
-        public Task SetJobStatus(string jobId, string status)
+        public Task<bool> SetJobStatus(string jobId, string status)
         {
             lock (Jobs)
             {
                 if (!Jobs.ContainsKey(jobId))
                 {
-                    throw new Exception($"Unknown key: A job with id '{jobId}' does not exist.");
+                    return Task.FromResult(false);
                 }
                 Jobs[jobId].Status = status;
             }
-            return Task.CompletedTask;
+            return Task.FromResult(true);
         }
 
         public Task<IJob?> GetJob(string jobId)
@@ -91,19 +91,13 @@ namespace DidoNet
             }
         }
 
-        public Task DeleteJob(string jobId)
+        public Task<bool> DeleteJob(string jobId)
         {
             lock (Jobs)
             {
-                Jobs.Remove(jobId);
-                return Task.CompletedTask;
+                return Task.FromResult(Jobs.Remove(jobId));
             }
         }
-
-        //public Task DeleteAllJobs(string runnerId)
-        //{
-        //    throw new NotImplementedException();
-        //}
 
         private Dictionary<string, MemoryJob> Jobs = new Dictionary<string, MemoryJob>();
     }
@@ -384,8 +378,7 @@ namespace DidoNet
                         var jobs = await JobStore.GetAllJobs(runner.Id);
                         foreach (var job in jobs)
                         {
-                            if (//job.Status == JobStatusValues.Pending ||
-                                job.Status == JobStatusValues.Running)
+                            if (job.Status == JobStatusValues.Running)
                             {
                                 _ = JobStore.SetJobStatus(job.JobId, JobStatusValues.Abandoned);
                             }
@@ -398,6 +391,20 @@ namespace DidoNet
                 case RunnerStatusMessage status:
                     runner = RunnerPool.FirstOrDefault(x => x.Channel == channel);
                     runner?.Update(status);
+
+                    if (runner != null && status.State == RunnerStates.Stopping)
+                    {
+                        // the runner is stopping:
+                        // update the status of all of its in-progress jobs to "abandoned"
+                        var jobs = await JobStore.GetAllJobs(runner.Id);
+                        foreach (var j in jobs)
+                        {
+                            if (j.Status == JobStatusValues.Running)
+                            {
+                                _ = JobStore.SetJobStatus(j.JobId, JobStatusValues.Abandoned);
+                            }
+                        }
+                    }
                     break;
 
                 case JobStartMessage jobStart:
@@ -501,21 +508,31 @@ namespace DidoNet
                     break;
 
                 case JobDeleteMessage jobDelete:
-                    await JobStore.DeleteJob(jobDelete.JobId);
-                    channel.Send(new AcknowledgedMessage());
-                    break;
-
-                case JobCancelMessage jobCancel:
-                    job = await JobStore.GetJob(jobCancel.JobId);
-                    if (job != null)
+                    // find the runner and tell it to cancel the job
+                    job = await JobStore.GetJob(jobDelete.JobId);
+                    if (job != null && job.Status == JobStatusValues.Running)
                     {
-                        // find the runner and tell it to cancel the job
                         runner = RunnerPool.FirstOrDefault(x => x.Id == job.RunnerId);
                         runner?.Channel?.Send(new JobCancelMessage(job.JobId));
                     }
 
                     // delete the job
-                    await JobStore.DeleteJob(jobCancel.JobId);
+                    await JobStore.DeleteJob(jobDelete.JobId);
+
+                    // acknowledge the application
+                    channel.Send(new AcknowledgedMessage());
+                    break;
+
+                case JobCancelMessage jobCancel:
+                    // find the runner and tell it to cancel the job
+                    job = await JobStore.GetJob(jobCancel.JobId);
+                    if (job != null && job.Status == JobStatusValues.Running)
+                    {
+                        runner = RunnerPool.FirstOrDefault(x => x.Id == job.RunnerId);
+                        runner?.Channel?.Send(new JobCancelMessage(job.JobId));
+                    }
+
+                    // acknowledge the application
                     channel.Send(new AcknowledgedMessage());
                     break;
             }

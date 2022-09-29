@@ -1,5 +1,4 @@
 ﻿using DidoNet.Test.Common;
-using Microsoft.VisualStudio.TestPlatform.CommunicationUtilities;
 using System;
 using System.Linq;
 using System.Linq.Expressions;
@@ -12,7 +11,7 @@ using Xunit.Abstractions;
 
 namespace DidoNet.Test.Servers
 {
-    public class ApiTests : IClassFixture<TestFixture>
+    public class RunApiTests : IClassFixture<TestFixture>
     {
         static long NextPort = 9100;
 
@@ -27,11 +26,32 @@ namespace DidoNet.Test.Servers
 
         readonly TestFixture TestFixture;
 
-        public ApiTests(TestFixture fixture, ITestOutputHelper output)
+        public RunApiTests(TestFixture fixture, ITestOutputHelper output)
         {
             TestFixture = fixture;
             //var converter = new OutputConverter(output, "OUTPUT.txt");
             //Console.SetOut(converter);
+        }
+
+        static class BusyLoopWithCancellation
+        {
+            public static bool DoFakeWork(ExecutionContext context)
+            {
+                while (!context.Cancel.IsCancellationRequested)
+                {
+                    Thread.Sleep(1);
+                }
+                return true;
+            }
+        }
+
+        static class SleepThenException
+        {
+            public static bool DoFakeWork(string message)
+            {
+                Thread.Sleep(250);
+                throw new InvalidOperationException(message);
+            }
         }
 
         /// <summary>
@@ -305,18 +325,6 @@ namespace DidoNet.Test.Servers
             runnerServer.Dispose();
         }
 
-        static class BusyLoopWithCancellation
-        {
-            public static bool DoFakeWork(ExecutionContext context)
-            {
-                while (!context.Cancel.IsCancellationRequested)
-                {
-                    Thread.Sleep(1);
-                }
-                return true;
-            }
-        }
-
         /// <summary>
         /// Performs an end-to-end test of Dido.RunAsync using a local loop-back runner server
         /// and an infinite-loop expression to confirm a timeout exception is thrown.
@@ -394,15 +402,6 @@ namespace DidoNet.Test.Servers
             // cleanup
             runnerServer.DeleteCache();
             runnerServer.Dispose();
-        }
-
-        static class SleepThenException
-        {
-            public static bool DoFakeWork(string message)
-            {
-                Thread.Sleep(250);
-                throw new InvalidOperationException(message);
-            }
         }
 
         /// <summary>
@@ -501,150 +500,6 @@ namespace DidoNet.Test.Servers
             Assert.Equal(expectedResult, result);
 
             // cleanup
-            runnerServer.DeleteCache();
-            runnerServer.Dispose();
-            mediatorServer.Dispose();
-        }
-
-        /// <summary>
-        /// Performs an end-to-end test of Dido.RunAsync using local loop-back mediator and runner servers.
-        /// </summary>
-        [Fact]
-        public async void RunJob()
-        {
-            // create a test lambda expression
-            int testArgument = 123;
-            var lambda = await CreateTestLambdaAsync(testArgument);
-
-            // compile and execute the lambda to get the expected result and confirm it matches expectations
-            var expectedResult = lambda.Compile().Invoke(TestFixture.Environment.ExecutionContext!);
-            Assert.Equal(testArgument, expectedResult);
-
-            // create and start a secure localhost loop-back mediator server that can orchestrate runners
-            var mediatorServer = new MediatorServer();
-            int mediatorPort = GetNextAvailablePort();
-            mediatorServer.Start(TestSelfSignedCert.ServerCertificate, mediatorPort, IPAddress.Loopback);
-
-            // create and start a secure localhost loop-back runner server that registers to the mediator
-            var runnerPort = GetNextAvailablePort();
-            var runnerServer = new RunnerServer(new RunnerConfiguration
-            {
-                Endpoint = new UriBuilder("https", "localhost", runnerPort).Uri.ToString(),
-                MediatorUri = new UriBuilder("https", "localhost", mediatorPort).Uri.ToString(),
-                // bypass server cert validation since unit tests are using a base-64 self-signed cert
-                ServerValidationPolicy = ServerCertificateValidationPolicies._SKIP_
-            });
-            runnerServer.Start(TestSelfSignedCert.ServerCertificate, runnerPort, IPAddress.Loopback);
-
-            // wait for the runner to reach a "ready" state in the mediator
-            while (mediatorServer.RunnerPool.Count == 0 || mediatorServer.RunnerPool.First().State != RunnerStates.Ready)
-            {
-                Thread.Sleep(1);
-            }
-
-            // create a configuration to use the mediator to locate a runner to execute the task
-            var configuration = new Configuration
-            {
-                MaxTries = 1,
-                MediatorUri = new UriBuilder("https", "localhost", mediatorPort).Uri,
-                ExecutionMode = ExecutionModes.Remote,
-                // use the unit test assembly resolver instead of the default implementation
-                ResolveLocalAssemblyAsync = (assemblyName) => TestFixture.AssemblyResolver.ResolveAssembly(TestFixture.Environment, assemblyName, out _),
-                // bypass server cert validation since unit tests are using a base-64 self-signed cert
-                ServerCertificateValidationPolicy = ServerCertificateValidationPolicies._SKIP_
-            };
-
-            // execute the lambda expression using the jobs interface
-            var jobHandle = await Dido.SubmitJobAsync<int>(lambda, configuration);
-
-            // check on the job periodically until it completes
-            JobResult<int> result;
-            do
-            {
-                Thread.Sleep(1);
-                result = await Dido.QueryJobAsync<int>(jobHandle, configuration);
-            } while (result.Status == JobStatus.Running);
-
-            // confirm the results match
-            Assert.Equal(JobStatus.Complete, result.Status);
-            Assert.Equal(expectedResult, result.Result);
-
-            // cleanup
-            await Dido.DeleteJobAsync(jobHandle, configuration);
-            runnerServer.DeleteCache();
-            runnerServer.Dispose();
-            mediatorServer.Dispose();
-        }
-
-        /// <summary>
-        /// Performs an end-to-end test of Dido.RunAsync using local loop-back mediator and runner servers
-        /// and a expression that throws during execution.
-        /// </summary>
-        [Fact]
-        public async void RunJobWithException()
-        {
-            //// create a test lambda expression
-            //int testArgument = 123;
-            //var lambda = await CreateTestLambdaAsync(testArgument);
-
-            //// compile and execute the lambda to get the expected result and confirm it matches expectations
-            //var expectedResult = lambda.Compile().Invoke(TestFixture.Environment.ExecutionContext!);
-            //Assert.Equal(testArgument, expectedResult);
-
-            // create and start a secure localhost loop-back mediator server that can orchestrate runners
-            var mediatorServer = new MediatorServer();
-            int mediatorPort = GetNextAvailablePort();
-            mediatorServer.Start(TestSelfSignedCert.ServerCertificate, mediatorPort, IPAddress.Loopback);
-
-            // create and start a secure localhost loop-back runner server that registers to the mediator
-            var runnerPort = GetNextAvailablePort();
-            var runnerServer = new RunnerServer(new RunnerConfiguration
-            {
-                Endpoint = new UriBuilder("https", "localhost", runnerPort).Uri.ToString(),
-                MediatorUri = new UriBuilder("https", "localhost", mediatorPort).Uri.ToString(),
-                // bypass server cert validation since unit tests are using a base-64 self-signed cert
-                ServerValidationPolicy = ServerCertificateValidationPolicies._SKIP_
-            });
-            runnerServer.Start(TestSelfSignedCert.ServerCertificate, runnerPort, IPAddress.Loopback);
-
-            // wait for the runner to reach a "ready" state in the mediator
-            while (mediatorServer.RunnerPool.Count == 0 || mediatorServer.RunnerPool.First().State != RunnerStates.Ready)
-            {
-                Thread.Sleep(1);
-            }
-
-            // create a configuration to use the mediator to locate a runner to execute the task
-            var configuration = new Configuration
-            {
-                MaxTries = 1,
-                MediatorUri = new UriBuilder("https", "localhost", mediatorPort).Uri,
-                ExecutionMode = ExecutionModes.Remote,
-                // use the unit test assembly resolver instead of the default implementation
-                ResolveLocalAssemblyAsync = (assemblyName) => TestFixture.AssemblyResolver.ResolveAssembly(TestFixture.Environment, assemblyName, out _),
-                // bypass server cert validation since unit tests are using a base-64 self-signed cert
-                ServerCertificateValidationPolicy = ServerCertificateValidationPolicies._SKIP_
-            };
-
-            // execute the fake work expression using the jobs interface
-            var message = Guid.NewGuid().ToString();
-            var jobHandle = await Dido.SubmitJobAsync<bool>(
-                (context) => SleepThenException.DoFakeWork(message),
-                configuration);
-
-            // check on the job periodically until it completes
-            JobResult<int> result;
-            do
-            {
-                Thread.Sleep(1);
-                result = await Dido.QueryJobAsync<int>(jobHandle, configuration);
-            } while (result.Status == JobStatus.Running);
-
-            // confirm the job failed with an exception
-            Assert.Equal(JobStatus.Error, result.Status);
-            Assert.NotNull(result.Exception);
-
-            // cleanup
-            await Dido.DeleteJobAsync(jobHandle, configuration);
             runnerServer.DeleteCache();
             runnerServer.Dispose();
             mediatorServer.Dispose();

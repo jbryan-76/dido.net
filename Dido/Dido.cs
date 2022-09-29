@@ -166,12 +166,16 @@ namespace DidoNet
             }
         }
 
-        // TODO: "jobs" API: must use a mediator and runners
-        // TODO: SubmitJobAsync(expression) => submit request to mediator, get back a job id
-        // TODO: QueryJobAsync(id) => get job status/result by job id
-        // TODO: CancelJobAsync(id) => cancel job
         // TODO: AddJobHandler(id,handler) => invoke handler when job is done (either polling background thread or use MQ)
 
+        /// <summary>
+        /// Execute the provided expression as a job on a remote runner.
+        /// </summary>
+        /// <typeparam name="Tprop"></typeparam>
+        /// <param name="expression"></param>
+        /// <param name="configuration"></param>
+        /// <returns></returns>
+        /// <exception cref="InvalidConfigurationException"></exception>
         public static async Task<JobHandle> SubmitJobAsync<Tprop>(
             Expression<Func<ExecutionContext, Tprop>> expression,
             Configuration? configuration = null)
@@ -548,7 +552,7 @@ namespace DidoNet
 
         /// <summary>
         /// Execute the provided expression as a task on a remote runner,
-        /// but track its life cycle and result as a job in a mediator.
+        /// but control and track its life cycle and result as a job in a mediator.
         /// </summary>
         /// <typeparam name="Tprop"></typeparam>
         /// <param name="expression"></param>
@@ -563,7 +567,6 @@ namespace DidoNet
             Configuration configuration)
         {
             // choose a runner to execute the expression
-            //(Uri runnerUri, string jobId) = SelectRunner(configuration, true);
             var runnerUri = SelectRunner(configuration, true);
 
             var connectionSettings = new ClientConnectionSettings

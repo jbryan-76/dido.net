@@ -216,16 +216,16 @@ namespace DidoNet
         {
             Logger.Info($"Stopping runner {Configuration.Id}...");
 
-            // inform the mediator that this runner is stopping
-            // TODO: what to do if mediator is not available? retry? how long?
-            MediatorChannel?.Send(new RunnerStatusMessage(RunnerStates.Stopping, 0, 0));
-
             // signal the work thread to stop
             Interlocked.Exchange(ref IsRunning, 0);
 
             // wait for it to finish
             WorkLoopThread?.Join();
             WorkLoopThread = null;
+
+            // inform the mediator that this runner is stopping
+            // TODO: what to do if mediator is not available? retry? how long?
+            MediatorChannel?.Send(new RunnerStatusMessage(RunnerStates.Stopping, 0, 0));
 
             if (Configuration.DeleteCacheAtShutdown)
             {
@@ -449,8 +449,13 @@ namespace DidoNet
         {
             if (!string.IsNullOrEmpty(worker.Request?.JobId))
             {
-                // if the task is in "job" mode, send the result to the mediator
-                MediatorChannel?.Send(new JobCompleteMessage(Configuration.Id, worker.Request.JobId, worker.Result!));
+                // if the task is in "job" mode, send the result to the mediator only if the runner
+                // is still running (if it's not running, the worker probably completed prematurely
+                // when the work thread was stopped and all tasks cancelled)
+                if (Interlocked.Read(ref IsRunning) == 1)
+                {
+                    MediatorChannel?.Send(new JobCompleteMessage(Configuration.Id, worker.Request.JobId, worker.Result!));
+                }
             }
 
             // move the worker to the completed queue so it can be disposed by the main thread
