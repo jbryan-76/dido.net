@@ -131,11 +131,11 @@ namespace DidoNet
                         {
                             throw new IOException("Connection closed.");
                         }
-                        source.SetResult(false);
+                        source.TrySetResult(false);
                         return;
                     }
                 }
-                source.SetResult(true);
+                source.TrySetResult(true);
             });
             return source.Task;
         }

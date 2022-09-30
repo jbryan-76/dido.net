@@ -47,7 +47,7 @@ namespace DidoNet
         public delegate void ExceptionHandler(Exception ex);
 
         /// <summary>
-        /// The optional global configuration. If an explicit configuration is not provided to a Run method,
+        /// The optional global configuration. If an explicit configuration is not provided to an API method,
         /// the global configuration will be used.
         /// </summary>
         public static Configuration? GlobalConfiguration = null;
@@ -60,7 +60,7 @@ namespace DidoNet
         /// <summary>
         /// Execute the provided expression as a task and return its result.
         /// </summary>
-        /// <typeparam name="Tprop"></typeparam>
+        /// <typeparam name="Tprop">The return type of the executed expression.</typeparam>
         /// <param name="expression">The expression to execute.</param>
         /// <param name="configuration">The optional configuration to control how the expression is executed.
         /// If not provided, the GlobalConfiguration is used (if defined), otherwise a default configuration.</param>
@@ -101,13 +101,17 @@ namespace DidoNet
 
         /// <summary>
         /// Execute the provided expression as a task and invoke the provided handler with the result.
-        /// <para/>NOTE the provided handler is run in a separate thread.
+        /// <para/>NOTE the provided handlers will be invoked from a separate thread.
         /// </summary>
-        /// <typeparam name="Tprop"></typeparam>
+        /// <typeparam name="Tprop">The return type of the executed expression.</typeparam>
         /// <param name="expression">The expression to execute.</param>
         /// <param name="resultHandler">A result handler invoked after the expression completes. 
-        /// Note this handler runs in a separate thread.</param>
-        /// <param name="executionMode">An optional execution mode to override the currently configured mode.</param>
+        /// Note this handler is invoked from a separate thread.</param>
+        /// <param name="configuration">The optional configuration to control how the expression is executed.
+        /// If not provided, the GlobalConfiguration is used (if defined), otherwise a default configuration.</param>
+        /// <param name="execptionHandler">A handler invoked if an exception occurs while executing the expression. 
+        /// Note this handler is invoked from a separate thread.</param>
+        /// <param name="cancellationToken">An optional cancellation token to cancel execution of the expression.</param>
         public static void Run<Tprop>(
             Expression<Func<ExecutionContext, Tprop>> expression,
             ResultHandler<Tprop> resultHandler,
@@ -134,8 +138,11 @@ namespace DidoNet
         /// Execute the provided expression as a task locally (i.e. using the current application domain
         /// and environment), regardless of the value of configuration.ExecutionMode.
         /// </summary>
-        /// <typeparam name="Tprop"></typeparam>
-        /// <param name="expression"></param>
+        /// <typeparam name="Tprop">The return type of the executed expression.</typeparam>
+        /// <param name="expression">The expression to execute.</param>
+        /// <param name="configuration">The optional configuration to control how the expression is executed.
+        /// If not provided, the GlobalConfiguration is used (if defined), otherwise a default configuration.</param>
+        /// <param name="cancellationToken">An optional cancellation token to cancel execution of the expression.</param>
         /// <returns></returns>
         public static Task<Tprop> RunLocalAsync<Tprop>(
             Expression<Func<ExecutionContext, Tprop>> expression,
@@ -166,14 +173,13 @@ namespace DidoNet
             }
         }
 
-        // TODO: AddJobHandler(id,handler) => invoke handler when job is done (either polling background thread or use MQ)
-
         /// <summary>
         /// Execute the provided expression as a job on a remote runner.
         /// </summary>
-        /// <typeparam name="Tprop"></typeparam>
-        /// <param name="expression"></param>
-        /// <param name="configuration"></param>
+        /// <typeparam name="Tprop">The return type of the executed expression.</typeparam>
+        /// <param name="expression">The expression to execute.</param>
+        /// <param name="configuration">The optional configuration to control how the expression is executed.
+        /// If not provided, the GlobalConfiguration is used (if defined), otherwise a default configuration.</param>
         /// <returns></returns>
         /// <exception cref="InvalidConfigurationException"></exception>
         public static async Task<JobHandle> SubmitJobAsync<Tprop>(
@@ -220,11 +226,30 @@ namespace DidoNet
             throw new NotImplementedException();
         }
 
+        /// <summary>
+        /// Query the status and result for the indicated job.
+        /// </summary>
+        /// <typeparam name="Tprop">The return type of the executed expression.</typeparam>
+        /// <param name="jobHandle">The job handle returned by SubmitJobAsync.</param>
+        /// <param name="configuration">The optional configuration to control how the expression is executed.
+        /// If not provided, the GlobalConfiguration is used (if defined), otherwise a default configuration.</param>
+        /// <returns></returns>
         public static Task<JobResult<Tprop>> QueryJobAsync<Tprop>(JobHandle jobHandle, Configuration? configuration = null)
         {
             return QueryJobAsync<Tprop>(jobHandle.JobId, configuration);
         }
 
+        /// <summary>
+        /// Query the status and result for the indicated job.
+        /// </summary>
+        /// <typeparam name="Tprop">The return type of the executed expression.</typeparam>
+        /// <param name="jobId">The id of the job executing an expression previously started with SubmitJobAsync.</param>
+        /// <param name="configuration">The optional configuration to control how the expression is executed.
+        /// If not provided, the GlobalConfiguration is used (if defined), otherwise a default configuration.</param>
+        /// <returns></returns>
+        /// <exception cref="InvalidConfigurationException"></exception>
+        /// <exception cref="JobNotFoundException"></exception>
+        /// <exception cref="UnhandledMessageException"></exception>
         public static async Task<JobResult<Tprop>> QueryJobAsync<Tprop>(string jobId, Configuration? configuration = null)
         {
             configuration ??= GlobalConfiguration ?? new Configuration();
@@ -308,11 +333,27 @@ namespace DidoNet
             }
         }
 
+        /// <summary>
+        /// Cancel and delete the indicated job.
+        /// </summary>
+        /// <param name="jobHandle">The job handle returned by SubmitJobAsync.</param>
+        /// <param name="configuration">The optional configuration to control how the expression is executed.
+        /// If not provided, the GlobalConfiguration is used (if defined), otherwise a default configuration.</param>
+        /// <returns></returns>
         public static Task DeleteJobAsync(JobHandle jobHandle, Configuration? configuration = null)
         {
             return DeleteJobAsync(jobHandle.JobId, configuration);
         }
 
+        /// <summary>
+        /// Cancel and delete the indicated job.
+        /// </summary>
+        /// <param name="jobId">The id of the job executing an expression previously started with SubmitJobAsync.</param>
+        /// <param name="configuration">The optional configuration to control how the expression is executed.
+        /// If not provided, the GlobalConfiguration is used (if defined), otherwise a default configuration.</param>
+        /// <returns></returns>
+        /// <exception cref="InvalidConfigurationException"></exception>
+        /// <exception cref="UnhandledMessageException"></exception>
         public static async Task DeleteJobAsync(string jobId, Configuration? configuration = null)
         {
             configuration ??= GlobalConfiguration ?? new Configuration();
@@ -348,11 +389,27 @@ namespace DidoNet
             }
         }
 
+        /// <summary>
+        /// Cancel the indicated job.
+        /// </summary>
+        /// <param name="jobHandle">The job handle returned by SubmitJobAsync.</param>
+        /// <param name="configuration">The optional configuration to control how the expression is executed.
+        /// If not provided, the GlobalConfiguration is used (if defined), otherwise a default configuration.</param>
+        /// <returns></returns>
         public static Task CancelJobAsync(JobHandle jobHandle, Configuration? configuration = null)
         {
             return CancelJobAsync(jobHandle.JobId, configuration);
         }
 
+        /// <summary>
+        /// Cancel the indicated job.
+        /// </summary>
+        /// <param name="jobId">The id of the job executing an expression previously started with SubmitJobAsync.</param>
+        /// <param name="configuration">The optional configuration to control how the expression is executed.
+        /// If not provided, the GlobalConfiguration is used (if defined), otherwise a default configuration.</param>
+        /// <returns></returns>
+        /// <exception cref="InvalidConfigurationException"></exception>
+        /// <exception cref="UnhandledMessageException"></exception>
         public static async Task CancelJobAsync(string jobId, Configuration? configuration = null)
         {
             configuration ??= GlobalConfiguration ?? new Configuration();
@@ -389,10 +446,14 @@ namespace DidoNet
         }
 
         /// <summary>
-        /// Execute the provided expression as a task in a remote environment, regardless of the value of configuration.ExecutionMode.
+        /// Execute the provided expression as a task in a remote environment using the provided configuration,
+        /// but regardless of the value of configuration.ExecutionMode.
         /// </summary>
-        /// <typeparam name="Tprop"></typeparam>
-        /// <param name="expression"></param>
+        /// <typeparam name="Tprop">The return type of the executed expression.</typeparam>
+        /// <param name="expression">The expression to execute.</param>
+        /// <param name="configuration">The optional configuration to control how the expression is executed.
+        /// If not provided, the GlobalConfiguration is used (if defined), otherwise a default configuration.</param>
+        /// <param name="cancellationToken">An optional cancellation token to cancel execution of the expression.</param>
         /// <returns></returns>
         /// <exception cref="InvalidOperationException"></exception>
         public static async Task<Tprop> RunRemoteAsync<Tprop>(
@@ -449,10 +510,11 @@ namespace DidoNet
         /// <summary>
         /// Execute the provided expression as a task in a remote environment.
         /// </summary>
-        /// <typeparam name="Tprop"></typeparam>
-        /// <param name="expression"></param>
-        /// <param name="configuration"></param>
-        /// <param name="cancellationToken"></param>
+        /// <typeparam name="Tprop">The return type of the executed expression.</typeparam>
+        /// <param name="expression">The expression to execute.</param>
+        /// <param name="configuration">The optional configuration to control how the expression is executed.
+        /// If not provided, the GlobalConfiguration is used (if defined), otherwise a default configuration.</param>
+        /// <param name="cancellationToken">An optional cancellation token to cancel execution of the expression.</param>
         /// <returns></returns>
         /// <exception cref="TaskGeneralException"></exception>
         /// <exception cref="TaskDeserializationException"></exception>
@@ -464,7 +526,6 @@ namespace DidoNet
             CancellationToken cancellationToken)
         {
             // choose a runner to execute the expression
-            //(Uri runnerUri, string _) = SelectRunner(configuration);
             var runnerUri = SelectRunner(configuration, false);
 
             var connectionSettings = new ClientConnectionSettings
@@ -498,7 +559,7 @@ namespace DidoNet
                 var responseSource = new TaskCompletionSource<IMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
                 tasksChannel.OnMessageReceived = (message, channel) =>
                 {
-                    responseSource.SetResult(message);
+                    responseSource.TrySetResult(message);
                 };
 
                 // kickoff the remote task by serializing the expression and transmitting it to the runner
@@ -535,28 +596,14 @@ namespace DidoNet
             }
         }
 
-        public class JobHandle : IDisposable
-        {
-            public string JobId { get; set; }
-
-            internal ClientConnectionSettings ConnectionSettings { get; set; }
-            internal Connection RunnerConnection { get; set; }
-            internal MessageChannel AssembliesChannel { get; set; }
-            internal ApplicationIOProxy IOProxy { get; set; }
-
-            public void Dispose()
-            {
-                RunnerConnection.Dispose();
-            }
-        }
-
         /// <summary>
         /// Execute the provided expression as a task on a remote runner,
         /// but control and track its life cycle and result as a job in a mediator.
         /// </summary>
-        /// <typeparam name="Tprop"></typeparam>
-        /// <param name="expression"></param>
-        /// <param name="Configuration"></param>
+        /// <typeparam name="Tprop">The return type of the executed expression.</typeparam>
+        /// <param name="expression">The expression to execute.</param>
+        /// <param name="configuration">The optional configuration to control how the expression is executed.
+        /// If not provided, the GlobalConfiguration is used (if defined), otherwise a default configuration.</param>
         /// <returns></returns>
         /// <exception cref="TaskGeneralException"></exception>
         /// <exception cref="TaskDeserializationException"></exception>
@@ -601,7 +648,7 @@ namespace DidoNet
                 var responseSource = new TaskCompletionSource<IMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
                 tasksChannel.OnMessageReceived = (message, channel) =>
                 {
-                    responseSource.SetResult(message);
+                    responseSource.TrySetResult(message);
                 };
 
                 // kickoff the remote task by serializing the expression and transmitting it to the runner.
@@ -651,8 +698,11 @@ namespace DidoNet
         /// all serialization requirements and all assemblies can be resolved and loaded into
         /// a temporary AssemblyLoadContext.
         /// </summary>
-        /// <typeparam name="Tprop"></typeparam>
-        /// <param name="expression"></param>
+        /// <typeparam name="Tprop">The return type of the executed expression.</typeparam>
+        /// <param name="expression">The expression to execute.</param>
+        /// <param name="configuration">The optional configuration to control how the expression is executed.
+        /// If not provided, the GlobalConfiguration is used (if defined), otherwise a default configuration.</param>
+        /// <param name="cancellationToken">An optional cancellation token to cancel execution of the expression.</param>
         /// <returns></returns>
         internal static async Task<Tprop> DebugRunLocalAsync<Tprop>(
             Expression<Func<ExecutionContext, Tprop>> expression,
@@ -740,8 +790,11 @@ namespace DidoNet
         /// Optimized for release builds: perform local mode execution of the provided expression
         /// by directly compiling and invoking it.
         /// </summary>
-        /// <typeparam name="Tprop"></typeparam>
-        /// <param name="expression"></param>
+        /// <typeparam name="Tprop">The return type of the executed expression.</typeparam>
+        /// <param name="expression">The expression to execute.</param>
+        /// <param name="configuration">The optional configuration to control how the expression is executed.
+        /// If not provided, the GlobalConfiguration is used (if defined), otherwise a default configuration.</param>
+        /// <param name="cancellationToken">An optional cancellation token to cancel execution of the expression.</param>
         /// <returns></returns>
         internal static async Task<Tprop> ReleaseRunLocalAsync<Tprop>(
             Expression<Func<ExecutionContext, Tprop>> expression,
@@ -775,12 +828,13 @@ namespace DidoNet
         /// Selects a suitable remote runner to execute a task based on the provided configuration.
         /// Throws an exception if a runner could not be obtained.
         /// </summary>
-        /// <param name="configuration"></param>
-        /// <param name="asJob"></param>
+        /// <param name="configuration">The optional configuration to control how the expression is executed.
+        /// If not provided, the GlobalConfiguration is used (if defined), otherwise a default configuration.</param>
+        /// <param name="forceSelectFromMediator">If true, select a runner from the mediator, regardless if
+        /// a runner is explicitly configured in the configuration</param>
         /// <returns></returns>
         /// <exception cref="RunnerNotAvailableException"></exception>
         /// <exception cref="UnhandledMessageException"></exception>
-        //internal static (Uri endpoint, string jobId) SelectRunner(Configuration configuration, bool asJob = false)
         internal static Uri SelectRunner(Configuration configuration, bool forceSelectFromMediator)
         {
             // prefer the explicitly provided runner...

@@ -516,7 +516,7 @@ namespace DidoNet
 
             if (SecureStream != null)
             {
-                // send a heartbeat frame at least twice as frequent as the timeout to keep the connection active
+                // send a heartbeat frame at least twice as frequently as the timeout to keep the connection active
                 HeartbeatTimer = new Timer(
                     (arg) => Interlocked.Exchange(ref HeartbeatPending, 1),
                     null,

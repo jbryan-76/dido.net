@@ -119,6 +119,7 @@ namespace DidoNet.Test.Servers
 
             // cleanup
             await Dido.DeleteJobAsync(jobHandle, configuration);
+            jobHandle.Dispose();
             runnerServer.DeleteCache();
             runnerServer.Dispose();
             mediatorServer.Dispose();
@@ -185,6 +186,7 @@ namespace DidoNet.Test.Servers
 
             // cleanup
             await Dido.DeleteJobAsync(jobHandle, configuration);
+            jobHandle.Dispose();
             runnerServer.DeleteCache();
             runnerServer.Dispose();
             mediatorServer.Dispose();
@@ -254,6 +256,7 @@ namespace DidoNet.Test.Servers
 
             // cleanup
             await Dido.DeleteJobAsync(jobHandle, configuration);
+            jobHandle.Dispose();
             runnerServer.DeleteCache();
             runnerServer.Dispose();
             mediatorServer.Dispose();
@@ -321,6 +324,7 @@ namespace DidoNet.Test.Servers
 
             // cleanup
             await Dido.DeleteJobAsync(jobHandle, configuration);
+            jobHandle.Dispose();
             runnerServer.DeleteCache();
             runnerServer.Dispose();
             mediatorServer.Dispose();
@@ -391,6 +395,7 @@ namespace DidoNet.Test.Servers
 
             // cleanup
             await Dido.DeleteJobAsync(jobHandle, configuration);
+            jobHandle.Dispose();
             mediatorServer.Dispose();
         }
 

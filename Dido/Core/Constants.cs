@@ -2,17 +2,9 @@
 
 namespace DidoNet
 {
-    internal class JobStatusValues
-    {
-        //internal const string Pending = "pending";
-        internal const string Running = "running";
-        internal const string Complete = "complete";
-        internal const string Cancelled = "cancelled";
-        internal const string Error = "error";
-        internal const string Timeout = "timeout";
-        internal const string Abandoned = "abandoned";
-    }
-
+    /// <summary>
+    /// Compile-time constant values.
+    /// </summary>
     internal class Constants
     {
         /// <summary>
