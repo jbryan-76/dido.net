@@ -80,7 +80,7 @@ namespace DidoNet.Test
                 var configuration = new Configuration
                 {
                     MaxTries = TestFixture.Configuration.MaxTries,
-                    TimeoutInMs = 500,
+                    TaskTimeout = 500,
                     RunnerUri = TestFixture.Configuration.RunnerUri,
                     ExecutionMode = TestFixture.Configuration.ExecutionMode,
                     ResolveLocalAssemblyAsync = TestFixture.Configuration.ResolveLocalAssemblyAsync
@@ -162,7 +162,7 @@ namespace DidoNet.Test
                 var configuration = new Configuration
                 {
                     MaxTries = TestFixture.Configuration.MaxTries,
-                    TimeoutInMs = 500,
+                    TaskTimeout = 500,
                     RunnerUri = TestFixture.Configuration.RunnerUri,
                     ExecutionMode = TestFixture.Configuration.ExecutionMode,
                     ResolveLocalAssemblyAsync = TestFixture.Configuration.ResolveLocalAssemblyAsync

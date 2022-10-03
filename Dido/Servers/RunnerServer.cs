@@ -149,19 +149,29 @@ namespace DidoNet
                     Thumbprint = Configuration.ServerCertificateThumbprint
                 };
 
-                // create a secure connection to the optional mediator
+                // create a secure connection to the mediator
                 var uri = new Uri(Configuration.MediatorUri);
                 MediatorConnection = new Connection(uri!.Host, uri.Port, null, connectionSettings);
                 MediatorChannel = new MessageChannel(MediatorConnection, Constants.MediatorRunner_ChannelId);
 
-                // announce this runner to the mediator
+                // announce this runner to the mediator and receive its single response message
                 MediatorChannel.Send(new RunnerStartMessage(Configuration.Id, Configuration.Endpoint.ToString(),
                     Configuration.MaxTasks, Configuration.MaxQueue, Configuration.Label, Configuration.Tags));
+                var message = MediatorChannel.ReceiveMessage(Configuration.CommunicationsTimeout);
+                switch (message)
+                {
+                    case DuplicateRunnerMessage duplicate:
+                        throw new DuplicateRunnerException();
+                    case AcknowledgedMessage ack:
+                        // this is the only valid expected response message indicating the runner is ok to continue startup
+                        break;
+                    default:
+                        throw new UnhandledMessageException(message);
+                }
+
                 MediatorChannel.Send(new RunnerStatusMessage(RunnerStates.Starting, 0, 0));
 
-                // TODO: receive the response. if error, kill the runner, else proceed
-
-                // TODO: start an infrequent (eg 60s) heartbeat to mediator to update status and environment stats (eg cpu, ram)?
+                // TODO: start an infrequent (eg 60s) heartbeat to mediator to update status and environment stats (eg cpu, ram) to aid load-balancing runner selection?
 
                 // start listening for messages from the mediator
                 MediatorChannel.OnMessageReceived = async (message, channel) => await MediatorChannelMessageHandler(message, channel);
@@ -337,7 +347,7 @@ namespace DidoNet
                 TaskTypeMessage taskTypeMessage = new TaskTypeMessage();
                 using (var controlChannel = new MessageChannel(connection, Constants.AppRunner_ControlChannelId))
                 {
-                    taskTypeMessage = controlChannel.ReceiveMessage<TaskTypeMessage>();
+                    taskTypeMessage = controlChannel.ReceiveMessage<TaskTypeMessage>(Configuration.CommunicationsTimeout);
                 }
 
                 // TODO: if the connection is reconnecting to an existing runner, find and update the worker
@@ -436,7 +446,7 @@ namespace DidoNet
             if (!string.IsNullOrEmpty(worker.Request?.JobId))
             {
                 // if the task is in "job" mode, inform the mediator that it started
-                MediatorChannel?.Send(new JobStartMessage(Configuration.Id, worker.Request.JobId));
+                MediatorChannel?.Send(new JobStartMessage(Configuration.Id, worker.Request.JobId, worker.TaskStarted));
                 // TODO: receive confirmation
             }
         }
@@ -451,10 +461,12 @@ namespace DidoNet
             {
                 // if the task is in "job" mode, send the result to the mediator only if the runner
                 // is still running (if it's not running, the worker probably completed prematurely
-                // when the work thread was stopped and all tasks cancelled)
+                // when the work thread was stopped and all tasks were cancelled)
                 if (Interlocked.Read(ref IsRunning) == 1)
                 {
-                    MediatorChannel?.Send(new JobCompleteMessage(Configuration.Id, worker.Request.JobId, worker.Result!));
+                    MediatorChannel?.Send(
+                        new JobCompleteMessage(Configuration.Id, worker.Request.JobId, worker.Result!, worker.TaskStarted, worker.TaskStopped)
+                    );
                 }
             }
 

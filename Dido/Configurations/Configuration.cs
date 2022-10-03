@@ -33,11 +33,12 @@ namespace DidoNet
         /// </summary>
         public int MaxTries { get; set; } = 3;
 
+        // TODO: make this a TimeSpan instead
         /// <summary>
         /// How long (in milliseconds) to wait before canceling a task
         /// and throwing a TimeoutException.
         /// </summary>
-        public int TimeoutInMs { get; set; } = Timeout.Infinite;
+        public int TaskTimeout { get; set; } = Timeout.Infinite;
 
         /// <summary>
         /// The default mode that will be used for executing tasks when using Run() or RunAsync().
@@ -115,9 +116,9 @@ namespace DidoNet
         public string DebugCachePath { get; set; } = string.Empty;
 
         /// <summary>
-        /// The maximum time to wait when communicating with the mediator before throwing a TimeoutException.
+        /// The maximum time to wait for a response from a remote connection before throwing a TimeoutException.
         /// </summary>
-        public TimeSpan MediatorTimeout { get; set; } = TimeSpan.FromSeconds(10);
+        public TimeSpan CommunicationsTimeout { get; set; } = TimeSpan.FromSeconds(10);
 
         /// <summary>
         /// Gets the actual assembly caching policy to use, interpreting the 'Auto' option as necessary.

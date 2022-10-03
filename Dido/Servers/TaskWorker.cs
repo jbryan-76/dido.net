@@ -32,6 +32,16 @@ namespace DidoNet
         public IMessage? Result { get; private set; }
 
         /// <summary>
+        /// Timestamp for when a task starts execution.
+        /// </summary>
+        public DateTime TaskStarted { get; private set; }
+
+        /// <summary>
+        /// Timestamp for when a task stops execution.
+        /// </summary>
+        public DateTime TaskStopped { get; private set; }
+
+        /// <summary>
         /// The configuration of the runner that is executing this task.
         /// </summary>
         private RunnerConfiguration Configuration { get; set; }
@@ -65,16 +75,6 @@ namespace DidoNet
         /// The class logger instance.
         /// </summary>
         private readonly ILogger Logger = LogManager.GetCurrentClassLogger();
-
-        /// <summary>
-        /// Timestamp for when a task starts.
-        /// </summary>
-        private DateTime TaskStarted;
-
-        /// <summary>
-        /// Timestamp for when a task stops.
-        /// </summary>
-        private DateTime TaskStopped;
 
         /// <summary>
         /// Create a new worker to process application task requests on the provided connection.
@@ -157,9 +157,9 @@ namespace DidoNet
             }
             finally
             {
-                OnComplete?.Invoke(this);
                 TaskStopped = DateTime.UtcNow;
                 Logger.Info($"Worker task {Id} finished. Elapsed = {(TaskStopped - TaskStarted)}");
+                OnComplete?.Invoke(this);
             }
         }
 
@@ -181,11 +181,6 @@ namespace DidoNet
             // TODO: for untethered tasks these channels will need to be recreated.
             var tasksChannel = new MessageChannel(Connection, Constants.AppRunner_TaskChannelId);
             var assembliesChannel = new MessageChannel(Connection, Constants.AppRunner_AssemblyChannelId);
-
-            // TODO: if the task is a job, send periodic heartbeat updates
-            // TODO: create separate mediatorJobChannel
-            //var jobsChannel = new MessageChannel(Connection, Constants.MediatorRunnerJobs_ChannelId);
-            //var mediatorChannel = 
 
             // set up a handler to process other task-related messages.
             // NOTE: this handler runs in a separate thread
@@ -288,10 +283,13 @@ namespace DidoNet
 
                     // if the task request is a job, notify the application that task processing is starting normally.
                     // the application will then need to interact with the job via the mediator using the jobs API,
-                    // but will receive no more traffic on the tasks channel
+                    // but will receive no more traffic on the tasks channel.
+                    // NOTE: although the application is notified that the task is starting, the task may not have
+                    // all the assemblies it needs. Part of the stipulation of using the jobs API is that the application
+                    // must remain online/connected after submitting a job for at least a minimum amount of time so
+                    // the necessary assemblies can be transferred.
                     if (isJob)
                     {
-                        // TODO: don't send this back until after the assemblies come over?
                         tasksChannel.Send(new AcknowledgedMessage());
                     }
 

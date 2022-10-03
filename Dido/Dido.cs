@@ -274,7 +274,7 @@ namespace DidoNet
                 mediatorChannel.Send(new JobQueryMessage(jobId));
 
                 // receive and process the response
-                var message = mediatorChannel.ReceiveMessage(configuration.MediatorTimeout);
+                var message = mediatorChannel.ReceiveMessage(configuration.CommunicationsTimeout);
                 switch (message)
                 {
                     case JobNotFoundMessage notFound:
@@ -378,7 +378,7 @@ namespace DidoNet
                 mediatorChannel.Send(new JobDeleteMessage(jobId));
 
                 // receive and process the response
-                var message = mediatorChannel.ReceiveMessage(configuration.MediatorTimeout);
+                var message = mediatorChannel.ReceiveMessage(configuration.CommunicationsTimeout);
                 switch (message)
                 {
                     case AcknowledgedMessage ack:
@@ -434,7 +434,7 @@ namespace DidoNet
                 mediatorChannel.Send(new JobCancelMessage(jobId));
 
                 // receive and process the response
-                var message = mediatorChannel.ReceiveMessage(configuration.MediatorTimeout);
+                var message = mediatorChannel.ReceiveMessage(configuration.CommunicationsTimeout);
                 switch (message)
                 {
                     case AcknowledgedMessage ack:
@@ -569,7 +569,7 @@ namespace DidoNet
                     configuration.GetActualAssemblyCachingPolicy(),
                     configuration.CachedAssemblyEncryptionKey,
                     string.Empty,
-                    configuration.TimeoutInMs);
+                    configuration.TaskTimeout);
                 tasksChannel.Send(requestMessage);
 
                 // when the cancellation token is canceled, send a cancel message to the runner
@@ -660,7 +660,7 @@ namespace DidoNet
                     configuration.GetActualAssemblyCachingPolicy(),
                     configuration.CachedAssemblyEncryptionKey,
                     jobId,
-                    configuration.TimeoutInMs);
+                    configuration.TaskTimeout);
                 tasksChannel.Send(requestMessage);
 
                 // wait until a response is received
@@ -768,7 +768,7 @@ namespace DidoNet
                     // run the expression with the optional configured timeout and return its result
                     var result = await Task
                         .Run(() => func.Invoke(context))
-                        .TimeoutAfter(TimeSpan.FromMilliseconds(configuration.TimeoutInMs));
+                        .TimeoutAfter(TimeSpan.FromMilliseconds(configuration.TaskTimeout));
                     cancellationToken.ThrowIfCancellationRequested();
                     return result;
                 }
@@ -819,7 +819,7 @@ namespace DidoNet
             // run the expression with the optional configured timeout and return its result
             var result = await Task
                 .Run(() => func.Invoke(context))
-                .TimeoutAfter(TimeSpan.FromMilliseconds(configuration.TimeoutInMs));
+                .TimeoutAfter(TimeSpan.FromMilliseconds(configuration.TaskTimeout));
             cancellationToken.ThrowIfCancellationRequested();
             return result;
         }
@@ -858,7 +858,7 @@ namespace DidoNet
                     mediatorChannel.Send(new RunnerRequestMessage(configuration.RunnerOSPlatforms, configuration.RunnerLabel, configuration.RunnerTags));//, asJob);
 
                     // receive and process the response
-                    var message = mediatorChannel.ReceiveMessage(configuration.MediatorTimeout);
+                    var message = mediatorChannel.ReceiveMessage(configuration.CommunicationsTimeout);
                     switch (message)
                     {
                         case RunnerResponseMessage response:

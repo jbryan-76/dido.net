@@ -341,7 +341,7 @@ namespace DidoNet.Test.Servers
             var configuration = new Configuration
             {
                 MaxTries = 1,
-                TimeoutInMs = 500,
+                TaskTimeout = 500,
                 RunnerUri = new Uri($"https://localhost:{port}"),
                 ExecutionMode = ExecutionModes.Remote,
                 // use the unit test assembly resolver instead of the default implementation
@@ -502,6 +502,62 @@ namespace DidoNet.Test.Servers
             // cleanup
             runnerServer.DeleteCache();
             runnerServer.Dispose();
+            mediatorServer.Dispose();
+        }
+
+        /// <summary>
+        /// Confirms that attempting to register multiple runners with the same id to a single mediator
+        /// will throw an exception.
+        /// </summary>
+        [Fact]
+        public void DuplicateRunners()
+        {
+            // create and start a secure localhost loop-back mediator server that can orchestrate runners
+            var mediatorServer = new MediatorServer();
+            int mediatorPort = GetNextAvailablePort();
+            mediatorServer.Start(TestSelfSignedCert.ServerCertificate, mediatorPort, IPAddress.Loopback);
+
+            var runnerId = Guid.NewGuid().ToString();
+
+            // create and start a first localhost loop-back runner server that registers to the mediator
+            var runner1Port = GetNextAvailablePort();
+            var runner1Server = new RunnerServer(new RunnerConfiguration
+            {
+                Id = runnerId,
+                Endpoint = new UriBuilder("https", "localhost", runner1Port).Uri.ToString(),
+                MediatorUri = new UriBuilder("https", "localhost", mediatorPort).Uri.ToString(),
+                // bypass server cert validation since unit tests are using a base-64 self-signed cert
+                ServerValidationPolicy = ServerCertificateValidationPolicies._SKIP_
+            });
+            runner1Server.Start(TestSelfSignedCert.ServerCertificate, runner1Port, IPAddress.Loopback);
+
+            // wait for the runner to reach a "ready" state in the mediator
+            while (mediatorServer.RunnerPool.Count == 0 || mediatorServer.RunnerPool.First().State != RunnerStates.Ready)
+            {
+                Thread.Sleep(1);
+            }
+
+            // create and attempt to start a second localhost loop-back runner server with the same id as the first.
+            var runner2Port = GetNextAvailablePort();
+            var runner2Server = new RunnerServer(new RunnerConfiguration
+            {
+                Id = runnerId,
+                Endpoint = new UriBuilder("https", "localhost", runner2Port).Uri.ToString(),
+                MediatorUri = new UriBuilder("https", "localhost", mediatorPort).Uri.ToString(),
+                // bypass server cert validation since unit tests are using a base-64 self-signed cert
+                ServerValidationPolicy = ServerCertificateValidationPolicies._SKIP_
+            });
+
+            // confirm the second runner fails during startup registration with the mediator
+            // (because another runner already exists with the same id)
+            Assert.Throws<DuplicateRunnerException>(() =>
+            {
+                runner2Server.Start(TestSelfSignedCert.ServerCertificate, runner2Port, IPAddress.Loopback);
+            });
+
+            // cleanup
+            runner1Server.Dispose();
+            runner2Server.Dispose();
             mediatorServer.Dispose();
         }
 

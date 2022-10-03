@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
 
 namespace DidoNet
 {
@@ -8,7 +9,17 @@ namespace DidoNet
 
         public string JobId { get; set; } = string.Empty;
 
-        //public string ResultMessageType { get; set; } = string.Empty;
+        public DateTime Started
+        {
+            get { return DateTime.FromBinary(_startTime); }
+            set { _startTime = value.ToBinary(); }
+        }
+
+        public DateTime Finished
+        {
+            get { return DateTime.FromBinary(_finishTime); }
+            set { _finishTime = value.ToBinary(); }
+        }
 
         public byte[] ResultMessageBytes { get; set; } = new byte[0];
 
@@ -18,38 +29,21 @@ namespace DidoNet
             {
                 if (_message == null && ResultMessageBytes.Length > 0)
                 {
-                    //var type = Type.GetType(ResultMessageType);
-                    //if (type == null)
-                    //{
-                    //    throw new InvalidOperationException($"Unknown message type '{type}'");
-                    //}
-                    //var message = Activator.CreateInstance(type) as IMessage;
-                    //if (message == null)
-                    //{
-                    //    throw new InvalidOperationException($"Cannot create instance of message type '{ResultMessageType}'");
-                    //}
                     using (var stream = new MemoryStream(ResultMessageBytes))
                     {
                         _message = stream.ReadMessage();
-                        //message.Read(stream);
                     }
-                    //_message = message;
                 }
                 return _message;
             }
             set
             {
                 _message = value;
-                //if (_message != null)
-                //{
-                //var type = value.GetType();
-                //ResultMessageType = type.AssemblyQualifiedName!;
                 if (_message != null)
                 {
                     using (var stream = new MemoryStream())
                     {
                         stream.WriteMessage(_message);
-                        //value.Write(stream);
                         ResultMessageBytes = stream.ToArray();
                     }
                 }
@@ -57,7 +51,6 @@ namespace DidoNet
                 {
                     ResultMessageBytes = new byte[0];
                 }
-                //}
             }
         }
 
@@ -66,19 +59,24 @@ namespace DidoNet
         public JobCompleteMessage(
             string runnerId,
             string jobId,
-            IMessage result)
+            IMessage result,
+            DateTime started,
+            DateTime finished)
         {
             RunnerId = runnerId;
             JobId = jobId;
             ResultMessage = result;
+            Started = started;
+            Finished = finished;
         }
 
         public void Read(Stream stream)
         {
             RunnerId = stream.ReadString();
             JobId = stream.ReadString();
-            //ResultMessageType = stream.ReadString();
             ResultMessageBytes = stream.ReadByteArray();
+            _startTime = stream.ReadInt64BE();
+            _finishTime = stream.ReadInt64BE();
             _message = null;
         }
 
@@ -86,10 +84,13 @@ namespace DidoNet
         {
             stream.WriteString(RunnerId);
             stream.WriteString(JobId);
-            //stream.WriteString(ResultMessageType);
             stream.WriteByteArray(ResultMessageBytes);
+            stream.WriteInt64BE(_startTime);
+            stream.WriteInt64BE(_finishTime);
         }
 
         private IMessage? _message;
+        private long _startTime { get; set; }
+        private long _finishTime { get; set; }
     }
 }

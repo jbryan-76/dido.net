@@ -4,7 +4,7 @@ using System;
 namespace DidoNet
 {
     /// <summary>
-    /// Encapsulates the internal state for a job executing an expression on a remote runner.
+    /// Encapsulates the internal state for an expression executing as a job on a remote runner.
     /// </summary>
     public class JobHandle : IDisposable
     {
@@ -13,15 +13,24 @@ namespace DidoNet
         /// </summary>
         public string JobId { get; set; }
 
-        // TODO: add an event delegate invoked when the job completes using a completion source?
-        // TODO: SetJobHandler(id,handler) => invoke handler when job is done (either polling background thread or use MQ)
-
+        /// <summary>
+        /// The connection settings used to connect the application to the runner.
+        /// </summary>
         internal ClientConnectionSettings ConnectionSettings { get; set; }
 
+        /// <summary>
+        /// The connection from the application to the runner.
+        /// </summary>
         internal Connection RunnerConnection { get; set; }
         
+        /// <summary>
+        /// The assemblies communications channel from the application to the runner.
+        /// </summary>
         internal MessageChannel AssembliesChannel { get; set; }
         
+        /// <summary>
+        /// The application IO proxy to handle IO requests from a remotely executing task.
+        /// </summary>
         internal ApplicationIOProxy IOProxy { get; set; }
 
         public void Dispose()

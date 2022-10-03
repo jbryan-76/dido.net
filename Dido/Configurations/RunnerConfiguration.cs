@@ -93,6 +93,11 @@ namespace DidoNet
         public bool DeleteCacheAtShutdown { get; set; } = false;
 
         /// <summary>
+        /// The maximum time to wait for a response from a remote connection before throwing a TimeoutException.
+        /// </summary>
+        public TimeSpan CommunicationsTimeout { get; set; } = TimeSpan.FromSeconds(10);
+
+        /// <summary>
         /// A local file-system path used to cache application assemblies used by the runner.
         /// </summary>
         internal string? AssemblyCachePath { get; set; } = null;

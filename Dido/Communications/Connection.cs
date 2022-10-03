@@ -310,9 +310,8 @@ namespace DidoNet
         }
 
         /// <summary>
-        /// Cleans up and disposes all managed and unmanaged resources.
+        /// <inheritdoc/> 
         /// </summary>
-        /// <exception cref="AggregateException"></exception>
         public void Dispose()
         {
             // cleanly shutdown all channels and processing threads

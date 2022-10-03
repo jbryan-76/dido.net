@@ -11,6 +11,8 @@ using Xunit.Abstractions;
 
 namespace DidoNet.Test.Servers
 {
+    // TODO: JobStoreTests
+
     public class JobApiTests : IClassFixture<TestFixture>
     {
         static long NextPort = 9200;
@@ -33,9 +35,9 @@ namespace DidoNet.Test.Servers
             //Console.SetOut(converter);
         }
 
-        static class BusyLoopWithCancellation
+        static class SampleExpressions
         {
-            public static bool DoFakeWork(ExecutionContext context)
+            public static bool BusyLoopWithCancellation(ExecutionContext context)
             {
                 while (!context.Cancel.IsCancellationRequested)
                 {
@@ -43,14 +45,16 @@ namespace DidoNet.Test.Servers
                 }
                 return true;
             }
-        }
 
-        static class SleepThenException
-        {
-            public static bool DoFakeWork(string message)
+            public static bool SleepThenException(string message)
             {
                 Thread.Sleep(250);
                 throw new InvalidOperationException(message);
+            }
+
+            public static string ReturnArgument(string message)
+            {
+                return message;
             }
         }
 
@@ -117,8 +121,16 @@ namespace DidoNet.Test.Servers
             Assert.Equal(JobStatus.Complete, result.Status);
             Assert.Equal(expectedResult, result.Result);
 
-            // cleanup
+            // delete the job
             await Dido.DeleteJobAsync(jobHandle, configuration);
+
+            // confirm the job no longer exists
+            await Assert.ThrowsAsync<JobNotFoundException>(async () =>
+            {
+                await Dido.QueryJobAsync<int>(jobHandle, configuration);
+            });
+
+            // cleanup
             jobHandle.Dispose();
             runnerServer.DeleteCache();
             runnerServer.Dispose();
@@ -169,7 +181,7 @@ namespace DidoNet.Test.Servers
             // execute the fake work expression using the jobs interface
             var message = Guid.NewGuid().ToString();
             var jobHandle = await Dido.SubmitJobAsync<bool>(
-                (context) => SleepThenException.DoFakeWork(message),
+                (context) => SampleExpressions.SleepThenException(message),
                 configuration);
 
             // check on the job periodically until it completes
@@ -236,7 +248,7 @@ namespace DidoNet.Test.Servers
             // execute the fake work expression using the jobs interface
             var message = Guid.NewGuid().ToString();
             var jobHandle = await Dido.SubmitJobAsync<bool>(
-                (context) => BusyLoopWithCancellation.DoFakeWork(context),
+                (context) => SampleExpressions.BusyLoopWithCancellation(context),
                 configuration);
 
             // give the job a moment to spin up, then cancel it
@@ -298,7 +310,7 @@ namespace DidoNet.Test.Servers
                 MaxTries = 1,
                 MediatorUri = new UriBuilder("https", "localhost", mediatorPort).Uri,
                 ExecutionMode = ExecutionModes.Remote,
-                TimeoutInMs = 500,
+                TaskTimeout = 500,
                 // use the unit test assembly resolver instead of the default implementation
                 ResolveLocalAssemblyAsync = (assemblyName) => TestFixture.AssemblyResolver.ResolveAssembly(TestFixture.Environment, assemblyName, out _),
                 // bypass server cert validation since unit tests are using a base-64 self-signed cert
@@ -308,7 +320,7 @@ namespace DidoNet.Test.Servers
             // execute the fake work expression using the jobs interface
             var message = Guid.NewGuid().ToString();
             var jobHandle = await Dido.SubmitJobAsync<bool>(
-                (context) => BusyLoopWithCancellation.DoFakeWork(context),
+                (context) => SampleExpressions.BusyLoopWithCancellation(context),
                 configuration);
 
             // check on the job periodically until it completes
@@ -374,7 +386,7 @@ namespace DidoNet.Test.Servers
             // execute the fake work expression using the jobs interface
             var message = Guid.NewGuid().ToString();
             var jobHandle = await Dido.SubmitJobAsync<bool>(
-                (context) => BusyLoopWithCancellation.DoFakeWork(context),
+                (context) => SampleExpressions.BusyLoopWithCancellation(context),
                 configuration);
 
             // give the job a moment to spin up, then kill the runner
@@ -396,6 +408,90 @@ namespace DidoNet.Test.Servers
             // cleanup
             await Dido.DeleteJobAsync(jobHandle, configuration);
             jobHandle.Dispose();
+            mediatorServer.Dispose();
+        }
+
+        [Fact]
+        public async void DeleteExpiredJobs()
+        {
+            // create and start a secure localhost loop-back mediator server that can orchestrate runners,
+            // configured to delete finished jobs after a few seconds
+            var mediatorServer = new MediatorServer(new MediatorConfiguration
+            {
+                JobLifetime = TimeSpan.FromSeconds(3),
+                JobExpirationFrequency = TimeSpan.FromSeconds(1)
+            });
+            int mediatorPort = GetNextAvailablePort();
+            mediatorServer.Start(TestSelfSignedCert.ServerCertificate, mediatorPort, IPAddress.Loopback);
+
+            // create and start a secure localhost loop-back runner server that registers to the mediator
+            var runnerPort = GetNextAvailablePort();
+            var runnerServer = new RunnerServer(new RunnerConfiguration
+            {
+                Endpoint = new UriBuilder("https", "localhost", runnerPort).Uri.ToString(),
+                MediatorUri = new UriBuilder("https", "localhost", mediatorPort).Uri.ToString(),
+                // bypass server cert validation since unit tests are using a base-64 self-signed cert
+                ServerValidationPolicy = ServerCertificateValidationPolicies._SKIP_
+            });
+            runnerServer.Start(TestSelfSignedCert.ServerCertificate, runnerPort, IPAddress.Loopback);
+
+            // wait for the runner to reach a "ready" state in the mediator
+            while (mediatorServer.RunnerPool.Count == 0 || mediatorServer.RunnerPool.First().State != RunnerStates.Ready)
+            {
+                Thread.Sleep(1);
+            }
+
+            // create a configuration to use the mediator to locate a runner to execute the task
+            var configuration = new Configuration
+            {
+                MaxTries = 1,
+                MediatorUri = new UriBuilder("https", "localhost", mediatorPort).Uri,
+                ExecutionMode = ExecutionModes.Remote,
+                // use the unit test assembly resolver instead of the default implementation
+                ResolveLocalAssemblyAsync = (assemblyName) => TestFixture.AssemblyResolver.ResolveAssembly(TestFixture.Environment, assemblyName, out _),
+                // bypass server cert validation since unit tests are using a base-64 self-signed cert
+                ServerCertificateValidationPolicy = ServerCertificateValidationPolicies._SKIP_
+            };
+
+            // submit a job to the runner
+            var jobHandle = await Dido.SubmitJobAsync<string>((context) => SampleExpressions.ReturnArgument("foo"), configuration);
+
+            // wait for the runner to finish executing the job
+            JobResult<string> result;
+            do
+            {
+                Thread.Sleep(1);
+                result = await Dido.QueryJobAsync<string>(jobHandle, configuration);
+            } while (result.Status == JobStatus.Running);
+
+            // wait for the mediator to expire the job. if it does not expire the job
+            // within 10 seconds, assume something went wrong
+            var waitUntil = DateTime.UtcNow.AddSeconds(10);
+            var deleted = false;
+            do
+            {
+                Thread.Sleep(1);
+                try
+                {
+                    await Dido.QueryJobAsync<int>(jobHandle, configuration);
+                }
+                catch (JobNotFoundException)
+                {
+                    deleted = true;
+                }
+            } while (!deleted && DateTime.UtcNow < waitUntil);
+
+            // if the job was not deleted, the test fails
+            if (!deleted)
+            {
+                throw new InvalidOperationException("The expired job was not automatically deleted.");
+            }
+
+            // cleanup
+            //await Dido.DeleteJobAsync(jobHandle, configuration);
+            jobHandle.Dispose();
+            runnerServer.DeleteCache();
+            runnerServer.Dispose();
             mediatorServer.Dispose();
         }
 

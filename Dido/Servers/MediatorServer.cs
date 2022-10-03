@@ -7,101 +7,12 @@ using System.Linq;
 using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace DidoNet
 {
-
-    internal class MemoryJob : IJob
-    {
-        public string RunnerId { get; set; } = string.Empty;
-        public string JobId { get; set; } = string.Empty;
-        public string Status { get; set; } = string.Empty;
-        public byte[] Data { get; set; } = new byte[0];
-    }
-
-    internal class MemoryJobStore : IJobStore
-    {
-        public Task CreateJob(IJob job)
-        {
-            lock (Jobs)
-            {
-                if (Jobs.ContainsKey(job.JobId))
-                {
-                    throw new Exception($"Duplicate key: A job with id '{job.JobId}' already exists.");
-                }
-                Jobs.Add(job.JobId, new MemoryJob
-                {
-                    JobId = job.JobId,
-                    RunnerId = job.RunnerId,
-                    Status = job.Status,
-                    Data = job.Data.ToArray()
-                });
-            }
-            return Task.CompletedTask;
-        }
-
-        public Task<bool> UpdateJob(IJob job)
-        {
-            lock (Jobs)
-            {
-                if (!Jobs.ContainsKey(job.JobId))
-                {
-                    return Task.FromResult(false);
-                }
-                Jobs[job.JobId] = new MemoryJob
-                {
-                    JobId = job.JobId,
-                    RunnerId = job.RunnerId,
-                    Status = job.Status,
-                    Data = job.Data.ToArray()
-                };
-            }
-            return Task.FromResult(true);
-        }
-
-        public Task<bool> SetJobStatus(string jobId, string status)
-        {
-            lock (Jobs)
-            {
-                if (!Jobs.ContainsKey(jobId))
-                {
-                    return Task.FromResult(false);
-                }
-                Jobs[jobId].Status = status;
-            }
-            return Task.FromResult(true);
-        }
-
-        public Task<IJob?> GetJob(string jobId)
-        {
-            lock (Jobs)
-            {
-                Jobs.TryGetValue(jobId, out var job);
-                return Task.FromResult((IJob?)job);
-            }
-        }
-
-        public Task<IEnumerable<IJob>> GetAllJobs(string runnerId)
-        {
-            lock (Jobs)
-            {
-                return Task.FromResult(Jobs.Values.Where(j => j.RunnerId == runnerId).Select(j => (IJob)j));
-            }
-        }
-
-        public Task<bool> DeleteJob(string jobId)
-        {
-            lock (Jobs)
-            {
-                return Task.FromResult(Jobs.Remove(jobId));
-            }
-        }
-
-        private Dictionary<string, MemoryJob> Jobs = new Dictionary<string, MemoryJob>();
-    }
-
     /// <summary>
     /// A configurable Dido Mediator server that can be deployed as a console app, service, or integrated into a
     /// larger application.
@@ -112,11 +23,6 @@ namespace DidoNet
         /// The current configuration of the mediator.
         /// </summary>
         public MediatorConfiguration Configuration { get; private set; }
-
-        /// <summary>
-        /// A backing store for jobs.
-        /// </summary>
-        public IJobStore JobStore { get; set; } = new MemoryJobStore();
 
         /// <summary>
         /// The set of known runners.
@@ -147,6 +53,11 @@ namespace DidoNet
         /// The set of clients that have disconnected and need to be disposed.
         /// </summary>
         private ConcurrentQueue<ConnectedClient> CompletedClients = new ConcurrentQueue<ConnectedClient>();
+
+        /// <summary>
+        /// A timer to periodically delete expired jobs.
+        /// </summary>
+        private Timer? ExpiredJobsTimer;
 
         /// <summary>
         /// The class logger instance.
@@ -207,6 +118,16 @@ namespace DidoNet
             IsRunning = 1;
             WorkLoopThread = new Thread(() => WorkLoop(listener, cert));
             WorkLoopThread.Start();
+
+            if (Configuration.JobLifetime > TimeSpan.Zero)
+            {
+                // start a timer to periodically check for and delete expired jobs
+                ExpiredJobsTimer = new Timer(
+                    async (arg) => await DeleteExpiredJobsAsync(),
+                    null,
+                    0, // run immediately...
+                    (int)Configuration.JobExpirationFrequency.TotalMilliseconds); // ...and then according to the configured frequency
+            }
         }
 
         /// <summary>
@@ -226,6 +147,9 @@ namespace DidoNet
             // cleanup all clients
             DisconnectAndCleanupActiveClients();
             CleanupCompletedClients();
+
+            ExpiredJobsTimer?.Dispose();
+            ExpiredJobsTimer = null;
 
             Logger.Info($"  Mediator {Configuration.Id} stopped");
         }
@@ -353,39 +277,37 @@ namespace DidoNet
         /// <returns></returns>
         private async Task RunnerChannelMessageHandler(IMessage message, MessageChannel channel, Connection connection)
         {
-            IJob? job = null;
             RunnerItem? runner = null;
 
             switch (message)
             {
                 case RunnerStartMessage start:
-                    // TODO: if a runner with the same id already exists, send back error
 
                     // create and add the runner to the pool, if necessary
-                    if (runner == null)
+                    lock (RunnerPool)
                     {
-                        runner = new RunnerItem();
-                        lock (RunnerPool)
+                        // if a runner with the same id already exists, tell the runner to abort
+                        var exists = RunnerPool.FirstOrDefault(x => x.Id == start.Id);
+                        if (exists != null)
                         {
-                            RunnerPool.Add(runner);
+                            channel.Send(new DuplicateRunnerMessage());
+                            break;
                         }
+
+                        runner = new RunnerItem();
+                        RunnerPool.Add(runner);
                     }
                     runner.Init(start, channel);
 
-                    // add a disconnect handler to the connection to mark all in-progress jobs as abandoned
+                    // add a handler to the connection to abandon all the runner's in-progress jobs if it disconnects
                     connection.OnDisconnect = async (connection, reason) =>
                     {
-                        var jobs = await JobStore.GetAllJobs(runner.Id);
-                        foreach (var job in jobs)
-                        {
-                            if (job.Status == JobStatusValues.Running)
-                            {
-                                _ = JobStore.SetJobStatus(job.JobId, JobStatusValues.Abandoned);
-                            }
-                        }
+                        await AbandonAllJobs(runner.Id);
                     };
 
-                    // TODO: send back an ack to tell the runner they are ok to continue
+                    // tell the runner it is ok to continue
+                    channel.Send(new AcknowledgedMessage());
+
                     break;
 
                 case RunnerStatusMessage status:
@@ -394,25 +316,18 @@ namespace DidoNet
 
                     if (runner != null && status.State == RunnerStates.Stopping)
                     {
-                        // the runner is stopping:
-                        // update the status of all of its in-progress jobs to "abandoned"
-                        var jobs = await JobStore.GetAllJobs(runner.Id);
-                        foreach (var j in jobs)
-                        {
-                            if (j.Status == JobStatusValues.Running)
-                            {
-                                _ = JobStore.SetJobStatus(j.JobId, JobStatusValues.Abandoned);
-                            }
-                        }
+                        // when the runner stops, abandon all of its in-progress jobs
+                        await AbandonAllJobs(runner.Id);
                     }
                     break;
 
                 case JobStartMessage jobStart:
-                    await JobStore.CreateJob(new MemoryJob
+                    await Configuration.JobStore.CreateJob(new JobRecord
                     {
                         RunnerId = jobStart.RunnerId,
                         JobId = jobStart.JobId,
-                        Status = JobStatusValues.Running
+                        Status = JobStatusValues.Running,
+                        Started = jobStart.Started
                     });
                     break;
 
@@ -433,10 +348,12 @@ namespace DidoNet
                             jobStatus = JobStatusValues.Timeout;
                             break;
                     }
-                    await JobStore.UpdateJob(new MemoryJob
+                    await Configuration.JobStore.UpdateJob(new JobRecord
                     {
                         RunnerId = jobComplete.RunnerId,
                         JobId = jobComplete.JobId,
+                        Started = jobComplete.Started,
+                        Finished = jobComplete.Finished,
                         Status = jobStatus,
                         Data = jobComplete.ResultMessageBytes
                     });
@@ -471,7 +388,7 @@ namespace DidoNet
                     break;
 
                 case JobQueryMessage jobQuery:
-                    job = await JobStore.GetJob(jobQuery.JobId);
+                    job = await Configuration.JobStore.GetJob(jobQuery.JobId);
 
                     if (job == null)
                     {
@@ -493,6 +410,7 @@ namespace DidoNet
                             {
                                 JobId = job.JobId,
                                 RunnerId = job.RunnerId
+                                // a completed job with no result implies the job was abandoned
                             });
                         }
                         else
@@ -509,7 +427,7 @@ namespace DidoNet
 
                 case JobDeleteMessage jobDelete:
                     // find the runner and tell it to cancel the job
-                    job = await JobStore.GetJob(jobDelete.JobId);
+                    job = await Configuration.JobStore.GetJob(jobDelete.JobId);
                     if (job != null && job.Status == JobStatusValues.Running)
                     {
                         runner = RunnerPool.FirstOrDefault(x => x.Id == job.RunnerId);
@@ -517,7 +435,7 @@ namespace DidoNet
                     }
 
                     // delete the job
-                    await JobStore.DeleteJob(jobDelete.JobId);
+                    await Configuration.JobStore.DeleteJob(jobDelete.JobId);
 
                     // acknowledge the application
                     channel.Send(new AcknowledgedMessage());
@@ -525,7 +443,7 @@ namespace DidoNet
 
                 case JobCancelMessage jobCancel:
                     // find the runner and tell it to cancel the job
-                    job = await JobStore.GetJob(jobCancel.JobId);
+                    job = await Configuration.JobStore.GetJob(jobCancel.JobId);
                     if (job != null && job.Status == JobStatusValues.Running)
                     {
                         runner = RunnerPool.FirstOrDefault(x => x.Id == job.RunnerId);
@@ -607,6 +525,39 @@ namespace DidoNet
                 if (ActiveClients.TryGetValue(id, out var client))
                 {
                     CompletedClients.Enqueue(client);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Delete all finished jobs that are older than the configured job lifetime.
+        /// </summary>
+        /// <returns></returns>
+        private async Task DeleteExpiredJobsAsync()
+        {
+            await Configuration.JobStore.DeleteExpiredJobs(Configuration.JobLifetime);
+        }
+
+        /// <summary>
+        /// Updates the status of all in-progress jobs for the specified runner to "abandoned".
+        /// </summary>
+        /// <param name="runnerId"></param>
+        /// <returns></returns>
+        private async Task AbandonAllJobs(string runnerId)
+        {
+            var jobs = await Configuration.JobStore.GetAllJobs(runnerId);
+            foreach (var job in jobs)
+            {
+                if (job.Status == JobStatusValues.Running)
+                {
+                    await Configuration.JobStore.UpdateJob(new JobRecord
+                    {
+                        RunnerId = job.RunnerId,
+                        JobId = job.JobId,
+                        Started = job.Started,
+                        Finished = DateTime.UtcNow,
+                        Status = JobStatusValues.Abandoned
+                    });
                 }
             }
         }

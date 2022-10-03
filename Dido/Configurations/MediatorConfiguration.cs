@@ -32,7 +32,26 @@ namespace DidoNet
         /// </summary>
         public string ServerCertificateThumbprint { get; set; } = string.Empty;
 
-        // TODO: "job mode": generate an optional id for an execution request, monitor the job, "save" the result
-        // TODO: delegate for optional data persistence. default is in-memory
+        /// <summary>
+        /// A backing store for jobs.
+        /// </summary>
+        public IJobStore JobStore { get; set; } = new MemoryJobStore();
+
+        /// <summary>
+        /// Specifies how long "expired" job records are retained by the mediator before being automatically deleted.
+        /// An "expired" job is a job that has finished executing (i.e. its Finished property is not null), regardless
+        /// of whether it completed nominally vs with an error or timeout.
+        /// A value of zero indicates records never expire and are not automatically deleted.
+        /// The default value is zero (i.e. records never expire).
+        /// <para/>NOTE for best practice an application should explicitly delete jobs after they have completed and
+        /// their results retrieved, but this lifetime can be used to help prevent unchecked and unbounded job retention.
+        /// </summary>
+        public TimeSpan JobLifetime = TimeSpan.Zero;
+
+        /// <summary>
+        /// Specifies how often the mediator should check for and delete expired jobs.
+        /// The default value is 1 hour.
+        /// </summary>
+        public TimeSpan JobExpirationFrequency = TimeSpan.FromMinutes(60);
     }
 }

@@ -96,6 +96,9 @@ namespace DidoNet
         public MessageChannel(Connection connection, string channelId)
             : this(connection.GetChannel(channelId)) { }
 
+        /// <summary>
+        /// <inheritdoc/> 
+        /// </summary>
         public void Dispose()
         {
             Channel.Dispose();
@@ -109,9 +112,6 @@ namespace DidoNet
         {
             UnitTestTransmitMessageMonitor?.Invoke(message);
             Channel.WriteMessage(message);
-            //var messageType = message.GetType();
-            //Channel.WriteString(messageType.AssemblyQualifiedName!);
-            //message.Write(Channel);
             Channel.Flush();
         }
 
@@ -168,18 +168,6 @@ namespace DidoNet
                 var task = Task.Run(() =>
                 {
                     var message = Channel.ReadMessage();
-                    //var typeName = Channel.ReadString();
-                    //var messageType = Type.GetType(typeName);
-                    //if (messageType == null)
-                    //{
-                    //    throw new InvalidOperationException($"Unknown message type '{typeName}'");
-                    //}
-                    //var message = Activator.CreateInstance(messageType) as IMessage;
-                    //if (message == null)
-                    //{
-                    //    throw new InvalidOperationException($"Cannot create instance of message type '{typeName}'");
-                    //}
-                    //message.Read(Channel);
                     return message;
 
                 });
