@@ -184,16 +184,17 @@ namespace DidoNet.Test.Servers
                 configuration);
 
             // check on the job periodically until it completes
-            JobResult<int> result;
+            JobResult<int>? result;
             do
             {
                 Thread.Sleep(1);
                 result = await Dido.QueryJobAsync<int>(jobHandle, configuration);
-            } while (result.Status == JobStatus.Running);
+            } while (result != null && result.Status == JobStatus.Running);
 
             // confirm the job failed with an exception
-            Assert.Equal(JobStatus.Error, result.Status);
-            Assert.NotNull(result.Exception);
+            Assert.NotNull(result);
+            Assert.Equal(JobStatus.Error, result!.Status);
+            Assert.NotNull(result!.Exception);
 
             // cleanup
             await Dido.DeleteJobAsync(jobHandle, configuration);
@@ -255,15 +256,16 @@ namespace DidoNet.Test.Servers
             await Dido.CancelJobAsync(jobHandle, configuration);
 
             // check on the job periodically until it completes
-            JobResult<int> result;
+            JobResult<int>? result;
             do
             {
                 Thread.Sleep(1);
                 result = await Dido.QueryJobAsync<int>(jobHandle, configuration);
-            } while (result.Status == JobStatus.Running);
+            } while (result != null && result.Status == JobStatus.Running);
 
             // confirm the job was cancelled
-            Assert.Equal(JobStatus.Cancelled, result.Status);
+            Assert.NotNull(result);
+            Assert.Equal(JobStatus.Cancelled, result!.Status);
 
             // cleanup
             await Dido.DeleteJobAsync(jobHandle, configuration);
@@ -323,19 +325,109 @@ namespace DidoNet.Test.Servers
                 configuration);
 
             // check on the job periodically until it completes
-            JobResult<int> result;
+            JobResult<int>? result;
             do
             {
                 Thread.Sleep(1);
                 result = await Dido.QueryJobAsync<int>(jobHandle, configuration);
-            } while (result.Status == JobStatus.Running);
+            } while (result != null && result.Status == JobStatus.Running);
 
             // confirm the job timed out
-            Assert.Equal(JobStatus.Timeout, result.Status);
+            Assert.NotNull(result);
+            Assert.Equal(JobStatus.Timeout, result!.Status);
 
             // cleanup
             await Dido.DeleteJobAsync(jobHandle, configuration);
             jobHandle.Dispose();
+            runnerServer.DeleteCache();
+            runnerServer.Dispose();
+            mediatorServer.Dispose();
+        }
+
+        /// <summary>
+        /// Performs an end-to-end test of Dido.RunAsync using a local loop-back runner server
+        /// and an infinite-loop expression to confirm the runner worker aborts if the application
+        /// connection is dropped.
+        /// </summary>
+        [Fact]
+        public async void RunJobWithDroppedConnection()
+        {
+            // create and start a secure localhost loop-back mediator server that can orchestrate runners
+            var mediatorServer = new MediatorServer();
+            int mediatorPort = GetNextAvailablePort();
+            mediatorServer.Start(TestSelfSignedCert.ServerCertificate, mediatorPort, IPAddress.Loopback);
+
+            // create and start a secure localhost loop-back runner server that registers to the mediator
+            var runnerPort = GetNextAvailablePort();
+            var runnerServer = new RunnerServer(new RunnerConfiguration
+            {
+                Endpoint = new UriBuilder("https", "localhost", runnerPort).Uri.ToString(),
+                MediatorUri = new UriBuilder("https", "localhost", mediatorPort).Uri.ToString(),
+                // bypass server cert validation since unit tests are using a base-64 self-signed cert
+                ServerValidationPolicy = ServerCertificateValidationPolicies._SKIP_
+            });
+            runnerServer.Start(TestSelfSignedCert.ServerCertificate, runnerPort, IPAddress.Loopback);
+
+            // wait for the runner to reach a "ready" state in the mediator
+            while (mediatorServer.RunnerPool.Count == 0 || mediatorServer.RunnerPool.First().State != RunnerStates.Ready)
+            {
+                Thread.Sleep(1);
+            }
+            RunnerItem runner = mediatorServer.RunnerPool.First();
+
+            // create a configuration to use the mediator to locate a runner to execute the task
+            var configuration = new Configuration
+            {
+                MaxTries = 1,
+                MediatorUri = new UriBuilder("https", "localhost", mediatorPort).Uri,
+                ExecutionMode = ExecutionModes.Remote,
+                // use the unit test assembly resolver instead of the default implementation
+                ResolveLocalAssemblyAsync = (assemblyName) => TestFixture.AssemblyResolver.ResolveAssembly(TestFixture.Environment, assemblyName, out _),
+                // bypass server cert validation since unit tests are using a base-64 self-signed cert
+                ServerCertificateValidationPolicy = ServerCertificateValidationPolicies._SKIP_
+            };
+
+            // execute the fake work expression using the jobs interface
+            var message = Guid.NewGuid().ToString();
+            var jobHandle = await Dido.SubmitJobAsync<bool>(
+                (context) => SampleExpressions.BusyLoopWithCancellation(context),
+                configuration);
+
+            var jobId = jobHandle.JobId;
+
+            // wait until the runner is running the job
+            while (runner.ActiveTasks != 1)
+            {
+                Thread.Sleep(1);
+            }
+
+            // wait a few seconds to allow the assemblies to transfer
+            Thread.Sleep(3000);
+
+            // kill the application connection by disposing the handle
+            jobHandle.Dispose();
+
+            // wait until the runner aborts the job
+            while (runner.ActiveTasks != 0)
+            {
+                Thread.Sleep(1);
+            }
+
+            // check on the job periodically until it completes
+            JobResult<int>? result;
+            do
+            {
+                Thread.Sleep(1);
+                result = await Dido.QueryJobAsync<int>(jobId, configuration);
+            } while (result != null && result.Status == JobStatus.Running);
+
+            // confirm the job was indicated as cancelled (since the application disconnected
+            // before it could complete)
+            Assert.NotNull(result);
+            Assert.Equal(JobStatus.Cancelled, result!.Status);
+
+            // cleanup
+            await Dido.DeleteJobAsync(jobHandle, configuration);
             runnerServer.DeleteCache();
             runnerServer.Dispose();
             mediatorServer.Dispose();
@@ -394,15 +486,16 @@ namespace DidoNet.Test.Servers
             runnerServer.Dispose();
 
             // check on the job periodically until it completes
-            JobResult<int> result;
+            JobResult<int>? result;
             do
             {
                 Thread.Sleep(1);
                 result = await Dido.QueryJobAsync<int>(jobHandle, configuration);
-            } while (result.Status == JobStatus.Running);
+            } while (result != null && result.Status == JobStatus.Running);
 
             // confirm the job was abandoned
-            Assert.Equal(JobStatus.Abandoned, result.Status);
+            Assert.NotNull(result);
+            Assert.Equal(JobStatus.Abandoned, result!.Status);
 
             // cleanup
             await Dido.DeleteJobAsync(jobHandle, configuration);
@@ -484,7 +577,6 @@ namespace DidoNet.Test.Servers
             }
 
             // cleanup
-            //await Dido.DeleteJobAsync(jobHandle, configuration);
             jobHandle.Dispose();
             runnerServer.DeleteCache();
             runnerServer.Dispose();

@@ -2,6 +2,7 @@
 using NLog;
 using System;
 using System.IO;
+using System.Text;
 using System.Threading;
 
 namespace DidoNet
@@ -59,7 +60,7 @@ namespace DidoNet
         /// <summary>
         /// A delegate invoked when the task is started. 
         /// </summary>
-        private Action<TaskWorker>? OnStart{ get; set; }
+        private Action<TaskWorker>? OnStart { get; set; }
 
         /// <summary>
         /// A delegate invoked when the task is complete. 
@@ -84,6 +85,13 @@ namespace DidoNet
         {
             Connection = connection;
             Configuration = configuration;
+
+            Connection.OnDisconnect = (connection, reason) =>
+            {
+                // if the connection terminates unexpectedly stop this worker (since the application is no longer connected)
+                CancelSource.Cancel();
+                TaskComplete.Set();
+            };
 
             // TODO: add "tethering" configuration: what to do if the application connection breaks?
             // TODO: in "tethered" mode, the task should cancel.
@@ -114,6 +122,9 @@ namespace DidoNet
 
         public void Dispose()
         {
+            // remove the disconnection handler so it does not try to run when the connection is disposed
+            Connection.OnDisconnect = null;
+
             WorkThread?.Join(1000);
             Connection.Dispose();
             CancelSource.Dispose();

@@ -112,6 +112,8 @@ This solution is similar to the legacy/deprecated .NET Remoting or general RPC p
   }
   ```
 
+  The runner will queue incoming task requests and execute them in-order, up to its configured maximum queue length.
+
 - **Job management with cached results**
 
   For use cases 
