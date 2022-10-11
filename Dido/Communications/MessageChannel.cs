@@ -96,9 +96,7 @@ namespace DidoNet
         public MessageChannel(Connection connection, string channelId)
             : this(connection.GetChannel(channelId)) { }
 
-        /// <summary>
         /// <inheritdoc/> 
-        /// </summary>
         public void Dispose()
         {
             Channel.Dispose();

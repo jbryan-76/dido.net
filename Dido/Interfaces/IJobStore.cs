@@ -19,7 +19,7 @@ namespace DidoNet
 
         /// <summary>
         /// Update an existing record in the store with the provided job state.
-        /// Return true if the record exists, else false.
+        /// Return <c>true</c> if the record exists, else <c>false</c>.
         /// Throws an exception only due to errors accessing the store.
         /// </summary>
         /// <param name="job"></param>
@@ -45,7 +45,7 @@ namespace DidoNet
 
         /// <summary>
         /// Delete the record from the store for the job with the given id.
-        /// Return true if the record exists, else false.
+        /// Return <c>true</c> if the record exists, else <c>false</c>.
         /// Throws an exception only due to errors accessing the store.
         /// </summary>
         /// <param name="jobId"></param>

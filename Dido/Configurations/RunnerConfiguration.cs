@@ -3,7 +3,7 @@
 namespace DidoNet
 {
     /// <summary>
-    /// Configures a runner.
+    /// Configuration for a runner.
     /// </summary>
     public class RunnerConfiguration
     {

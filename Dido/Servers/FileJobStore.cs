@@ -24,9 +24,7 @@
 //            DbFile = filename;
 //        }
 
-//        /// <summary>
 //        /// <inheritdoc/> 
-//        /// </summary>
 //        public Task CreateJob(IJob job)
 //        {
 //            using (var db = new LiteDatabase(DbFile))
@@ -58,9 +56,7 @@
 //            return Task.CompletedTask;
 //        }
 
-//        /// <summary>
 //        /// <inheritdoc/> 
-//        /// </summary>
 //        public Task<bool> UpdateJob(IJob job)
 //        {
 //            lock (Jobs)
@@ -80,9 +76,7 @@
 //            return Task.FromResult(true);
 //        }
 
-//        /// <summary>
 //        /// <inheritdoc/> 
-//        /// </summary>
 //        public Task<bool> SetJobStatus(string jobId, string status)
 //        {
 //            lock (Jobs)
@@ -96,9 +90,7 @@
 //            return Task.FromResult(true);
 //        }
 
-//        /// <summary>
 //        /// <inheritdoc/> 
-//        /// </summary>
 //        public Task<IJob?> GetJob(string jobId)
 //        {
 //            lock (Jobs)
@@ -108,9 +100,7 @@
 //            }
 //        }
 
-//        /// <summary>
 //        /// <inheritdoc/> 
-//        /// </summary>
 //        public Task<IEnumerable<IJob>> GetAllJobs(string runnerId)
 //        {
 //            lock (Jobs)
@@ -119,9 +109,7 @@
 //            }
 //        }
 
-//        /// <summary>
 //        /// <inheritdoc/> 
-//        /// </summary>
 //        public Task<bool> DeleteJob(string jobId)
 //        {
 //            lock (Jobs)

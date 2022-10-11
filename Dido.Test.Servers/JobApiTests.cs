@@ -110,25 +110,24 @@ namespace DidoNet.Test.Servers
             var jobHandle = await Dido.SubmitJobAsync<int>(lambda, configuration);
 
             // check on the job periodically until it completes
-            JobResult<int> result;
+            JobResult<int>? result;
             do
             {
                 Thread.Sleep(1);
                 result = await Dido.QueryJobAsync<int>(jobHandle, configuration);
-            } while (result.Status == JobStatus.Running);
+            } while (result != null && result.Status == JobStatus.Running);
 
             // confirm the results match
-            Assert.Equal(JobStatus.Complete, result.Status);
-            Assert.Equal(expectedResult, result.Result);
+            Assert.NotNull(result);
+            Assert.Equal(JobStatus.Complete, result!.Status);
+            Assert.Equal(expectedResult, result!.Result);
 
             // delete the job
             await Dido.DeleteJobAsync(jobHandle, configuration);
 
             // confirm the job no longer exists
-            await Assert.ThrowsAsync<JobNotFoundException>(async () =>
-            {
-                await Dido.QueryJobAsync<int>(jobHandle, configuration);
-            });
+            result = await Dido.QueryJobAsync<int>(jobHandle, configuration);
+            Assert.Null(result);
 
             // cleanup
             jobHandle.Dispose();
@@ -457,12 +456,12 @@ namespace DidoNet.Test.Servers
             var jobHandle = await Dido.SubmitJobAsync<string>((context) => SampleExpressions.ReturnArgument("foo"), configuration);
 
             // wait for the runner to finish executing the job
-            JobResult<string> result;
+            JobResult<string>? result;
             do
             {
                 Thread.Sleep(1);
                 result = await Dido.QueryJobAsync<string>(jobHandle, configuration);
-            } while (result.Status == JobStatus.Running);
+            } while (result != null && result.Status == JobStatus.Running);
 
             // wait for the mediator to expire the job. if it does not expire the job
             // within 10 seconds, assume something went wrong
@@ -471,11 +470,8 @@ namespace DidoNet.Test.Servers
             do
             {
                 Thread.Sleep(1);
-                try
-                {
-                    await Dido.QueryJobAsync<int>(jobHandle, configuration);
-                }
-                catch (JobNotFoundException)
+                result = await Dido.QueryJobAsync<string>(jobHandle, configuration);
+                if (result == null)
                 {
                     deleted = true;
                 }

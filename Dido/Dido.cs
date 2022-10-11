@@ -25,27 +25,11 @@ using System.Threading.Tasks;
 namespace DidoNet
 {
     /// <summary>
-    /// Provides support for executing expressions locally for debugging, or remotely for
-    /// distributed processing.
+    /// A configurable API for executing lambda expressions either locally (for debugging) or remotely 
+    /// (for distributed processing).
     /// </summary>
     public static class Dido
     {
-        /// <summary>
-        /// Signature for a method that handles the result of asynchronous
-        /// execution of a task.
-        /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="result"></param>
-        public delegate void ResultHandler<T>(T result);
-
-        /// <summary>
-        /// Signature for a method that handles exceptions during asynchronous
-        /// execution of a task.
-        /// </summary>
-        /// <typeparam name="T"></typeparam>
-        /// <param name="result"></param>
-        public delegate void ExceptionHandler(Exception ex);
-
         /// <summary>
         /// The optional global configuration. If an explicit configuration is not provided to an API method,
         /// the global configuration will be used.
@@ -100,43 +84,8 @@ namespace DidoNet
         }
 
         /// <summary>
-        /// Execute the provided expression as a task and invoke the provided handler with the result.
-        /// <para/>NOTE the provided handlers will be invoked from a separate thread.
-        /// </summary>
-        /// <typeparam name="Tprop">The return type of the executed expression.</typeparam>
-        /// <param name="expression">The expression to execute.</param>
-        /// <param name="resultHandler">A result handler invoked after the expression completes. 
-        /// Note this handler is invoked from a separate thread.</param>
-        /// <param name="configuration">The optional configuration to control how the expression is executed.
-        /// If not provided, the GlobalConfiguration is used (if defined), otherwise a default configuration.</param>
-        /// <param name="execptionHandler">A handler invoked if an exception occurs while executing the expression. 
-        /// Note this handler is invoked from a separate thread.</param>
-        /// <param name="cancellationToken">An optional cancellation token to cancel execution of the expression.</param>
-        public static void Run<Tprop>(
-            Expression<Func<ExecutionContext, Tprop>> expression,
-            ResultHandler<Tprop> resultHandler,
-            Configuration? configuration = null,
-            ExceptionHandler? execptionHandler = null,
-            CancellationToken? cancellationToken = null)
-        {
-            var thread = new Thread(async () =>
-            {
-                try
-                {
-                    var result = await RunAsync(expression, configuration, cancellationToken);
-                    resultHandler(result);
-                }
-                catch (Exception ex)
-                {
-                    execptionHandler?.Invoke(ex);
-                }
-            });
-            thread.Start();
-        }
-
-        /// <summary>
         /// Execute the provided expression as a task locally (i.e. using the current application domain
-        /// and environment), regardless of the value of configuration.ExecutionMode.
+        /// and environment) using the provided configuration, regardless of the value of configuration.ExecutionMode.
         /// </summary>
         /// <typeparam name="Tprop">The return type of the executed expression.</typeparam>
         /// <param name="expression">The expression to execute.</param>
@@ -166,6 +115,68 @@ namespace DidoNet
 #else
                 return ReleaseRunLocalAsync(expression, configuration, cancellationToken.Value);
 #endif
+            }
+            finally
+            {
+                source?.Dispose();
+            }
+        }
+
+        /// <summary>
+        /// Execute the provided expression as a task in a remote environment using the provided configuration,
+        /// regardless of the value of configuration.ExecutionMode.
+        /// </summary>
+        /// <typeparam name="Tprop">The return type of the executed expression.</typeparam>
+        /// <param name="expression">The expression to execute.</param>
+        /// <param name="configuration">The optional configuration to control how the expression is executed.
+        /// If not provided, the GlobalConfiguration is used (if defined), otherwise a default configuration.</param>
+        /// <param name="cancellationToken">An optional cancellation token to cancel execution of the expression.</param>
+        /// <returns></returns>
+        /// <exception cref="InvalidConfigurationException"></exception>
+        public static async Task<Tprop> RunRemoteAsync<Tprop>(
+            Expression<Func<ExecutionContext, Tprop>> expression,
+            Configuration configuration,
+            CancellationToken? cancellationToken = null)
+        {
+            if (configuration.MediatorUri == null && configuration.RunnerUri == null)
+            {
+                throw new InvalidConfigurationException($"Configuration error: At least one of {nameof(Configuration.MediatorUri)} or {nameof(Configuration.RunnerUri)} must be set to a valid value.");
+            }
+
+            // create an (unused) cancellation token source if no cancellation token has been provided
+            CancellationTokenSource? source = null;
+            if (cancellationToken == null)
+            {
+                source = new CancellationTokenSource();
+                cancellationToken = source.Token;
+            }
+
+            try
+            {
+                int tries = 0;
+                while (true)
+                {
+                    ++tries;
+                    try
+                    {
+                        return await DoRunRemoteAsync(expression, configuration, cancellationToken.Value);
+                    }
+                    // only retry if the exception is a TimeoutException or RunnerBusyException
+                    // (otherwise the exception is for a different error and should bubble up)
+                    catch (Exception e) when (e is TimeoutException || e is RunnerBusyException)
+                    {
+                        // don't retry forever
+                        if (configuration.MaxTries > 0 && tries >= configuration.MaxTries)
+                        {
+                            throw;
+                        }
+                        else
+                        {
+                            // exponential back-off: roughly [100, 700, 3000, 10000] ms
+                            ThreadHelpers.Yield((int)Math.Pow(100, Math.Sqrt(Math.Max(tries, 4))));
+                        }
+                    }
+                }
             }
             finally
             {
@@ -220,27 +231,27 @@ namespace DidoNet
             }
         }
 
+        // TODO: 
         public static async Task<JobHandle> ConnectJobAsync(string jobId, Configuration? configuration = null)
         {
-            // TODO: 
             throw new NotImplementedException();
         }
 
         /// <summary>
-        /// Query the status and result for the indicated job.
+        /// Query the status and result for the indicated job, returning null if the job does not exist.
         /// </summary>
         /// <typeparam name="Tprop">The return type of the executed expression.</typeparam>
         /// <param name="jobHandle">The job handle returned by SubmitJobAsync.</param>
         /// <param name="configuration">The optional configuration to control how the expression is executed.
         /// If not provided, the GlobalConfiguration is used (if defined), otherwise a default configuration.</param>
         /// <returns></returns>
-        public static Task<JobResult<Tprop>> QueryJobAsync<Tprop>(JobHandle jobHandle, Configuration? configuration = null)
+        public static Task<JobResult<Tprop>?> QueryJobAsync<Tprop>(JobHandle jobHandle, Configuration? configuration = null)
         {
             return QueryJobAsync<Tprop>(jobHandle.JobId, configuration);
         }
 
         /// <summary>
-        /// Query the status and result for the indicated job.
+        /// Query the status and result for the indicated job, returning null if the job does not exist.
         /// </summary>
         /// <typeparam name="Tprop">The return type of the executed expression.</typeparam>
         /// <param name="jobId">The id of the job executing an expression previously started with SubmitJobAsync.</param>
@@ -248,9 +259,8 @@ namespace DidoNet
         /// If not provided, the GlobalConfiguration is used (if defined), otherwise a default configuration.</param>
         /// <returns></returns>
         /// <exception cref="InvalidConfigurationException"></exception>
-        /// <exception cref="JobNotFoundException"></exception>
         /// <exception cref="UnhandledMessageException"></exception>
-        public static async Task<JobResult<Tprop>> QueryJobAsync<Tprop>(string jobId, Configuration? configuration = null)
+        public static async Task<JobResult<Tprop>?> QueryJobAsync<Tprop>(string jobId, Configuration? configuration = null)
         {
             configuration ??= GlobalConfiguration ?? new Configuration();
 
@@ -278,7 +288,7 @@ namespace DidoNet
                 switch (message)
                 {
                     case JobNotFoundMessage notFound:
-                        throw new JobNotFoundException($"Job '{jobId}' not found.");
+                        return null;
 
                     case JobStartMessage start:
                         return new JobResult<Tprop>
@@ -442,68 +452,6 @@ namespace DidoNet
                     default:
                         throw new UnhandledMessageException(message);
                 }
-            }
-        }
-
-        /// <summary>
-        /// Execute the provided expression as a task in a remote environment using the provided configuration,
-        /// but regardless of the value of configuration.ExecutionMode.
-        /// </summary>
-        /// <typeparam name="Tprop">The return type of the executed expression.</typeparam>
-        /// <param name="expression">The expression to execute.</param>
-        /// <param name="configuration">The optional configuration to control how the expression is executed.
-        /// If not provided, the GlobalConfiguration is used (if defined), otherwise a default configuration.</param>
-        /// <param name="cancellationToken">An optional cancellation token to cancel execution of the expression.</param>
-        /// <returns></returns>
-        /// <exception cref="InvalidOperationException"></exception>
-        public static async Task<Tprop> RunRemoteAsync<Tprop>(
-            Expression<Func<ExecutionContext, Tprop>> expression,
-            Configuration configuration,
-            CancellationToken? cancellationToken = null)
-        {
-            if (configuration.MediatorUri == null && configuration.RunnerUri == null)
-            {
-                throw new InvalidConfigurationException($"Configuration error: At least one of {nameof(Configuration.MediatorUri)} or {nameof(Configuration.RunnerUri)} must be set to a valid value.");
-            }
-
-            // create an (unused) cancellation token source if no cancellation token has been provided
-            CancellationTokenSource? source = null;
-            if (cancellationToken == null)
-            {
-                source = new CancellationTokenSource();
-                cancellationToken = source.Token;
-            }
-
-            try
-            {
-                int tries = 0;
-                while (true)
-                {
-                    ++tries;
-                    try
-                    {
-                        return await DoRunRemoteAsync(expression, configuration, cancellationToken.Value);
-                    }
-                    // only retry if the exception is a TimeoutException or RunnerBusyException
-                    // (otherwise the exception is for a different error and should bubble up)
-                    catch (Exception e) when (e is TimeoutException || e is RunnerBusyException)
-                    {
-                        // don't retry forever
-                        if (configuration.MaxTries > 0 && tries >= configuration.MaxTries)
-                        {
-                            throw;
-                        }
-                        else
-                        {
-                            // exponential back-off: roughly [100, 700, 3000, 10000] ms
-                            ThreadHelpers.Yield((int)Math.Pow(100, Math.Sqrt(Math.Max(tries, 4))));
-                        }
-                    }
-                }
-            }
-            finally
-            {
-                source?.Dispose();
             }
         }
 

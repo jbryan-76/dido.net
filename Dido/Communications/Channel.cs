@@ -310,9 +310,7 @@ namespace DidoNet
             Dispose(false);
         }
 
-        /// <summary>
         /// <inheritdoc/> 
-        /// </summary>
         protected override void Dispose(bool disposing)
         {
             base.Dispose(disposing);

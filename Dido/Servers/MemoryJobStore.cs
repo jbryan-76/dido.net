@@ -10,9 +10,7 @@ namespace DidoNet
     /// </summary>
     internal class MemoryJobStore : IJobStore
     {
-        /// <summary>
         /// <inheritdoc/> 
-        /// </summary>
         public Task CreateJob(IJob job)
         {
             lock (Jobs)
@@ -34,9 +32,7 @@ namespace DidoNet
             return Task.CompletedTask;
         }
 
-        /// <summary>
-        /// <inheritdoc/> 
-        /// </summary>
+        /// <inheritdoc/>
         public Task<bool> UpdateJob(IJob job)
         {
             lock (Jobs)
@@ -58,25 +54,7 @@ namespace DidoNet
             return Task.FromResult(true);
         }
 
-        ///// <summary>
-        ///// <inheritdoc/> 
-        ///// </summary>
-        //public Task<bool> SetJobStatus(string jobId, string status)
-        //{
-        //    lock (Jobs)
-        //    {
-        //        if (!Jobs.ContainsKey(jobId))
-        //        {
-        //            return Task.FromResult(false);
-        //        }
-        //        Jobs[jobId].Status = status;
-        //    }
-        //    return Task.FromResult(true);
-        //}
-
-        /// <summary>
-        /// <inheritdoc/> 
-        /// </summary>
+        /// <inheritdoc/>
         public Task<IJob?> GetJob(string jobId)
         {
             lock (Jobs)
@@ -86,9 +64,7 @@ namespace DidoNet
             }
         }
 
-        /// <summary>
-        /// <inheritdoc/> 
-        /// </summary>
+        /// <inheritdoc/>
         public Task<IEnumerable<IJob>> GetAllJobs(string runnerId)
         {
             lock (Jobs)
@@ -97,9 +73,7 @@ namespace DidoNet
             }
         }
 
-        /// <summary>
-        /// <inheritdoc/> 
-        /// </summary>
+        /// <inheritdoc/>
         public Task<bool> DeleteJob(string jobId)
         {
             lock (Jobs)
@@ -108,9 +82,7 @@ namespace DidoNet
             }
         }
 
-        /// <summary>
-        /// <inheritdoc/> 
-        /// </summary>
+        /// <inheritdoc/>
         public Task DeleteExpiredJobs(TimeSpan age)
         {
             lock (Jobs)

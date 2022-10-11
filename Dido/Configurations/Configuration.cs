@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 namespace DidoNet
 {
     /// <summary>
-    /// Configures the execution of a task.
+    /// Configuration for the execution of a task.
     /// </summary>
     public class Configuration
     {

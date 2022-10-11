@@ -309,9 +309,7 @@ namespace DidoNet
             FinishConnecting();
         }
 
-        /// <summary>
         /// <inheritdoc/> 
-        /// </summary>
         public void Dispose()
         {
             // cleanly shutdown all channels and processing threads

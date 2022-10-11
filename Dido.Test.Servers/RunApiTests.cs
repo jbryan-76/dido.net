@@ -273,59 +273,6 @@ namespace DidoNet.Test.Servers
         }
 
         /// <summary>
-        /// Performs an end-to-end test of Dido.Run using a local loop-back runner server,
-        /// which invokes a handler when the execution completes, instead of awaiting a task.
-        /// </summary>
-        [Fact]
-        public async void RunRemoteWithDeferredResultHandling()
-        {
-            // create a test lambda expression
-            int testArgument = 123;
-            var lambda = await CreateTestLambdaAsync(testArgument);
-
-            // compile and execute the lambda to get the expected result and confirm it matches expectations
-            var expectedResult = lambda.Compile().Invoke(TestFixture.Environment.ExecutionContext!);
-            Assert.Equal(testArgument, expectedResult);
-
-            // create and start a secure localhost loop-back runner server that can execute serialized expressions
-            var runnerServer = new RunnerServer();
-            int port = GetNextAvailablePort();
-            runnerServer.Start(TestSelfSignedCert.ServerCertificate, port, IPAddress.Loopback);
-
-            // create configuration to use the loop-back server
-            var configuration = new Configuration
-            {
-                MaxTries = 1,
-                RunnerUri = new Uri($"https://localhost:{port}"),
-                ExecutionMode = ExecutionModes.Remote,
-                // use the unit test assembly resolver instead of the default assemblyName, out _
-                ResolveLocalAssemblyAsync = (assemblyName) => TestFixture.AssemblyResolver.ResolveAssembly(TestFixture.Environment, assemblyName, out _),
-                // bypass server cert validation since unit tests are using a base-64 self-signed cert
-                ServerCertificateValidationPolicy = ServerCertificateValidationPolicies._SKIP_
-            };
-
-            // execute the lambda expression using the remote runner server using the deferred handler
-            // (NOTE the handler is run in a different thread)
-            var reset = new AutoResetEvent(false);
-            Dido.Run(lambda, (result) =>
-            {
-                // confirm the results match
-                Assert.Equal(expectedResult, result);
-
-                // signal the main thread that it can proceed
-                reset.Set();
-            }, configuration);
-
-            // block here until the result is received
-            reset.WaitOne();
-            reset.Dispose();
-
-            // cleanup
-            runnerServer.DeleteCache();
-            runnerServer.Dispose();
-        }
-
-        /// <summary>
         /// Performs an end-to-end test of Dido.RunAsync using a local loop-back runner server
         /// and an infinite-loop expression to confirm a timeout exception is thrown.
         /// </summary>

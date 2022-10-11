@@ -1,5 +1,8 @@
 ﻿namespace DidoNet
 {
+    /// <summary>
+    /// Configuration for a server.
+    /// </summary>
     public class ServerConfiguration
     {
         /// <summary>

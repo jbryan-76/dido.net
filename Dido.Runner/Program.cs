@@ -10,7 +10,7 @@ using Topshelf.Runtime.DotNetCore;
 namespace DidoNet.Runner.Windows
 {
     /// <summary>
-    /// Implements a basic Dido.NET Runner service for windows.
+    /// Implements a basic Dido.NET Runner service for Windows.
     /// Note this is a reference implementation of a standard runner service.
     /// </summary>
     public class RunnerService : ServiceControl, IDisposable
@@ -47,18 +47,21 @@ namespace DidoNet.Runner.Windows
         private static int? CommandLinePort = null;
 
         /// <summary>
-        /// When running the service from the command line, allows specifying the id to use.
+        /// When running the service from the command line, allows specifying the runner id.
+        /// This sets the RunnerConfiguration.Id value, overriding any appsettings.json configured value.
         /// </summary>
         private static string? CommandLineId = null;
 
         /// <summary>
-        /// When running the service from the command line, allows specifying the label to use.
+        /// When running the service from the command line, allows specifying the runner label.
+        /// This sets the RunnerConfiguration.Label value, overriding any appsettings.json configured value.
         /// </summary>
         private static string? CommandLineLabel = null;
 
         /// <summary>
         /// When running the service from the command line, allows specifying the mediator
         /// that schedules tasks for this runner.
+        /// This sets the RunnerConfiguration.MediatorUri value, overriding any appsettings.json configured value.
         /// </summary>
         private static string? CommandLineMediator = null;
 

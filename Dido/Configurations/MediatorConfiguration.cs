@@ -3,7 +3,7 @@
 namespace DidoNet
 {
     /// <summary>
-    /// Configures a mediator.
+    /// Configuration for a mediator.
     /// </summary>
     public class MediatorConfiguration
     {
@@ -40,11 +40,11 @@ namespace DidoNet
         /// <summary>
         /// Specifies how long "expired" job records are retained by the mediator before being automatically deleted.
         /// An "expired" job is a job that has finished executing (i.e. its Finished property is not null), regardless
-        /// of whether it completed nominally vs with an error or timeout.
+        /// of whether it completed nominally or with an error or timeout.
         /// A value of zero indicates records never expire and are not automatically deleted.
         /// The default value is zero (i.e. records never expire).
         /// <para/>NOTE for best practice an application should explicitly delete jobs after they have completed and
-        /// their results retrieved, but this lifetime can be used to help prevent unchecked and unbounded job retention.
+        /// their results retrieved, but this lifetime setting can be used to help prevent unchecked and unbounded job retention.
         /// </summary>
         public TimeSpan JobLifetime = TimeSpan.Zero;
 

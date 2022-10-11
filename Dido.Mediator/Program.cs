@@ -10,7 +10,7 @@ using Topshelf.Runtime.DotNetCore;
 namespace DidoNet.Mediator.Windows
 {
     /// <summary>
-    /// Implements a basic Dido.NET Mediator service for windows.
+    /// Implements a basic Dido.NET Mediator service for Windows.
     /// Note this is a reference implementation of a standard mediator service.
     /// </summary>
     public class MediatorService : ServiceControl, IDisposable
@@ -47,7 +47,8 @@ namespace DidoNet.Mediator.Windows
         private static int? CommandLinePort = null;
 
         /// <summary>
-        /// When running the service from the command line, allows specifying the id to use.
+        /// When running the service from the command line, allows specifying the mediator id.
+        /// This sets the MediatorConfiguration.Id value, overriding any appsettings.json configured value.
         /// </summary>
         private static string? CommandLineId = null;
 

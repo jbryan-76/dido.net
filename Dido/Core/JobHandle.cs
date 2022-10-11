@@ -4,7 +4,7 @@ using System;
 namespace DidoNet
 {
     /// <summary>
-    /// Encapsulates the internal state for an expression executing as a job on a remote runner.
+    /// Encapsulates the internal state for a task executing as a job on a remote runner.
     /// </summary>
     public class JobHandle : IDisposable
     {
@@ -33,6 +33,7 @@ namespace DidoNet
         /// </summary>
         internal ApplicationIOProxy IOProxy { get; set; }
 
+        /// <inheritdoc/> 
         public void Dispose()
         {
             RunnerConnection.Dispose();
