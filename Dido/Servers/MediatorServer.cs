@@ -220,27 +220,34 @@ namespace DidoNet
         {
             while (Interlocked.Read(ref IsRunning) == 1)
             {
-                CleanupCompletedClients();
-
-                // sleep unless a new connection is pending
-                if (!listener.Pending())
+                try
                 {
-                    ThreadHelpers.Yield();
-                    continue;
+                    CleanupCompletedClients();
+
+                    // sleep unless a new connection is pending
+                    if (!listener.Pending())
+                    {
+                        ThreadHelpers.Yield();
+                        continue;
+                    }
+
+                    // block and wait for the next incoming connection
+                    var client = listener.AcceptTcpClient();
+
+                    // create a secure connection to the endpoint
+                    // and start processing it in a dedicated thread
+                    var connection = new Connection(client, cert);
+                    var id = Guid.NewGuid();
+                    var thread = new Thread(() => ProcessClient(id, connection));
+                    thread.Start();
+
+                    // track the thread/connection pair as an active client
+                    ActiveClients.TryAdd(id, new ConnectedClient(thread, connection));
                 }
-
-                // block and wait for the next incoming connection
-                var client = listener.AcceptTcpClient();
-
-                // create a secure connection to the endpoint
-                // and start processing it in a dedicated thread
-                var connection = new Connection(client, cert);
-                var id = Guid.NewGuid();
-                var thread = new Thread(() => ProcessClient(id, connection));
-                thread.Start();
-
-                // track the thread/connection pair as an active client
-                ActiveClients.TryAdd(id, new ConnectedClient(thread, connection));
+                catch (Exception e)
+                {
+                    Logger.Error(e);
+                }
             }
         }
 

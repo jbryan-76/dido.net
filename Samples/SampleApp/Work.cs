@@ -22,16 +22,17 @@
         Array.Sort(numbers);
 
         // compute the average value
-        long total = 0;
+        long average = 0;
         for (int i = 0; i < numbers.Length; i++)
         {
-            total += numbers[i];
+            average += numbers[i];
         }
+        average /= numbers.LongLength;
 
         return new Result
         {
             Duration = (DateTime.Now - start).TotalSeconds,
-            Average = total / numbers.LongLength
+            Average = average
         };
     }
 }

@@ -84,7 +84,7 @@ namespace DidoNet.Test.Servers
                 Endpoint = new UriBuilder("https", "localhost", runnerPort).Uri.ToString(),
                 MediatorUri = new UriBuilder("https", "localhost", mediatorPort).Uri.ToString(),
                 // bypass server cert validation since unit tests are using a base-64 self-signed cert
-                ServerValidationPolicy = ServerCertificateValidationPolicies._SKIP_
+                MediatorServerValidationPolicy = ServerCertificateValidationPolicies._SKIP_
             });
             runnerServer.Start(TestSelfSignedCert.ServerCertificate, runnerPort, IPAddress.Loopback);
 
@@ -155,7 +155,7 @@ namespace DidoNet.Test.Servers
                 Endpoint = new UriBuilder("https", "localhost", runnerPort).Uri.ToString(),
                 MediatorUri = new UriBuilder("https", "localhost", mediatorPort).Uri.ToString(),
                 // bypass server cert validation since unit tests are using a base-64 self-signed cert
-                ServerValidationPolicy = ServerCertificateValidationPolicies._SKIP_
+                MediatorServerValidationPolicy = ServerCertificateValidationPolicies._SKIP_
             });
             runnerServer.Start(TestSelfSignedCert.ServerCertificate, runnerPort, IPAddress.Loopback);
 
@@ -223,7 +223,7 @@ namespace DidoNet.Test.Servers
                 Endpoint = new UriBuilder("https", "localhost", runnerPort).Uri.ToString(),
                 MediatorUri = new UriBuilder("https", "localhost", mediatorPort).Uri.ToString(),
                 // bypass server cert validation since unit tests are using a base-64 self-signed cert
-                ServerValidationPolicy = ServerCertificateValidationPolicies._SKIP_
+                MediatorServerValidationPolicy = ServerCertificateValidationPolicies._SKIP_
             });
             runnerServer.Start(TestSelfSignedCert.ServerCertificate, runnerPort, IPAddress.Loopback);
 
@@ -294,7 +294,7 @@ namespace DidoNet.Test.Servers
                 Endpoint = new UriBuilder("https", "localhost", runnerPort).Uri.ToString(),
                 MediatorUri = new UriBuilder("https", "localhost", mediatorPort).Uri.ToString(),
                 // bypass server cert validation since unit tests are using a base-64 self-signed cert
-                ServerValidationPolicy = ServerCertificateValidationPolicies._SKIP_
+                MediatorServerValidationPolicy = ServerCertificateValidationPolicies._SKIP_
             });
             runnerServer.Start(TestSelfSignedCert.ServerCertificate, runnerPort, IPAddress.Loopback);
 
@@ -364,7 +364,7 @@ namespace DidoNet.Test.Servers
                 Endpoint = new UriBuilder("https", "localhost", runnerPort).Uri.ToString(),
                 MediatorUri = new UriBuilder("https", "localhost", mediatorPort).Uri.ToString(),
                 // bypass server cert validation since unit tests are using a base-64 self-signed cert
-                ServerValidationPolicy = ServerCertificateValidationPolicies._SKIP_
+                MediatorServerValidationPolicy = ServerCertificateValidationPolicies._SKIP_
             });
             runnerServer.Start(TestSelfSignedCert.ServerCertificate, runnerPort, IPAddress.Loopback);
 
@@ -452,7 +452,7 @@ namespace DidoNet.Test.Servers
                 Endpoint = new UriBuilder("https", "localhost", runnerPort).Uri.ToString(),
                 MediatorUri = new UriBuilder("https", "localhost", mediatorPort).Uri.ToString(),
                 // bypass server cert validation since unit tests are using a base-64 self-signed cert
-                ServerValidationPolicy = ServerCertificateValidationPolicies._SKIP_
+                MediatorServerValidationPolicy = ServerCertificateValidationPolicies._SKIP_
             });
             runnerServer.Start(TestSelfSignedCert.ServerCertificate, runnerPort, IPAddress.Loopback);
 
@@ -523,7 +523,7 @@ namespace DidoNet.Test.Servers
                 Endpoint = new UriBuilder("https", "localhost", runnerPort).Uri.ToString(),
                 MediatorUri = new UriBuilder("https", "localhost", mediatorPort).Uri.ToString(),
                 // bypass server cert validation since unit tests are using a base-64 self-signed cert
-                ServerValidationPolicy = ServerCertificateValidationPolicies._SKIP_
+                MediatorServerValidationPolicy = ServerCertificateValidationPolicies._SKIP_
             });
             runnerServer.Start(TestSelfSignedCert.ServerCertificate, runnerPort, IPAddress.Loopback);
 

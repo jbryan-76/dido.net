@@ -7,7 +7,7 @@ class Program
         var appName = Path.GetFileNameWithoutExtension(Process.GetCurrentProcess().MainModule.FileName);
         Console.WriteLine($"Compresses or decompresses a source file to a destination file.");
         Console.WriteLine($"Use: {appName} runner_host source_file destination_file");
-        Console.WriteLine($"NOTE: A Dido.Runner must be running at the indicated host with the sample dido-localhost certificate.");
+        Console.WriteLine($"NOTE: A Dido.Runner must be running at the indicated host using the sample dido-localhost certificate.");
     }
 
     public static async Task Main(string[] args)

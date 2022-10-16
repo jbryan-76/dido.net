@@ -120,6 +120,7 @@ namespace DidoNet
             CancelSource.Cancel();
         }
 
+        /// <inheritdoc/> 
         public void Dispose()
         {
             // remove the disconnection handler so it does not try to run when the connection is disposed

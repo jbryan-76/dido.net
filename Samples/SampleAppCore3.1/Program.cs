@@ -8,7 +8,7 @@ class Program
     {
         var appName = Path.GetFileNameWithoutExtension(System.Diagnostics.Process.GetCurrentProcess().MainModule.FileName);
         Console.WriteLine($"Use: {appName} runner_host");
-        Console.WriteLine($"NOTE: A Dido.Runner must be running at the indicated host with the sample dido-localhost certificate.");
+        Console.WriteLine($"NOTE: A Dido.Runner must be running at the indicated host using the sample dido-localhost certificate.");
     }
 
     public static async Task Main(string[] args)

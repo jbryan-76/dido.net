@@ -418,7 +418,7 @@ namespace DidoNet.Test.Servers
                 Endpoint = new UriBuilder("https", "localhost", runnerPort).Uri.ToString(),
                 MediatorUri = new UriBuilder("https", "localhost", mediatorPort).Uri.ToString(),
                 // bypass server cert validation since unit tests are using a base-64 self-signed cert
-                ServerValidationPolicy = ServerCertificateValidationPolicies._SKIP_
+                MediatorServerValidationPolicy = ServerCertificateValidationPolicies._SKIP_
             });
             runnerServer.Start(TestSelfSignedCert.ServerCertificate, runnerPort, IPAddress.Loopback);
 
@@ -474,7 +474,7 @@ namespace DidoNet.Test.Servers
                 Endpoint = new UriBuilder("https", "localhost", runner1Port).Uri.ToString(),
                 MediatorUri = new UriBuilder("https", "localhost", mediatorPort).Uri.ToString(),
                 // bypass server cert validation since unit tests are using a base-64 self-signed cert
-                ServerValidationPolicy = ServerCertificateValidationPolicies._SKIP_
+                MediatorServerValidationPolicy = ServerCertificateValidationPolicies._SKIP_
             });
             runner1Server.Start(TestSelfSignedCert.ServerCertificate, runner1Port, IPAddress.Loopback);
 
@@ -492,7 +492,7 @@ namespace DidoNet.Test.Servers
                 Endpoint = new UriBuilder("https", "localhost", runner2Port).Uri.ToString(),
                 MediatorUri = new UriBuilder("https", "localhost", mediatorPort).Uri.ToString(),
                 // bypass server cert validation since unit tests are using a base-64 self-signed cert
-                ServerValidationPolicy = ServerCertificateValidationPolicies._SKIP_
+                MediatorServerValidationPolicy = ServerCertificateValidationPolicies._SKIP_
             });
 
             // confirm the second runner fails during startup registration with the mediator

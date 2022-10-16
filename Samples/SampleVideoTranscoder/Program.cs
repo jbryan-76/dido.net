@@ -7,7 +7,7 @@ class Program
         var appName = Path.GetFileNameWithoutExtension(Process.GetCurrentProcess().MainModule.FileName);
         Console.WriteLine($"Transcodes a source video file to a destination video file.");
         Console.WriteLine($"Use: {appName} runner_host source_video_file destination_video_file");
-        Console.WriteLine($"NOTE: A Dido.Runner must be running at the indicated host with the sample dido-localhost certificate.");
+        Console.WriteLine($"NOTE: A Dido.Runner must be running at the indicated host using the sample dido-localhost certificate.");
     }
 
     static void CheckForFfmpeg()

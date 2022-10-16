@@ -21,6 +21,8 @@ using System.Threading.Tasks;
 // constructor specialized for connecting a client to a server.
 // 2) convert to a pkcs12 pfx
 // openssl pkcs12 -export -out cert.pfx -inkey test.key -in test.pem -password pass:1234
+// 3) generate the fingerprint of a cert
+// openssl pkcs12 -in cert.pfx -nodes -passin pass:1234 | openssl x509 -noout -fingerprint
 
 namespace DidoNet
 {

@@ -180,26 +180,26 @@ namespace DidoNet.Runner.Windows
                 {
                     cert = new X509Certificate2(Convert.FromBase64String(ServerConfig.CertBase64), ServerConfig.CertPass);
                 }
-                else if (!string.IsNullOrEmpty(ServerConfig.FindBy))
+                else if (!string.IsNullOrEmpty(ServerConfig.CertFindBy))
                 {
-                    if (string.IsNullOrEmpty(ServerConfig.FindValue))
+                    if (string.IsNullOrEmpty(ServerConfig.CertFindValue))
                     {
-                        throw new InvalidConfigurationException($"When '{nameof(ServerConfiguration.FindBy)}' is provided '{nameof(ServerConfiguration.FindValue)}' is also required.");
+                        throw new InvalidConfigurationException($"When '{nameof(ServerConfiguration.CertFindBy)}' is provided '{nameof(ServerConfiguration.CertFindValue)}' is also required.");
                     }
 
-                    if (!Enum.TryParse<X509FindType>(ServerConfig.FindBy, out var findType))
+                    if (!Enum.TryParse<X509FindType>(ServerConfig.CertFindBy, out var findType))
                     {
-                        throw new InvalidConfigurationException($"Value '{ServerConfig.FindBy}' could not be parsed to a legal value for type '{nameof(X509FindType)}'. Legal values are: {string.Join(',', Enum.GetValues<X509FindType>())}");
+                        throw new InvalidConfigurationException($"Value '{ServerConfig.CertFindBy}' could not be parsed to a legal value for type '{nameof(X509FindType)}'. Legal values are: {string.Join(',', Enum.GetValues<X509FindType>())}");
                     }
 
                     // find the certificate from the machine root CA
                     var store = new X509Store(StoreName.Root, StoreLocation.CurrentUser);
                     store.Open(OpenFlags.ReadOnly);
-                    var certs = store.Certificates.Find(findType, ServerConfig.FindValue, false);
+                    var certs = store.Certificates.Find(findType, ServerConfig.CertFindValue, false);
                     cert = certs.Cast<X509Certificate2>().FirstOrDefault();
                     if (cert == null)
                     {
-                        throw new InvalidConfigurationException($"No certificate corresponding to {ServerConfig.FindBy}:{ServerConfig.FindValue} could be found in the system root CA.");
+                        throw new InvalidConfigurationException($"No certificate corresponding to {ServerConfig.CertFindBy}:{ServerConfig.CertFindValue} could be found in the system root CA.");
                     }
                 }
                 else

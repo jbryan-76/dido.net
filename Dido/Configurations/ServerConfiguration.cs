@@ -35,14 +35,14 @@
         /// If set, indicates a system root CA certificate will be used.
         /// <para/>Must be a legal enumeration value for X509FindType.
         /// </summary>
-        public string? FindBy { get; set; }
+        public string? CertFindBy { get; set; }
 
         /// <summary>
         /// If set, indicates a system root CA certificate will be used.
-        /// <para/>Must be a value corresponding to FindBy which is used to locate
+        /// <para/>Must be a value corresponding to CertFindBy which is used to locate
         /// a specific certificate.
         /// </summary>
-        public string? FindValue { get; set; }
+        public string? CertFindValue { get; set; }
 
     }
 }
