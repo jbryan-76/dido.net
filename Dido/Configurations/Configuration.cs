@@ -120,6 +120,8 @@ namespace DidoNet
         /// </summary>
         public TimeSpan CommunicationsTimeout { get; set; } = TimeSpan.FromSeconds(10);
 
+        #region ----------INTERNAL-------------
+
         /// <summary>
         /// Gets the actual assembly caching policy to use, interpreting the 'Auto' option as necessary.
         /// </summary>
@@ -146,5 +148,8 @@ namespace DidoNet
             var appName = System.Reflection.Assembly.GetEntryAssembly()!.GetName();
             return $"{appName.Name}.{appName.Version}";
         }
+
+        #endregion ----------INTERNAL-------------
+
     }
 }

@@ -211,7 +211,9 @@ namespace DidoNet
                 }
             }
 
-            // finally try the remote resolver
+            // finally try the remote resolver.
+            // NOTE this method must execute synchronously since it is registered with the AssemblyLoadContext.Resolving event handler,
+            // so the Task.Result of any async calls below must be used explicitly.
             if (ResolveRemoteAssemblyAsync == null)
             {
                 throw new InvalidOperationException($"'{nameof(Environment.ResolveRemoteAssemblyAsync)}' is not defined on the current Environment parameter.");

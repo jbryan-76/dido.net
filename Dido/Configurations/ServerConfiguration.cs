@@ -33,14 +33,16 @@
 
         /// <summary>
         /// If set, indicates a system root CA certificate will be used.
-        /// <para/>Must be a legal enumeration value for X509FindType.
+        /// <para/>Must be a legal and parse-able string enumeration value for X509FindType.
+        /// <para/>See the .NET X509Store.Certificates.Find() method documentation for more detail.
         /// </summary>
         public string? CertFindBy { get; set; }
 
         /// <summary>
         /// If set, indicates a system root CA certificate will be used.
         /// <para/>Must be a value corresponding to CertFindBy which is used to locate
-        /// a specific certificate.
+        /// a specific certificate in the system root CA.
+        /// <para/>See the .NET X509Store.Certificates.Find() method documentation for more detail.
         /// </summary>
         public string? CertFindValue { get; set; }
 

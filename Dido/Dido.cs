@@ -233,11 +233,11 @@ namespace DidoNet
             }
         }
 
-        // TODO: 
-        public static async Task<JobHandle> ConnectJobAsync(string jobId, Configuration? configuration = null)
-        {
-            throw new NotImplementedException();
-        }
+        //// TODO: look up the job and try to re-connect to the runner
+        //public static async Task<JobHandle> ConnectJobAsync(string jobId, Configuration? configuration = null)
+        //{
+        //    throw new NotImplementedException();
+        //}
 
         /// <summary>
         /// Query the status and result for the indicated job, returning null if the job does not exist.
@@ -789,7 +789,6 @@ namespace DidoNet
         {
             // prefer the explicitly provided runner...
             var runnerUri = configuration.RunnerUri;
-            //var jobId = String.Empty;
 
             // ...however if no runner is configured but a mediator is, ask the mediator to choose a runner
             if (configuration.MediatorUri != null && (forceSelectFromMediator || runnerUri == null))
@@ -805,7 +804,7 @@ namespace DidoNet
                 {
                     // create the communications channel and request an available runner from the mediator
                     var mediatorChannel = new MessageChannel(mediatorConnection, Constants.MediatorApp_ChannelId);
-                    mediatorChannel.Send(new RunnerRequestMessage(configuration.RunnerOSPlatforms, configuration.RunnerLabel, configuration.RunnerTags));//, asJob);
+                    mediatorChannel.Send(new RunnerRequestMessage(configuration.RunnerOSPlatforms, configuration.RunnerLabel, configuration.RunnerTags));
 
                     // receive and process the response
                     var message = mediatorChannel.ReceiveMessage(configuration.CommunicationsTimeout);
@@ -813,7 +812,6 @@ namespace DidoNet
                     {
                         case RunnerResponseMessage response:
                             runnerUri = new Uri(response.Endpoint);
-                            //jobId = response.JobId;
                             break;
 
                         case RunnerNotAvailableMessage notAvailable:
@@ -825,7 +823,6 @@ namespace DidoNet
                 }
             }
 
-            //return (runnerUri!, jobId);
             return runnerUri!;
         }
 

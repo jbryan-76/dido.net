@@ -299,7 +299,7 @@ namespace DidoNet
                     // NOTE: although the application is notified that the task is starting, the task may not have
                     // all the assemblies it needs. Part of the stipulation of using the jobs API is that the application
                     // must remain online/connected after submitting a job for at least a minimum amount of time so
-                    // the necessary assemblies can be transferred.
+                    // any necessary assemblies can be transferred.
                     if (isJob)
                     {
                         tasksChannel.Send(new AcknowledgedMessage());

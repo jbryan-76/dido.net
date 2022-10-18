@@ -23,12 +23,13 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Dido.TestLibDependency", "D
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{0265E925-514D-464D-A7A2-919BEFE55589}"
 	ProjectSection(SolutionItems) = preProject
-		Dockerfile.Mediator.build = Dockerfile.Mediator.build
-		Dockerfile.Mediator.pack = Dockerfile.Mediator.pack
-		Dockerfile.Runner.build = Dockerfile.Runner.build
-		Dockerfile.Runner.pack = Dockerfile.Runner.pack
-		Docker_README.md = Docker_README.md
+		docker\Dockerfile.Mediator.build = docker\Dockerfile.Mediator.build
+		docker\Dockerfile.Mediator.pack = docker\Dockerfile.Mediator.pack
+		docker\Dockerfile.Runner.build = docker\Dockerfile.Runner.build
+		docker\Dockerfile.Runner.pack = docker\Dockerfile.Runner.pack
+		LICENSE = LICENSE
 		README.md = README.md
+		docker\README.md = docker\README.md
 		TODO = TODO
 	EndProjectSection
 EndProject

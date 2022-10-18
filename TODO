@@ -1,8 +1,7 @@
-- enhance Run() configuration or parameters to support the application creating custom communication channels
-  (and corresponding symmetric capability on the execution context)
-- add progress support to execution context
+- support creating custom communication channels to allow the application to communicate with the remote code
+- add progress messaging support to the execution context and feed back to both RunAsync (via handler) and jobs
 - explore task "tethering": what should a task running on a runner do when the application connection terminates
-  unexpectedly? also terminate? keep going and store result on a mediator? can we support re-establishing a connection?
+  unexpectedly? also terminate? keep going and store result on a mediator? support re-establishing a connection?
   when an app tries reconnecting to an untethered task:
     case fail: the app will need to start the task over
     case succeed:
@@ -18,5 +17,6 @@
     3) application updates the microservice code
     4) application restarts and reconnects to the microservice task
     =>) if code has changed (? how to tell?), stop task, unload assemblies, restart task
-- for "untethered" tasks, force the use of an external durable message system rather than write our own? can be achieved 
-  through configuration and delegates or plugins.
+- for "untethered" tasks, force the use of an external durable message system rather than including a custom solution?
+  could also explore using an app-provided solution through configured delegates or plugins.
+- for "untethered" tasks, allow opportunity to safely "update"?: save state, stop task, start task with new code, load state
