@@ -55,11 +55,11 @@ class MyApp
 }
 ```
 
-In this example `MyWork.DoSomethingLongAndExpensive` is a method that takes a long time to complete or requires a large amount of resources. When the method is invoked via Dido in `MyApp.MyMain`, depending on the configuration the method may either run locally within the application process or remotely in a different compute environment. This allows an otherwise monolithic application to easily utilize distributed computing to improve performance with minimal developer effort and overhead.
+In this example `MyWork.DoSomethingLongAndExpensive` is a method that takes a long time to complete or requires a significant amount of resources. When the method is invoked via Dido in `MyApp.MyMain`, depending on the configuration the method may either run locally within the application process or remotely in a different compute environment. This allows an otherwise monolithic application to easily utilize distributed computing to improve performance with minimal developer effort and overhead.
 
 # Background
 
-At the most basic level, the Dido framework targets the distributed computing problem space where there is a need to develop, test, and deploy an application that performs CPU- and memory-intensive calculations but those calculations should not or can not be performed on the machine or in the environment of the host application, usually due to resource constraints. In more complex scenarios, with proper configuration and an available pool of generic Dido services, other use cases such as a jobs system or a service-oriented system of microservices are also possible from a single governing monolithic application.
+At the most basic level, the Dido framework targets the distributed computing problem space where there is a need to develop, test, and deploy an application that performs CPU- and memory-intensive calculations but those calculations should not or can not be performed on the machine or in the environment of the host application, usually due to resource constraints. In more complex scenarios, with proper configuration and an available pool of generic Dido Runner services, other use cases such as a jobs system or a service-oriented system of microservices are also possible from a single governing monolithic application.
 
 The most common traditional solutions for distributed computing problems are to create one or more auxiliary (micro)services, a generic job processing system, or use service-oriented cloud platforms (e.g. AWS, Azure, GCP), where the host application orchestrates and communicates with the auxiliary systems to perform the necessary work. These solutions are undeniably powerful and flexible, but increase overall application complexity and typically require multiple teams and specific developer expertise and IT administrative overhead, such as:
 - Experience with distributed communication and synchronization patterns.
@@ -131,7 +131,7 @@ This introductory walkthrough uses the [Basic app (.NET 6)](Samples/SampleApp) e
         Console.WriteLine($"Result: duration={result.Duration} average={result.Average}");
     }
 
-   At any point Dido can be used as a degenerate "wrapper" to execute code locally (as long as no global configuration has been provided), which yields the same behavior as if Dido was not used:
+   At any point Dido can be integrated as a degenerate "wrapper" to execute code locally (as long as no global configuration has been provided), which yields the same behavior as if Dido was not used:
 
     public static async Task Main(string[] args)
     {
@@ -298,8 +298,9 @@ This introductory walkthrough uses the [Basic app (.NET 6)](Samples/SampleApp) e
 
 This framework currently has the following limitations:
 
+- All referenced objects and arguments within the closure of the lambda expression passed to `RunAsync()` or `SubmitJobAsync()` must be serializable, since they are serialized and transmitted to a Runner for execution.
 - Communications are encypted and require a valid SSL certificate. There is no option to use non-encrypted communications or username+password or API key authentication.
-- Any local disk IO required by the executing task must use the [File Proxy](Dido/IO/RunnerFileProxy.cs) and [Directory Proxy](Dido/IO/RunnerDirectoryProxy.cs) APIs, which are limited replacement implementations of the corresponding .NET System.IO APIs which proxy disk IO requests through the network connection between the Application and Runner.
+- Any local disk IO required by the executing task (i.e. "local" with respect to the host application) must use the [File Proxy](Dido/IO/RunnerFileProxy.cs) and [Directory Proxy](Dido/IO/RunnerDirectoryProxy.cs) APIs, which are limited replacement implementations of the corresponding .NET System.IO APIs which proxy disk IO requests through the network connection between the Application and Runner.
 - Depending on the scope and complexity of a task, for some use cases the application must remain "connected" to a Runner throughout the lifetime of a submitted task. For example, when a task runs, any dependent assemblies it requires are lazy-loaded when the corresponding code executes. If the application connection to the runner is terminated prior to all needed assemblies being transferred or all proxied disk IO operations completing, the task will not complete successfully.
 - When a Runner terminates unexpectedly, all in-progress tasks it is running are lost and all active connections to applications broken. Depending on the configuration used in `RunAsync()` and whether the Runner is restarted or another Runner is available, the task may be retried automatically from the application side.
 - When a Mediator terminates unexpectedly, all active connections to Runners and applications will be broken, effectively abandoning all in-progress jobs that might be running. Additionally, if the Mediator is using the default in-memory job records store, all in-progress or completed job records and results are lost (however if a custom implementation is used with a persistant backing store, presumably it will retain the job records).
@@ -323,8 +324,8 @@ Basic [Docker images](docker/README.md) for a Runner Server and Mediator Server 
 
 The Dido framework is implemented in .NET 6.0 and consists of:
 - A Library containing the API, configuration models, and key data structures and utilities.
-- A Mediator Service which serves as a limited pseudo load balancer and which coordinates access to a pool of generic Runner instances (available as a console app, OS service, or docker image).
-- A Runner Service that communicates with the host application (via the Library) and optional Mediator instance to execute application code (available as a console app, OS service, or docker image).
+- A Mediator Service that communicates with the host application and Runners which serves as a limited pseudo load balancer and which coordinates access to a pool of generic Runner instances (available as a console app, OS service, or docker image).
+- A Runner Service that communicates with the host application and optional Mediator instance to execute application code (available as a console app, OS service, or docker image).
 
 Without a Mediator nor Runner, the Dido API degenerates to local execution, which is no different than executing code without using the framework. Alternatively, exactly one Runner can be used without a Mediator for simple scenarios with limited or more predictable remote computing needs. Finally, a Mediator can be used with one or more Runners for more advanced or demanding distributed computing scenarios.
 
@@ -336,7 +337,7 @@ Although a variety of different use cases are supported via appropriate configur
 2. The Mediator is contacted to find an available Runner.
 3. The expression is serialized and transmitted to the Runner.
 4. The Runner deserializes the expression and attempts to instantiate and execute it.
-5. Inevitably, the expression requires application and dependency assemblies that do not yet exist in the Runner domain (or whose previously cached version has expired), so those assemblies are securely transmitted to the Runner.
+5. Inevitably, the expression requires application and dependent assemblies that do not yet exist in the Runner domain (or whose previously cached version has expired), so those assemblies are securely transmitted to the Runner.
 6. Once all assemblies are available and loaded, the expression is executed.
 7. The expression result is transmitted back to the application.
 
@@ -394,11 +395,11 @@ See the [Runner Configuration](Dido/Configurations/RunnerConfiguration.cs) class
 See the [Mediator Configuration](Dido/Configurations/MediatorConfiguration.cs) class for more information about configuring a Mediator Server.
 
 # Security
-Communications between the application and a Runner or Mediator instance is encrypted using SSL certificates and .NET SslStreams. Either self-signed or CA-issued certificates can be used, and several options are available in the respective Runner and Mediator configurations to select and use a certificate.
+Communications between the application and a Runner or Mediator instance are encrypted using SSL certificates and .NET SslStreams. Either self-signed or CA-issued certificates can be used, and several options are available in the respective Runner and Mediator configurations to select and use a certificate.
 
 *Note: robust certificate generation and management and security best-practices are beyond the scope of this document.*
 
-Since Runners necessarily load and execute assemblies transferred from the host application and its environment, the Runner environment should not be considered "secure" if multiple applications from different actors are using the same Runner; In principle, the entire Runner environment is available to any code running in a Runner, including assemblies from other applications. However, the [Runner Configuration](#runner-configuration) supports options for encrypting on-disk cached assemblies to minimize casual introspection of potentially proprietary bytecode for Runners running potentially hostile application code. Containerized runners or dedicated environments can be used if additional isolation and security is required.
+Since Runners necessarily load and execute assemblies transferred from the host application and its environment, the Runner environment should not be considered "secure" if multiple applications from different actors are using the same Runner; In principle, the entire Runner environment is exposed to any code running in a Runner, including assemblies from other applications. However, the [Runner Configuration](#runner-configuration) supports options for encrypting on-disk cached assemblies to minimize casual introspection of potentially proprietary bytecode for Runners running potentially hostile application code. Containerized runners or dedicated environments can be used if additional isolation and security is required.
 
 *Note: robust security and virtualization best-practices are beyond the scope of this document.*
 
@@ -447,6 +448,6 @@ for example `2E51782C63164181EF715A04F505850D1E6C2FFD`.
 Depending on the viability and level of interest for this project, future enhancements may include:
 - Add support for custom communication channels that can be created by the calling application and its remotely executed code to allow two-way communication during task execution on a Runner.
 - Add support for progress monitoring during execution of a task, e.g. to update a UI.
-- Add configuration support to "pre-transfer" all needed assemblies and files with the initial task request to prevent task failure if the application terminates.
+- Add cache-warming configuration support to "pre-transfer" all needed assemblies and files with the initial task request to mitigate task failure if the application terminates.
 - Add support to "re-connect" to an in-progress task on a Runner if the connection terminates prematurely.
 - Explore a more robust and mature workflow that would allow long-running remotely executing code to be dynamically "updated" in-situ when the application source changes. E.g. when the application source is updated and the application restarted, it could re-connect to a running task and that task could save its state, terminate, restart with the new, up-to-date assemblies, load its state, and resume operation.
