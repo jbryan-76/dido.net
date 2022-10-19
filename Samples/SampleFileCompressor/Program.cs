@@ -12,12 +12,15 @@ class Program
 
     public static async Task Main(string[] args)
     {
+        // verify the command line
         if (args.Length < 3)
         {
             PrintUse();
             return;
         }
 
+        // create the dido configuration, which explicitly uses the sample self-signed certificate included in the repository
+        // and connects to an explicit runner
         var conf = new DidoNet.Configuration
         {
             ServerCertificateValidationPolicy = DidoNet.ServerCertificateValidationPolicies.Thumbprint,
@@ -28,6 +31,7 @@ class Program
 
         Console.WriteLine($"Starting remote execution of a sample compression task on {conf.RunnerUri}...");
 
+        // do the work
         Task<double> task;
         if (string.Compare(Path.GetExtension(args[1]), Compressor.Extension, true) == 0)
         {

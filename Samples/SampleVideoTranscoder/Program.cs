@@ -12,7 +12,7 @@ class Program
 
     static void CheckForFfmpeg()
     {
-        // check if it's in the current directory
+        // check if ffmpeg is in the current directory
         if (File.Exists(Constants.Ffmpeg))
         {
             return;
@@ -27,12 +27,15 @@ class Program
     {
         CheckForFfmpeg();
 
+        // verify the command line
         if (args.Length < 3)
         {
             PrintUse();
             return;
         }
 
+        // create the dido configuration, which explicitly uses the sample self-signed certificate included in the repository
+        // and connects to an explicit runner
         var conf = new DidoNet.Configuration
         {
             ServerCertificateValidationPolicy = DidoNet.ServerCertificateValidationPolicies.Thumbprint,
@@ -41,11 +44,10 @@ class Program
             RunnerUri = new UriBuilder(args[0]).Uri
         };
 
+        // do the work
         Console.WriteLine($"Starting remote execution of a sample transcoding task on {conf.RunnerUri}...");
-
         var task = await DidoNet.Dido.RunAsync((context) => Transcoder.Transcode(context, args[1], args[2]), conf);
         var duration = await task;
-
         Console.WriteLine($"Transcoding duration={duration}");
     }
 }

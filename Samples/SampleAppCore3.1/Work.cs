@@ -18,6 +18,7 @@ static class Work
 
     public static Result DoSomethingLongAndExpensive(int sizeInMB)
     {
+        // demonstrate additional dependent assembly resolution by using System.Xml
         string xml;
         using (var stream = new MemoryStream())
         {
@@ -25,9 +26,6 @@ static class Work
             serializer.Serialize(stream, new Foo());
             xml = System.Text.Encoding.UTF8.GetString(stream.ToArray());
         }
-
-        //var col = System.Drawing.Color.FromArgb(1, 2, 3);
-        //xml = col.ToString();
 
         var start = DateTime.Now;
 

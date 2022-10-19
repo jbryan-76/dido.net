@@ -1,7 +1,7 @@
 ﻿# Dido
 ### (Latin) /dēdō/ *verb*: distribute, disseminate, divide, spread.
 
-Dido is a .NET framework to facilitate incorporating distributed computing patterns directly into an application without the overhead of authoring, releasing, or maintaining multiple services or executables. Code can be executed locally within the application domain or remotely in a different environment (or potentially on a different OS), in any combination, using a single, configurable API. In this manner, its goal is similar to the .NET [Task Parallel Library](https://docs.microsoft.com/en-us/dotnet/standard/parallel-programming/task-parallel-library-tpl) (TPL) to easily add parallel and distributed computing capability directly to existing code (often with minimal or no refactoring), but with code execution unconstrained by local system resources.
+Dido is a .NET framework to facilitate incorporating distributed computing patterns directly into an application without the overhead of authoring, releasing, and maintaining multiple services or executables. Code can be executed locally within the application domain or remotely in a different environment (or potentially on a different OS), in any combination, using a single, configurable API. In this manner, its goal is similar to the .NET [Task Parallel Library](https://docs.microsoft.com/en-us/dotnet/standard/parallel-programming/task-parallel-library-tpl) (TPL) to easily add parallel and distributed computing capability directly to existing code (often with minimal or no refactoring), but with code execution unconstrained by local system resources.
 
 ## DISCLAIMER
 

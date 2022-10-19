@@ -68,7 +68,7 @@ namespace DidoNet.IO
         }
 
         /// <summary>
-        /// Copies (or overwrites as needed) the file at the provided source path (with respect to the application's local
+        /// Copies (or overwrites as needed) the file from the provided source path (with respect to the application's local
         /// file-system) to the provided destination path (with respect to the runner's local file-system).
         /// <para/>Existing files are not updated if they are heuristically determined to be the same as the source file.
         /// Nominally this is done by comparing the source and destination file lengths and last write time, but this
@@ -192,7 +192,7 @@ namespace DidoNet.IO
         }
 
         /// <summary>
-        /// Copies (or overwrites as needed) the file at the provided source path (with respect to the runner's local file-system)
+        /// Copies (or overwrites as needed) the file from the provided source path (with respect to the runner's local file-system)
         /// to the provided destination path (with respect to the application's local file-system).
         /// <para/>Existing files are not updated if they are heuristically determined to be the same as the source file.
         /// Nominally this is done by comparing the source and destination file lengths and last write time, but this

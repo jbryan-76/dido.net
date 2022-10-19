@@ -13,12 +13,15 @@ class Program
 
     public static async Task Main(string[] args)
     {
+        // verify the command line
         if (args.Length < 1)
         {
             PrintUse();
             return;
         }
 
+        // create the dido configuration, which explicitly uses the sample self-signed certificate included in the repository
+        // and connects to an explicit runner
         var conf = new DidoNet.Configuration
         {
             ServerCertificateValidationPolicy = DidoNet.ServerCertificateValidationPolicies.Thumbprint,
@@ -27,10 +30,9 @@ class Program
             RunnerUri = new UriBuilder(args[0]).Uri
         };
 
+        // do the work
         Console.WriteLine($"Starting remote execution of a sample task on {conf.RunnerUri}...");
-
         var result = await DidoNet.Dido.RunAsync((context) => Work.DoSomethingLongAndExpensive(64), conf);
-
         Console.WriteLine($"Result: duration={result.Duration} average={result.Average} xml={result.Xml}");
     }
 }

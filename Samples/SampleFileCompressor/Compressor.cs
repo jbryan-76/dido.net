@@ -1,11 +1,23 @@
 ﻿using ICSharpCode.SharpZipLib.Zip.Compression;
 
+/// <summary>
+/// A simple class to demonstrate the Dido Proxy IO API and use of 3rd party dependent assemblies.
+/// </summary>
 static class Compressor
 {
     public static readonly string Extension = ".compressed";
 
+    /// <summary>
+    /// Use the Proxy IO API exposed by the ExecutionContext to retrieve a source file from the application,
+    /// compress it (using the Deflate algorithm), and store it back with the application. 
+    /// </summary>
+    /// <param name="context"></param>
+    /// <param name="sourceFile"></param>
+    /// <param name="destinationFile"></param>
+    /// <returns></returns>
     public static async Task<double> Deflate(DidoNet.ExecutionContext context, string sourceFile, string destinationFile)
     {
+        // cache the source file from the application to the local file-system
         Console.WriteLine("Caching source file...");
         var cachedSrc = await context.File.CacheAsync(sourceFile, Path.GetFileName(sourceFile));
 
@@ -33,7 +45,7 @@ static class Compressor
 
         var duration = (DateTime.Now - start).TotalSeconds;
 
-        // store the temp file to the destination
+        // store the temp file back to the destination on the application file-system
         Console.WriteLine("Storing destination file...");
         await context.File.StoreAsync(tempDestination, destinationFile);
 
@@ -45,6 +57,7 @@ static class Compressor
 
     public static async Task<double> Inflate(DidoNet.ExecutionContext context, string sourceFile, string destinationFile)
     {
+        // cache the source file from the application to the local file-system
         Console.WriteLine("Caching source file...");
         var cachedSrc = await context.File.CacheAsync(sourceFile, Path.GetFileName(sourceFile));
 
@@ -66,7 +79,7 @@ static class Compressor
 
         var duration = (DateTime.Now - start).TotalSeconds;
 
-        // store the temp file to the destination
+        // store the temp file back to the destination on the application file-system
         Console.WriteLine("Storing destination file...");
         await context.File.StoreAsync(tempDestination, destinationFile);
 
